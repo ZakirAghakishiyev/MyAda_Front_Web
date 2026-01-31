@@ -18,11 +18,11 @@ const Home = () => {
   const lostAndFoundButtons = [
     {
       text: 'Announce Lost Item',
-      onClick: () => navigate('/lost-and-found/announce-lost')
+      onClick: () => navigate('/lost-and-found/announce-lost', { state: { from: 'home' } })
     },
     {
       text: 'Announce Found Item',
-      onClick: () => navigate('/lost-and-found/announce-found')
+      onClick: () => navigate('/lost-and-found/announce-found', { state: { from: 'home' } })
     },
     {
       text: 'View List',
@@ -33,102 +33,93 @@ const Home = () => {
   const clubsButtons = [
     {
       text: 'ADA Clubs',
-      onClick: () => {
-        console.log('Navigate to ADA Clubs')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'ADA Clubs' } })
     },
     {
       text: 'Become a Member',
-      onClick: () => {
-        console.log('Navigate to Become a Member')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Become a Member' } })
     },
     {
       text: 'Club Vacancies',
-      onClick: () => {
-        console.log('Navigate to Club Vacancies')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Club Vacancies' } })
     },
     {
       text: 'Club Events',
-      onClick: () => {
-        console.log('Navigate to Club Events')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Club Events' } })
     }
   ]
 
   const gradesButtons = [
     {
       text: 'View My Grades',
-      onClick: () => {
-        console.log('Navigate to View Grades')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'View My Grades' } })
     },
     {
       text: 'View Transcript',
-      onClick: () => {
-        console.log('Navigate to View Transcript')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'View Transcript' } })
     }
   ]
 
   const coursesButtons = [
     {
       text: 'Course Registration',
-      onClick: () => {
-        console.log('Navigate to Course Registration')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Course Registration' } })
     },
     {
       text: 'View Schedule',
-      onClick: () => {
-        console.log('Navigate to View Schedule')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'View Schedule' } })
     }
   ]
 
   const libraryButtons = [
     {
       text: 'Library Account',
-      onClick: () => {
-        console.log('Navigate to Library Account')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Library Account' } })
     },
     {
       text: 'Room Reservation',
-      onClick: () => {
-        console.log('Navigate to Room Reservation')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Room Reservation' } })
     }
   ]
 
   const profileButtons = [
     {
       text: 'Personal Information',
-      onClick: () => {
-        console.log('Navigate to Personal Information')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Personal Information' } })
     },
     {
       text: 'Account Settings',
-      onClick: () => {
-        console.log('Navigate to Account Settings')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Account Settings' } })
     }
   ]
 
   const tasksButtons = [
     {
       text: 'View Tasks',
-      onClick: () => {
-        console.log('Navigate to View Tasks')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'View Tasks' } })
     },
     {
       text: 'Create Task',
-      onClick: () => {
-        console.log('Navigate to Create Task')
-      }
+      onClick: () => navigate('/coming-soon', { state: { title: 'Create Task' } })
+    }
+  ]
+
+  const itfmSupportButtons = [
+    {
+      text: 'IT Support',
+      onClick: () => navigate('/it-support', { state: { from: 'home' } })
+    },
+    {
+      text: 'FM Support',
+      onClick: () => navigate('/fm-support', { state: { from: 'home' } })
+    },
+    {
+      text: 'My Requests',
+      onClick: () => navigate('/my-requests')
+    },
+    {
+      text: 'View All',
+      onClick: () => navigate('/coming-soon', { state: { title: 'View All Requests' } })
     }
   ]
 
@@ -137,6 +128,7 @@ const Home = () => {
     { title: 'Scheduling and room allocation', buttons: schedulingButtons, category: 'home', centerButtons: true },
     { title: 'Lost and found', buttons: lostAndFoundButtons, category: 'community' },
     { title: 'Student Life & Clubs', buttons: clubsButtons, category: 'community' },
+    { title: 'IT&FM Support', buttons: itfmSupportButtons, category: 'community' },
     { title: 'My Grades', buttons: gradesButtons, category: 'academics' },
     { title: 'Course Registration', buttons: coursesButtons, category: 'academics' },
     { title: 'Library Services', buttons: libraryButtons, category: 'academics' },

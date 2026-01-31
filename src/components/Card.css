@@ -51,13 +51,16 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: auto;
+  flex: 1;
+  justify-content: center;
 }
 
 .card-buttons--scroll {
   max-height: 160px; /* roughly 3 buttons tall before scrolling */
   overflow-y: auto;
   padding-right: 4px;
+  flex: none;
+  justify-content: flex-start;
 }
 
 .card-buttons--centered {
