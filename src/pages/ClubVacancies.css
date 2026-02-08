@@ -1,0 +1,161 @@
+.vacancies-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+}
+
+.vacancies-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.vacancies-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #374151;
+}
+
+.vacancies-back:hover {
+  background: #e5e7eb;
+}
+
+.vacancies-header-title {
+  flex: 1;
+}
+
+.vacancies-header-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.vacancies-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  display: block;
+  margin-top: 2px;
+}
+
+.vacancies-view-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.vacancies-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.vacancies-view-btn:hover {
+  background: #f9fafb;
+}
+
+.vacancies-view-btn--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+/* Grid view */
+.vacancies-container--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+@media (min-width: 900px) {
+  .vacancies-container--grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* List view */
+.vacancies-container--list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vacancy-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.vacancy-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.vacancy-card-icon {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb, #0d9488);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.vacancy-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.vacancy-card-position {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px;
+}
+
+.vacancy-card-club {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.vacancy-card-category {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 6px;
+}
+
+.vacancy-card-arrow {
+  flex-shrink: 0;
+  color: #9ca3af;
+}

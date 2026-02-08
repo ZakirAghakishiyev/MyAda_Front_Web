@@ -1,0 +1,156 @@
+/* Popup overlay – same as ClubDetail / JoinClub */
+.vacancy-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1004;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  overflow-y: auto;
+}
+
+.vacancy-detail-popup {
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 48px);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.vacancy-detail-header {
+  flex-shrink: 0;
+  padding: 16px 24px 0;
+}
+
+.vacancy-detail-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #374151;
+}
+
+.vacancy-detail-back:hover {
+  color: #1f2937;
+}
+
+.vacancy-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px 32px;
+}
+
+.vacancy-detail-hero {
+  text-align: center;
+  padding: 0 0 24px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.vacancy-detail-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2563eb, #0d9488);
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.vacancy-detail-category {
+  display: inline-block;
+  font-size: 12px;
+  padding: 4px 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.vacancy-detail-position {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 4px;
+}
+
+.vacancy-detail-club {
+  font-size: 0.9375rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.vacancy-detail-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 12px;
+}
+
+.vacancy-detail-requirements {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vacancy-detail-requirement {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 0.9375rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.vacancy-detail-requirement-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #d1fae5;
+  color: #059669;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.vacancy-detail-actions {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.vacancy-detail-apply-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.vacancy-detail-apply-btn:hover {
+  background: #1d4ed8;
+}

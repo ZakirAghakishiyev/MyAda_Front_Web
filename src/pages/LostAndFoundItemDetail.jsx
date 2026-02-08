@@ -47,10 +47,10 @@ const LostAndFoundItemDetail = () => {
 
   if (!item) {
     return (
-      <div className="lf-detail-overlay" onClick={() => navigate('/lost-and-found')} role="dialog" aria-modal="true">
+      <div className="lf-detail-overlay" onClick={() => navigate(-1)} role="dialog" aria-modal="true">
         <div className="lf-detail-popup" onClick={(e) => e.stopPropagation()}>
           <p>Item not found.</p>
-          <button type="button" className="lf-detail-btn" onClick={() => navigate('/lost-and-found')}>Back</button>
+          <button type="button" className="lf-detail-btn" onClick={() => navigate(-1)}>Back</button>
         </div>
       </div>
     )
@@ -65,14 +65,14 @@ const LostAndFoundItemDetail = () => {
   return (
     <div
       className="lf-detail-overlay"
-      onClick={(e) => e.target === e.currentTarget && navigate('/lost-and-found')}
+      onClick={(e) => e.target === e.currentTarget && navigate(-1)}
       role="dialog"
       aria-modal="true"
       aria-labelledby="lf-detail-title"
     >
       <div className="lf-detail-popup" onClick={(e) => e.stopPropagation()}>
         <header className="lf-detail-header">
-          <button type="button" className="lf-detail-icon-btn" onClick={() => navigate('/lost-and-found')} aria-label="Back">
+          <button type="button" className="lf-detail-icon-btn" onClick={() => navigate(-1)} aria-label="Back">
             <IconBack />
           </button>
           <div className="lf-detail-header-actions">

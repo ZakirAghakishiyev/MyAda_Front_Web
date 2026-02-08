@@ -1,0 +1,185 @@
+.mm-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+  box-sizing: border-box;
+}
+
+.mm-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.mm-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #374151;
+}
+
+.mm-back:hover {
+  background: #e5e7eb;
+}
+
+.mm-header-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.mm-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  display: block;
+  margin-top: 2px;
+}
+
+.mm-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.mm-tab {
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.mm-tab:hover {
+  color: #374151;
+}
+
+.mm-tab--active {
+  color: #2563eb;
+  font-weight: 600;
+  border-bottom-color: #2563eb;
+}
+
+.mm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mm-card {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+}
+
+.mm-card-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  flex-shrink: 0;
+}
+
+.mm-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mm-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.mm-card-role {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.mm-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #166534;
+  margin: 0 0 12px 0;
+}
+
+.mm-card-status svg {
+  color: #166534;
+}
+
+.mm-card-status--pending {
+  color: #92400e;
+}
+
+.mm-card-status--declined {
+  color: #991b1b;
+}
+
+.mm-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mm-btn-view {
+  padding: 10px 20px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.mm-btn-view:hover {
+  background: #1d4ed8;
+}
+
+.mm-btn-mail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.mm-btn-mail:hover {
+  background: #f9fafb;
+}
+
+.mm-empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 40px 20px;
+  margin: 0;
+}

@@ -1,0 +1,289 @@
+.clubs-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+}
+
+.clubs-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.clubs-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #374151;
+}
+
+.clubs-back:hover {
+  background: #e5e7eb;
+}
+
+.clubs-header-title {
+  flex: 1;
+}
+
+.clubs-header-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.clubs-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  display: block;
+  margin-top: 2px;
+}
+
+.clubs-propose-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.clubs-propose-btn:hover {
+  background: #b91c1c;
+}
+
+.clubs-vacancies-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.clubs-vacancies-btn:hover {
+  background: #1d4ed8;
+}
+
+.clubs-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #374151;
+}
+
+.clubs-profile-btn:hover {
+  background: #e5e7eb;
+}
+
+.clubs-search-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.clubs-search-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.clubs-search-icon {
+  color: #9ca3af;
+}
+
+.clubs-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  outline: none;
+}
+
+.clubs-grid-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.clubs-grid-btn:hover {
+  background: #f9fafb;
+}
+
+.clubs-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.clubs-filter-select {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.clubs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+@media (min-width: 900px) {
+  .clubs-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .clubs-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+}
+
+.clubs-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.clubs-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.clubs-card-image {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  flex-shrink: 0;
+}
+
+.clubs-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.clubs-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.clubs-card-category {
+  font-size: 12px;
+  color: #6b7280;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.clubs-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.clubs-card-members {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.clubs-card-members svg {
+  color: #9ca3af;
+}
+
+.clubs-card-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.clubs-card-status--open {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.clubs-card-status--paused {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.clubs-card-status--closed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.clubs-card-arrow {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.clubs-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #6b7280;
+  padding: 40px 20px;
+  margin: 0;
+}
+

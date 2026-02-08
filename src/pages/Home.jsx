@@ -33,19 +33,19 @@ const Home = () => {
   const clubsButtons = [
     {
       text: 'ADA Clubs',
-      onClick: () => navigate('/coming-soon', { state: { title: 'ADA Clubs' } })
-    },
-    {
-      text: 'Become a Member',
-      onClick: () => navigate('/coming-soon', { state: { title: 'Become a Member' } })
+      onClick: () => navigate('/clubs')
     },
     {
       text: 'Club Vacancies',
-      onClick: () => navigate('/coming-soon', { state: { title: 'Club Vacancies' } })
+      onClick: () => navigate('/clubs/vacancies')
     },
     {
       text: 'Club Events',
-      onClick: () => navigate('/coming-soon', { state: { title: 'Club Events' } })
+      onClick: () => navigate('/clubs/events')
+    },
+    {
+      text: 'My Registered Events',
+      onClick: () => navigate('/clubs/events/my-registrations')
     }
   ]
 
