@@ -54,6 +54,10 @@ const Home = () => {
     {
       text: 'My Registered Events',
       onClick: () => navigate('/clubs/events/my-registrations')
+    },
+    {
+      text: 'Club Admin',
+      onClick: () => navigate('/club-admin')
     }
   ]
 

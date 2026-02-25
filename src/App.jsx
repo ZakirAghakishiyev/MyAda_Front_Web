@@ -30,11 +30,19 @@ import ApplyVacancy from './pages/ApplyVacancy'
 import ClubEvents from './pages/ClubEvents'
 import EventDetail from './pages/EventDetail'
 import MyRegisteredEvents from './pages/MyRegisteredEvents'
+import ClubAdminLayout from './pages/club-admin/ClubAdminLayout'
+import ClubAdminDashboard from './pages/club-admin/ClubAdminDashboard'
+import ClubAdminApplications from './pages/club-admin/ClubAdminApplications'
+import ClubAdminNewVacancy from './pages/club-admin/ClubAdminNewVacancy'
+import ClubAdminSuggestEvent from './pages/club-admin/ClubAdminSuggestEvent'
+import ClubAdminMembers from './pages/club-admin/ClubAdminMembers'
+import ClubAdminEmployees from './pages/club-admin/ClubAdminEmployees'
 import './App.css'
 
 const AppContent = () => {
   const location = useLocation()
   const isRequestDetailRoute = location.pathname.match(/^\/my-requests\/T-\d+$/)
+  const isClubAdminRoute = location.pathname.startsWith('/club-admin')
   const hideHeaderOnRoutes = [
     '/scheduling',
     '/lost-and-found',
@@ -80,7 +88,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute)
 
   return (
     <div className="app">
@@ -121,6 +129,14 @@ const AppContent = () => {
             </>
           } />
           <Route path="/clubs/:id" element={<ClubDetail />} />
+          <Route path="/club-admin" element={<ClubAdminLayout />}>
+            <Route index element={<ClubAdminDashboard />} />
+            <Route path="applications" element={<ClubAdminApplications />} />
+            <Route path="members" element={<ClubAdminMembers />} />
+            <Route path="employees" element={<ClubAdminEmployees />} />
+            <Route path="vacancies/new" element={<ClubAdminNewVacancy />} />
+            <Route path="events/propose" element={<ClubAdminSuggestEvent />} />
+          </Route>
           <Route path="/lost-and-found" element={<LostAndFoundList />} />
           <Route path="/lost-and-found-2" element={
             location.state?.from === 'admin' ? (

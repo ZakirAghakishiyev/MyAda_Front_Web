@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { mockMemberships } from '../data/clubsData'
 import { getClubById } from '../data/clubsData'
+import './ClubsList.css'
 import './MyMemberships.css'
 
 const IconBack = () => (
@@ -9,15 +10,14 @@ const IconBack = () => (
     <path d="M19 12H5M12 19l-7-7 7-7" />
   </svg>
 )
-const IconCheck = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polyline points="20 6 9 17 4 12" />
+const IconPerson = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
   </svg>
 )
-const IconMail = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-    <polyline points="22,6 12,13 2,6" />
+const IconChevron = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="9 18 15 12 9 6" />
   </svg>
 )
 
@@ -37,15 +37,22 @@ const MyMemberships = () => {
   const declinedCount = mockMemberships.filter((m) => m.status === 'Declined').length
 
   return (
-    <div className="mm-page">
-      <header className="mm-header">
-        <button type="button" className="mm-back" onClick={() => navigate('/clubs')} aria-label="Back">
+    <div className="clubs-page">
+      <header className="clubs-header">
+        <button type="button" className="clubs-back" onClick={() => navigate('/clubs')} aria-label="Back to clubs">
           <IconBack />
         </button>
-        <div className="mm-header-title">
+        <div className="clubs-header-title">
           <h1>My Memberships</h1>
-          <span className="mm-subtitle">Track all your club memberships</span>
+          <span className="clubs-subtitle">{filtered.length} {tab === 'active' ? 'active' : tab === 'pending' ? 'pending' : 'declined'} membership{filtered.length !== 1 ? 's' : ''}</span>
         </div>
+        <button
+          type="button"
+          className="clubs-vacancies-btn"
+          onClick={() => navigate('/clubs')}
+        >
+          Discover Clubs
+        </button>
       </header>
 
       <div className="mm-tabs">
@@ -72,41 +79,52 @@ const MyMemberships = () => {
         </button>
       </div>
 
-      <div className="mm-list">
+      <div className="clubs-grid">
         {filtered.length > 0 ? (
           filtered.map((m) => {
             const club = getClubById(m.clubId)
-            const roleLabel = m.role && m.memberSince ? `${m.role} Since ${m.memberSince}` : m.memberSince ? `Member Since ${m.memberSince}` : m.role || '—'
+            const roleLabel = m.role && m.memberSince ? `${m.role} · Since ${m.memberSince}` : m.memberSince ? `Member since ${m.memberSince}` : m.role || 'Member'
             return (
-              <article key={`${m.clubId}-${m.status}`} className="mm-card">
-                <div className="mm-card-avatar" />
-                <div className="mm-card-body">
-                  <h2 className="mm-card-name">{m.clubName}</h2>
-                  <p className="mm-card-role">{roleLabel}</p>
-                  {m.status === 'Active' && (
-                    <p className="mm-card-status">
-                      <IconCheck />
-                      Active Member
-                    </p>
-                  )}
-                  {m.status === 'Pending' && (
-                    <p className="mm-card-status mm-card-status--pending">Pending</p>
-                  )}
-                  {m.status === 'Declined' && (
-                    <p className="mm-card-status mm-card-status--declined">Declined</p>
-                  )}
-                  <div className="mm-card-actions">
+              <article
+                key={`${m.clubId}-${m.status}`}
+                className="clubs-card"
+                onClick={() => club && navigate(`/clubs/${m.clubId}`)}
+                onKeyDown={(e) => club && e.key === 'Enter' && navigate(`/clubs/${m.clubId}`)}
+                role="button"
+                tabIndex={0}
+              >
+                <div
+                  className="clubs-card-media"
+                  style={club?.image ? { backgroundImage: `url(${club.image})` } : undefined}
+                >
+                  <span className="clubs-card-tag">{club?.category ?? 'Club'}</span>
+                  <span className={`mm-card-status-badge mm-card-status-badge--${m.status.toLowerCase()}`}>
+                    {m.status}
+                  </span>
+                </div>
+                <div className="clubs-card-body">
+                  <h2 className="clubs-card-name">{m.clubName}</h2>
+                  <p className="clubs-card-description mm-card-role">{roleLabel}</p>
+                  <div className="clubs-card-footer">
                     {club && (
-                      <button
-                        type="button"
-                        className="mm-btn-view"
-                        onClick={() => navigate(`/clubs/${m.clubId}`)}
-                      >
-                        View Club
-                      </button>
+                      <span className="clubs-card-members">
+                        <IconPerson />
+                        {club.members} members
+                      </span>
                     )}
-                    <button type="button" className="mm-btn-mail" aria-label="Contact">
-                      <IconMail />
+                    {!club && <span />}
+                    <button
+                      type="button"
+                      className="clubs-card-cta"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (club) navigate(`/clubs/${m.clubId}`)
+                      }}
+                    >
+                      View Details
+                      <span className="clubs-card-cta-icon">
+                        <IconChevron />
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -114,7 +132,7 @@ const MyMemberships = () => {
             )
           })
         ) : (
-          <p className="mm-empty">No memberships in this category.</p>
+          <p className="clubs-empty">No memberships in this category.</p>
         )}
       </div>
     </div>

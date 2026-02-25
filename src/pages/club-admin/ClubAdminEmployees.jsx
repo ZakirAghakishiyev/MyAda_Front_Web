@@ -1,0 +1,154 @@
+import React, { useState, useMemo } from 'react'
+import { mockClubEmployees as initialEmployees, EMPLOYEE_POSITIONS as employeePositionsList } from '../../data/clubAdminData'
+import './ClubAdmin.css'
+
+const mockClubEmployees = Array.isArray(initialEmployees) ? initialEmployees : []
+const EMPLOYEE_POSITIONS = Array.isArray(employeePositionsList) ? employeePositionsList : ['Marketing Coordinator', 'Event Coordinator', 'Lead Designer', 'Content Writer', 'Treasurer', 'Outreach Lead']
+
+const IconSearch = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+)
+const IconTrash = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+)
+
+const ClubAdminEmployees = () => {
+  const [employees, setEmployees] = useState(mockClubEmployees)
+  const [search, setSearch] = useState('')
+  const [removeConfirm, setRemoveConfirm] = useState(null)
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return employees
+    return employees.filter(
+      (e) =>
+        `${e.name} ${e.surname}`.toLowerCase().includes(q) ||
+        e.email.toLowerCase().includes(q) ||
+        (e.position && e.position.toLowerCase().includes(q)) ||
+        (e.department && e.department.toLowerCase().includes(q))
+    )
+  }, [employees, search])
+
+  const handleUpdatePosition = (id, newPosition) => {
+    setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, position: newPosition } : e)))
+  }
+
+  const handleRemove = (id) => {
+    setRemoveConfirm(id)
+  }
+
+  const confirmRemove = () => {
+    if (removeConfirm != null) {
+      setEmployees((prev) => prev.filter((e) => e.id !== removeConfirm))
+      setRemoveConfirm(null)
+    }
+  }
+
+  return (
+    <div className="club-admin-page">
+      <header className="club-admin-header">
+        <h1 className="club-admin-header-title">Employees</h1>
+        <div className="club-admin-header-search" style={{ flex: '1 1 280px', maxWidth: 360 }}>
+          <IconSearch />
+          <input
+            type="text"
+            placeholder="Search by name, email, or position..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search employees"
+          />
+        </div>
+      </header>
+
+      <div className="club-admin-content">
+        <p style={{ margin: '0 24px 20px', fontSize: 14, color: '#64748b' }}>
+          Manage club employees (filled roles). Update position or remove.
+        </p>
+
+        <div className="club-admin-card" style={{ margin: '0 24px 24px' }}>
+          <table className="club-admin-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Age</th>
+                <th>Position</th>
+                <th>Department</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((e) => (
+                <tr key={e.id}>
+                  <td>
+                    <div className="club-admin-table-user">
+                      <div className="club-admin-table-avatar" />
+                      <div>
+                        <div className="club-admin-table-name">{e.name} {e.surname}</div>
+                        <a href={`mailto:${e.email}`} className="club-admin-table-email">{e.email}</a>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{e.age != null ? e.age : '—'}</td>
+                  <td>
+                    <select
+                      className="club-admin-select-inline"
+                      value={e.position ?? ''}
+                      onChange={(ev) => handleUpdatePosition(e.id, ev.target.value)}
+                      aria-label={`Update position for ${e.name} ${e.surname}`}
+                    >
+                      {EMPLOYEE_POSITIONS.map((pos) => (
+                        <option key={pos} value={pos}>{pos}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{e.department ?? '—'}</td>
+                  <td>{e.joinedDate ?? '—'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="club-admin-btn-icon club-admin-btn-icon--reject"
+                      aria-label="Remove employee"
+                      onClick={() => handleRemove(e.id)}
+                    >
+                      <IconTrash />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <p className="club-admin-table-empty">No employees found.</p>
+          )}
+        </div>
+      </div>
+
+      {removeConfirm != null && (
+        <div
+          className="club-admin-popup-overlay"
+          onClick={(ev) => ev.target === ev.currentTarget && setRemoveConfirm(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remove-employee-title"
+        >
+          <div className="club-admin-popup club-admin-popup--sm" onClick={(ev) => ev.stopPropagation()}>
+            <div className="club-admin-popup-header">
+              <h2 id="remove-employee-title">Remove employee</h2>
+              <button type="button" className="club-admin-popup-close" onClick={() => setRemoveConfirm(null)} aria-label="Close">×</button>
+            </div>
+            <div className="club-admin-popup-body">
+              <p>Are you sure you want to remove this employee from their role? This action cannot be undone.</p>
+            </div>
+            <div className="club-admin-popup-footer">
+              <button type="button" className="club-admin-btn-secondary" onClick={() => setRemoveConfirm(null)}>Cancel</button>
+              <button type="button" className="club-admin-btn-danger" onClick={confirmRemove}>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default ClubAdminEmployees
