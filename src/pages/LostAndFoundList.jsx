@@ -127,7 +127,9 @@ const LostAndFoundList = () => {
               onClick={() => navigate(`/lost-and-found/item/${item.id}`)}
               onKeyDown={(e) => e.key === 'Enter' && navigate(`/lost-and-found/item/${item.id}`)}
             >
-              <div className="lf-card-image-placeholder" />
+              <div className="lf-card-image-placeholder">
+                {item.image && <img src={item.image} alt="" />}
+              </div>
               <div className="lf-card-body">
                 <div className="lf-card-header-row">
                   <h2 className="lf-card-title">{item.title}</h2>

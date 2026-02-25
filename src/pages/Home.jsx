@@ -17,6 +17,10 @@ const Home = () => {
 
   const lostAndFoundButtons = [
     {
+      text: 'Lost and Found 2',
+      onClick: () => navigate('/lost-and-found-2')
+    },
+    {
       text: 'Announce Lost Item',
       onClick: () => navigate('/lost-and-found/announce-lost', { state: { from: 'home' } })
     },
@@ -27,6 +31,10 @@ const Home = () => {
     {
       text: 'View List',
       onClick: () => navigate('/lost-and-found')
+    },
+    {
+      text: 'Admin',
+      onClick: () => navigate('/admin/lost-and-found')
     }
   ]
 

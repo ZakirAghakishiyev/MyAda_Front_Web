@@ -85,11 +85,14 @@ const LostAndFoundItemDetail = () => {
           </div>
         </header>
 
-        <div className="lf-detail-image-wrap">
-          <div className="lf-detail-image" />
-        </div>
-
         <div className="lf-detail-main">
+          <div className="lf-detail-image-wrap lf-detail-image-wrap--scroll">
+            {item.image ? (
+              <img src={item.image} alt="" className="lf-detail-image" />
+            ) : (
+              <div className="lf-detail-image lf-detail-image-placeholder" />
+            )}
+          </div>
           <span className="lf-detail-category">{item.category.toUpperCase()}</span>
           <h1 id="lf-detail-title" className="lf-detail-title">{item.title}</h1>
           <div className="lf-detail-meta">
