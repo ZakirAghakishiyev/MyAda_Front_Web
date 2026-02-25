@@ -113,25 +113,14 @@ const AppContent = () => {
               <VacancyDetail />
             </>
           } />
-          <Route path="/clubs/propose" element={
-            <>
-              <ClubsList />
-              <ProposeClub />
-            </>
-          } />
+          <Route path="/clubs/propose" element={<ProposeClub />} />
           <Route path="/clubs/:id/join" element={
             <>
-              <ClubsList />
               <ClubDetail />
               <JoinClub />
             </>
           } />
-          <Route path="/clubs/:id" element={
-            <>
-              <ClubsList />
-              <ClubDetail />
-            </>
-          } />
+          <Route path="/clubs/:id" element={<ClubDetail />} />
           <Route path="/lost-and-found" element={<LostAndFoundList />} />
           <Route path="/lost-and-found-2" element={
             location.state?.from === 'admin' ? (

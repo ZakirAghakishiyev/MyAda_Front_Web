@@ -10,7 +10,7 @@
     
     # ---- run stage ----
     FROM nginx:alpine
-    COPY --from=build /app/build /usr/share/nginx/html
+    COPY --from=build /app/dist /usr/share/nginx/html
     
     # React SPA routing (optional but recommended)
     RUN printf 'server {\n\

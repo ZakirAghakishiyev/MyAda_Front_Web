@@ -83,3 +83,8 @@ export function getEventById(id) {
   const numId = parseInt(id, 10)
   return mockClubEvents.find((e) => e.id === numId) || null
 }
+
+export function getEventsByClubId(clubId) {
+  const id = parseInt(clubId, 10)
+  return mockClubEvents.filter((e) => e.clubId === id)
+}

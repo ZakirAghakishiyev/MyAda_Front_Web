@@ -167,8 +167,8 @@
 
 .clubs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
 }
 
 @media (min-width: 900px) {
@@ -186,36 +186,53 @@
 
 .clubs-card {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
+  flex-direction: column;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
   border: 1px solid #e5e7eb;
   cursor: pointer;
-  transition: box-shadow 0.2s;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .clubs-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
-.clubs-card-image {
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  flex-shrink: 0;
+.clubs-card-media {
+  position: relative;
+  width: 100%;
+  padding-top: 65%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.clubs-card-tag {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #111827;
+  background: rgba(249, 250, 251, 0.96);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .clubs-card-body {
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 18px;
 }
 
 .clubs-card-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #1f2937;
   margin: 0 0 4px 0;
@@ -229,15 +246,26 @@
 .clubs-card-category {
   font-size: 12px;
   color: #6b7280;
-  display: block;
-  margin-bottom: 8px;
+  display: none;
 }
 
-.clubs-card-meta {
+.clubs-card-description {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #4b5563;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.clubs-card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  margin-top: 10px;
+  gap: 10px;
 }
 
 .clubs-card-members {
@@ -252,31 +280,28 @@
   color: #9ca3af;
 }
 
-.clubs-card-status {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 8px;
+.clubs-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
   border-radius: 999px;
+  border: none;
+  background: #111827;
+  color: #f9fafb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.clubs-card-status--open {
-  background: #dcfce7;
-  color: #166534;
+.clubs-card-cta:hover {
+  background: #020617;
 }
 
-.clubs-card-status--paused {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.clubs-card-status--closed {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.clubs-card-arrow {
-  color: #9ca3af;
-  flex-shrink: 0;
+.clubs-card-cta-icon {
+  display: inline-flex;
+  align-items: center;
 }
 
 .clubs-empty {

@@ -139,21 +139,35 @@ const ClubsList = () => {
               role="button"
               tabIndex={0}
             >
-              <div className="clubs-card-image" />
+              <div
+                className="clubs-card-media"
+                style={club.image ? { backgroundImage: `url(${club.image})` } : undefined}
+              >
+                <span className="clubs-card-tag">{club.category}</span>
+              </div>
               <div className="clubs-card-body">
                 <h2 className="clubs-card-name">{club.name}</h2>
-                <span className="clubs-card-category">{club.category}</span>
-                <div className="clubs-card-meta">
+                <p className="clubs-card-description">{club.about}</p>
+                <div className="clubs-card-footer">
                   <span className="clubs-card-members">
                     <IconPerson />
-                    {club.members}
+                    {club.members} members
                   </span>
-                  <span className={`clubs-card-status clubs-card-status--${club.status.toLowerCase()}`}>
-                    {club.status}
-                  </span>
+                  <button
+                    type="button"
+                    className="clubs-card-cta"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigate(`/clubs/${club.id}`)
+                    }}
+                  >
+                    View Details
+                    <span className="clubs-card-cta-icon">
+                      <IconChevron />
+                    </span>
+                  </button>
                 </div>
               </div>
-              <span className="clubs-card-arrow"><IconChevron /></span>
             </article>
           ))
         ) : (
