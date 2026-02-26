@@ -15,6 +15,8 @@ const IconTrash = () => (
 const ClubAdminEmployees = () => {
   const [employees, setEmployees] = useState(mockClubEmployees)
   const [search, setSearch] = useState('')
+  const [pendingChanges, setPendingChanges] = useState({})
+  const [isSaving, setIsSaving] = useState(false)
   const [removeConfirm, setRemoveConfirm] = useState(null)
 
   const filtered = useMemo(() => {
@@ -31,6 +33,31 @@ const ClubAdminEmployees = () => {
 
   const handleUpdatePosition = (id, newPosition) => {
     setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, position: newPosition } : e)))
+    setPendingChanges((prev) => ({
+      ...prev,
+      [id]: newPosition
+    }))
+  }
+
+  const handleConfirmPositionChanges = async () => {
+    const changes = Object.entries(pendingChanges).map(([id, position]) => ({
+      id: Number(id),
+      position
+    }))
+    if (!changes.length) return
+    setIsSaving(true)
+    try {
+      await fetch('/api/club-admin/employees/positions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes })
+      })
+      setPendingChanges({})
+    } catch (error) {
+      console.error('Failed to update employee positions', error)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleRemove = (id) => {
@@ -72,7 +99,6 @@ const ClubAdminEmployees = () => {
                 <th>Employee</th>
                 <th>Age</th>
                 <th>Position</th>
-                <th>Department</th>
                 <th>Joined</th>
                 <th>Actions</th>
               </tr>
@@ -102,7 +128,6 @@ const ClubAdminEmployees = () => {
                       ))}
                     </select>
                   </td>
-                  <td>{e.department ?? '—'}</td>
                   <td>{e.joinedDate ?? '—'}</td>
                   <td>
                     <button
@@ -120,6 +145,19 @@ const ClubAdminEmployees = () => {
           </table>
           {filtered.length === 0 && (
             <p className="club-admin-table-empty">No employees found.</p>
+          )}
+          {Object.keys(pendingChanges).length > 0 && (
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 14, color: '#0f172a' }}>You have unsaved position changes.</span>
+              <button
+                type="button"
+                className="club-admin-btn-primary"
+                onClick={handleConfirmPositionChanges}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Confirm changes'}
+              </button>
+            </div>
           )}
         </div>
       </div>

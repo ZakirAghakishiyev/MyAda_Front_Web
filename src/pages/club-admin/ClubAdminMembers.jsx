@@ -3,7 +3,7 @@ import { mockClubMembers as initialMembers, MEMBER_POSITIONS as memberPositionsL
 import './ClubAdmin.css'
 
 const mockClubMembers = Array.isArray(initialMembers) ? initialMembers : []
-const MEMBER_POSITIONS = Array.isArray(memberPositionsList) ? memberPositionsList : ['Full Member', 'Associate Member', 'Treasurer', 'Secretary', 'Vice President', 'President']
+const MEMBER_POSITIONS = Array.isArray(memberPositionsList) ? memberPositionsList : ['Member']
 
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -15,6 +15,8 @@ const IconTrash = () => (
 const ClubAdminMembers = () => {
   const [members, setMembers] = useState(mockClubMembers)
   const [search, setSearch] = useState('')
+  const [pendingChanges, setPendingChanges] = useState({})
+  const [isSaving, setIsSaving] = useState(false)
   const [removeConfirm, setRemoveConfirm] = useState(null)
 
   const filtered = useMemo(() => {
@@ -31,6 +33,31 @@ const ClubAdminMembers = () => {
 
   const handleUpdatePosition = (id, newPosition) => {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, position: newPosition } : m)))
+    setPendingChanges((prev) => ({
+      ...prev,
+      [id]: newPosition
+    }))
+  }
+
+  const handleConfirmPositionChanges = async () => {
+    const changes = Object.entries(pendingChanges).map(([id, position]) => ({
+      id: Number(id),
+      position
+    }))
+    if (!changes.length) return
+    setIsSaving(true)
+    try {
+      await fetch('/api/club-admin/members/positions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes })
+      })
+      setPendingChanges({})
+    } catch (error) {
+      console.error('Failed to update member positions', error)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleRemove = (id) => {
@@ -120,6 +147,19 @@ const ClubAdminMembers = () => {
           </table>
           {filtered.length === 0 && (
             <p className="club-admin-table-empty">No members found.</p>
+          )}
+          {Object.keys(pendingChanges).length > 0 && (
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 14, color: '#0f172a' }}>You have unsaved position changes.</span>
+              <button
+                type="button"
+                className="club-admin-btn-primary"
+                onClick={handleConfirmPositionChanges}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Confirm changes'}
+              </button>
+            </div>
           )}
         </div>
       </div>

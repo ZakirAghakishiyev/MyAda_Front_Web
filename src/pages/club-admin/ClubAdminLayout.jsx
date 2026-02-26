@@ -54,6 +54,13 @@ const IconBriefcase = () => (
   </svg>
 )
 
+const IconTag = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a2 2 0 0 0-2 2v5.59A2 2 0 0 0 2.59 12L12.17 21.6a2 2 0 0 0 2.83 0l5.59-5.59a2 2 0 0 0 0-2.83Z" />
+    <circle cx="7.5" cy="7.5" r="1.5" />
+  </svg>
+)
+
 const IconPlus = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="5" x2="12" y2="19" />
@@ -111,6 +118,10 @@ export default function ClubAdminLayout() {
 
           <NavLink to="/club-admin/vacancies/new" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
             <IconMegaphone /> Announce Vacancy
+          </NavLink>
+
+          <NavLink to="/club-admin/positions/new" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
+            <IconTag /> Create Position
           </NavLink>
 
           <NavLink to="/club-admin/events/propose" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>

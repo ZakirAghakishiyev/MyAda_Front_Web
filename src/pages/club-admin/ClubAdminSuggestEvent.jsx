@@ -21,6 +21,14 @@ const IconUpload = () => (
 const IconCheck = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
 )
+const IconTrash = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+)
 
 const VENUES = ['Main Auditorium', 'Student Center', 'Conference Room A', 'Outdoor Quad', 'Lecture Hall B']
 
@@ -36,12 +44,48 @@ const ClubAdminSuggestEvent = () => {
   const posterInputRef = useRef(null)
   const [description, setDescription] = useState('')
   const [objectives, setObjectives] = useState('')
-  const [subEvents, setSubEvents] = useState('')
+  const [subEvents, setSubEvents] = useState([])
+  const [subEventTitle, setSubEventTitle] = useState('')
+  const [subEventCapacity, setSubEventCapacity] = useState('')
+  const [subEventStart, setSubEventStart] = useState('')
+  const [subEventEnd, setSubEventEnd] = useState('')
+  const [subEventDate, setSubEventDate] = useState('')
+  const [subEventError, setSubEventError] = useState('')
   const [avSetup, setAvSetup] = useState(false)
   const [security, setSecurity] = useState(true)
   const [catering, setCatering] = useState(false)
   const [cleaning, setCleaning] = useState(true)
   const [otherNeeds, setOtherNeeds] = useState('')
+
+  const addSubEvent = () => {
+    const title = subEventTitle.trim()
+    const capacity = subEventCapacity.trim()
+    const start = subEventStart.trim()
+    const end = subEventEnd.trim()
+    const date = (subEventDate || dateTime).trim()
+
+    if (!title || !capacity || !start || !end) {
+      setSubEventError('Please fill in title, capacity, start, and end time.')
+      return
+    }
+
+    if (start && end && start >= end) {
+      setSubEventError('End time must be later than start time.')
+      return
+    }
+
+    setSubEvents((prev) => [...prev, { title, capacity, start, end, date }])
+    setSubEventError('')
+    setSubEventTitle('')
+    setSubEventCapacity('')
+    setSubEventStart('')
+    setSubEventEnd('')
+    setSubEventDate('')
+  }
+
+  const removeSubEvent = (index) => {
+    setSubEvents((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const progressPct = (step / STEPS) * 100
 
@@ -114,14 +158,20 @@ const ClubAdminSuggestEvent = () => {
               <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconImage style={{ color: '#0284c7' }} /></div>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Poster / Cover Image</h3>
             </div>
-            <label className="club-admin-upload-zone" htmlFor="suggest-event-poster-upload">
+            <div
+              className="club-admin-upload-zone"
+              onClick={(e) => {
+                // avoid triggering when clicking the inner button which already handles opening
+                if ((e.target instanceof HTMLElement) && e.target.closest('button')) return
+                posterInputRef.current?.click()
+              }}
+            >
               <input
                 id="suggest-event-poster-upload"
                 ref={posterInputRef}
                 type="file"
                 accept="image/png,image/jpeg,image/jpg,image/svg+xml"
                 onChange={(e) => setPosterFile(e.target.files?.[0] ?? null)}
-                style={{ display: 'none' }}
               />
               <IconUpload style={{ color: '#2563eb', marginBottom: 8 }} />
               <div>Click to upload or drag &amp; drop</div>
@@ -135,7 +185,7 @@ const ClubAdminSuggestEvent = () => {
                 Select File
               </button>
               {posterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{posterFile.name}</div>}
-            </label>
+            </div>
           </div>
         </div>
 
@@ -157,7 +207,120 @@ const ClubAdminSuggestEvent = () => {
             </div>
             <div className="club-admin-field">
               <label>Sub-events Included</label>
-              <textarea placeholder="List workshops, ceremonies, or breakout sessions..." value={subEvents} onChange={(e) => setSubEvents(e.target.value)} rows={3} />
+              <div className="club-admin-field">
+                <label style={{ fontSize: 12 }}>Date (optional)</label>
+                <input
+                  type="date"
+                  value={subEventDate}
+                  onChange={(e) => {
+                    setSubEventDate(e.target.value)
+                    if (subEventError) setSubEventError('')
+                  }}
+                  placeholder="Defaults to main event date"
+                />
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                  If left empty, the sub-event will use the main event&apos;s date.
+                </div>
+              </div>
+              <div className="club-admin-form-row">
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Opening Ceremony"
+                    value={subEventTitle}
+                    onChange={(e) => {
+                      setSubEventTitle(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Capacity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 150"
+                    value={subEventCapacity}
+                    onChange={(e) => {
+                      setSubEventCapacity(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Start Time</label>
+                  <input
+                    type="time"
+                    value={subEventStart}
+                    onChange={(e) => {
+                      setSubEventStart(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>End Time</label>
+                  <input
+                    type="time"
+                    value={subEventEnd}
+                    onChange={(e) => {
+                      setSubEventEnd(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="club-admin-btn-primary"
+                style={{ marginTop: 10 }}
+                onClick={addSubEvent}
+              >
+                + Add Sub-event
+              </button>
+              {subEventError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#b91c1c' }}>
+                  {subEventError}
+                </div>
+              )}
+              {subEvents.length > 0 && (
+                <table className="club-admin-table" style={{ marginTop: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Title</th>
+                      <th>Capacity</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subEvents.map((se, index) => (
+                      <tr key={`${se.title}-${index}`}>
+                        <td>{se.date}</td>
+                        <td>{se.title}</td>
+                        <td>{se.capacity}</td>
+                        <td>{se.start}</td>
+                        <td>{se.end}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="club-admin-btn-icon"
+                            onClick={() => removeSubEvent(index)}
+                            aria-label="Remove sub-event"
+                          >
+                            <IconTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 
@@ -169,7 +332,7 @@ const ClubAdminSuggestEvent = () => {
             <div style={{ background: '#f8fafc', borderRadius: 10, padding: 16 }}>
               <p style={{ margin: '0 0 8px', fontSize: 14 }}><strong>Total Steps:</strong> 4/4</p>
               <p style={{ margin: '0 0 8px', fontSize: 14 }}><strong>Mandatory Fields:</strong> <span style={{ color: '#10b981' }}>Complete</span></p>
-              <p style={{ margin: 0, fontSize: 14 }}><strong>Reviewer:</strong> Admin Committee</p>
+              <p style={{ margin: 0, fontSize: 14 }}><strong>Reviewer:</strong> Student Services</p>
             </div>
           </div>
         </div>

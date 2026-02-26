@@ -58,6 +58,10 @@ const Home = () => {
     {
       text: 'Club Admin',
       onClick: () => navigate('/club-admin')
+    },
+    {
+      text: 'Student Services',
+      onClick: () => navigate('/student-services')
     }
   ]
 

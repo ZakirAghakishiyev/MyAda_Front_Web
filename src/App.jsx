@@ -34,9 +34,11 @@ import ClubAdminLayout from './pages/club-admin/ClubAdminLayout'
 import ClubAdminDashboard from './pages/club-admin/ClubAdminDashboard'
 import ClubAdminApplications from './pages/club-admin/ClubAdminApplications'
 import ClubAdminNewVacancy from './pages/club-admin/ClubAdminNewVacancy'
+import ClubAdminNewPosition from './pages/club-admin/ClubAdminNewPosition'
 import ClubAdminSuggestEvent from './pages/club-admin/ClubAdminSuggestEvent'
 import ClubAdminMembers from './pages/club-admin/ClubAdminMembers'
 import ClubAdminEmployees from './pages/club-admin/ClubAdminEmployees'
+import StudentServices from './pages/StudentServices'
 import './App.css'
 
 const AppContent = () => {
@@ -58,7 +60,8 @@ const AppContent = () => {
     '/clubs/my-memberships',
     '/clubs/vacancies',
     '/clubs/events',
-    '/clubs/events/my-registrations'
+    '/clubs/events/my-registrations',
+    '/student-services'
   ]
   const isClubDetailRoute = location.pathname.match(/^\/clubs\/\d+$/)
   const isProposeClubRoute = location.pathname === '/clubs/propose'
@@ -98,6 +101,7 @@ const AppContent = () => {
           <Route path="/" element={<Home />} />
           <Route path="/scheduling" element={<SchedulingPage />} />
           <Route path="/coming-soon" element={<ComingSoonPage />} />
+          <Route path="/student-services" element={<StudentServices />} />
           <Route path="/clubs" element={<ClubsList />} />
           <Route path="/clubs/my-memberships" element={<MyMemberships />} />
           <Route path="/clubs/vacancies" element={<ClubVacancies />} />
@@ -135,6 +139,7 @@ const AppContent = () => {
             <Route path="members" element={<ClubAdminMembers />} />
             <Route path="employees" element={<ClubAdminEmployees />} />
             <Route path="vacancies/new" element={<ClubAdminNewVacancy />} />
+            <Route path="positions/new" element={<ClubAdminNewPosition />} />
             <Route path="events/propose" element={<ClubAdminSuggestEvent />} />
           </Route>
           <Route path="/lost-and-found" element={<LostAndFoundList />} />

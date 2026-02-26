@@ -32,24 +32,35 @@ export const mockJobVacancyApplications = [
 export const VACANCY_CATEGORIES = ['Marketing', 'Technology', 'Events', 'Finance', 'Outreach', 'Content', 'Other']
 
 // Member positions (status) in the club
-export const MEMBER_POSITIONS = ['Full Member', 'Associate Member', 'Treasurer', 'Secretary', 'Vice President', 'President']
+// In this UI we treat all regular members as having the same status: "Member"
+export const MEMBER_POSITIONS = ['Member']
 
-// Mock club members
+// Mock club members (only regular members appear here)
 export const mockClubMembers = [
-  { id: 1, name: 'Alex', surname: 'Johnson', email: 'alex.j@university.edu', studentId: '20220012', position: 'President', joinedDate: 'Sep 1, 2022', age: 22 },
-  { id: 2, name: 'Maria', surname: 'Garcia', email: 'maria.g@university.edu', studentId: '20220145', position: 'Full Member', joinedDate: 'Sep 15, 2022', age: 20 },
-  { id: 3, name: 'James', surname: 'Smith', email: 'james.s@university.edu', studentId: '20219890', position: 'Treasurer', joinedDate: 'Oct 1, 2022', age: 24 },
-  { id: 4, name: 'Sarah', surname: 'Chen', email: 'sarah.c@university.edu', studentId: '20220333', position: 'Secretary', joinedDate: 'Oct 10, 2022', age: 21 },
-  { id: 5, name: 'Emma', surname: 'Wilson', email: 'emma.w@university.edu', studentId: '20220456', position: 'Full Member', joinedDate: 'Nov 1, 2022', age: 19 },
-  { id: 6, name: 'David', surname: 'Brown', email: 'david.b@university.edu', studentId: '20220567', position: 'Associate Member', joinedDate: 'Jan 15, 2023', age: 23 }
+  { id: 2, name: 'Maria', surname: 'Garcia', email: 'maria.g@university.edu', studentId: '20220145', position: 'Member', joinedDate: 'Sep 15, 2022', age: 20 },
+  { id: 5, name: 'Emma', surname: 'Wilson', email: 'emma.w@university.edu', studentId: '20220456', position: 'Member', joinedDate: 'Nov 1, 2022', age: 19 },
+  { id: 6, name: 'David', surname: 'Brown', email: 'david.b@university.edu', studentId: '20220567', position: 'Member', joinedDate: 'Jan 15, 2023', age: 23 }
 ]
 
-// Employee/role positions (job titles for filled vacancies)
-export const EMPLOYEE_POSITIONS = ['Marketing Coordinator', 'Event Coordinator', 'Lead Designer', 'Content Writer', 'Treasurer', 'Outreach Lead']
+// Employee/role positions (job titles for filled vacancies, including leadership)
+export const EMPLOYEE_POSITIONS = [
+  'President',
+  'Vice President',
+  'Secretary',
+  'Treasurer',
+  'Marketing Coordinator',
+  'Event Coordinator',
+  'Lead Designer',
+  'Content Writer',
+  'Outreach Lead'
+]
 
-// Mock club employees (members who hold job positions)
+// Mock club employees (members who hold job/leadership positions)
 export const mockClubEmployees = [
-  { id: 1, name: 'Mike', surname: 'Wilson', email: 'mike.w@university.edu', position: 'Marketing Coordinator', department: 'Marketing', joinedDate: 'Oct 24, 2023', age: 21 },
-  { id: 2, name: 'Lisa', surname: 'Park', email: 'lisa.p@university.edu', position: 'Event Coordinator', department: 'Events', joinedDate: 'Oct 25, 2023', age: 23 },
-  { id: 3, name: 'Chris', surname: 'Lee', email: 'chris.l@university.edu', position: 'Lead Designer', department: 'Technology', joinedDate: 'Sep 10, 2023', age: 25 }
+  { id: 1, name: 'Alex', surname: 'Johnson', email: 'alex.j@university.edu', position: 'President', department: 'Management', joinedDate: 'Sep 1, 2022', age: 22 },
+  { id: 3, name: 'James', surname: 'Smith', email: 'james.s@university.edu', position: 'Treasurer', department: 'Finance', joinedDate: 'Oct 1, 2022', age: 24 },
+  { id: 4, name: 'Sarah', surname: 'Chen', email: 'sarah.c@university.edu', position: 'Secretary', department: 'Administration', joinedDate: 'Oct 10, 2022', age: 21 },
+  { id: 7, name: 'Mike', surname: 'Wilson', email: 'mike.w@university.edu', position: 'Marketing Coordinator', department: 'Marketing', joinedDate: 'Oct 24, 2023', age: 21 },
+  { id: 8, name: 'Lisa', surname: 'Park', email: 'lisa.p@university.edu', position: 'Event Coordinator', department: 'Events', joinedDate: 'Oct 25, 2023', age: 23 },
+  { id: 9, name: 'Chris', surname: 'Lee', email: 'chris.l@university.edu', position: 'Lead Designer', department: 'Technology', joinedDate: 'Sep 10, 2023', age: 25 }
 ]
