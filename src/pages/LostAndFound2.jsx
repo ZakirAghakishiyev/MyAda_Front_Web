@@ -5,15 +5,8 @@ import './LostAndFound2.css'
 
 const STEPS = ['Info', 'Location', 'Time', 'Details', 'Photos', 'Contact']
 const CATEGORIES = ['All Items', 'Electronics', 'Documents', 'Personal Items', 'Accessories']
-const COLORS = [
-  { name: 'Black', value: '#1f2937' },
-  { name: 'Dark Grey', value: '#4b5563' },
-  { name: 'Blue', value: '#2563eb' },
-  { name: 'Red', value: '#dc2626' },
-  { name: 'Green', value: '#16a34a' },
-  { name: 'White', value: '#f3f4f6' }
-]
 const ITEMS_PER_PAGE = 8
+const MAX_DESCRIPTION_LENGTH = 500
 
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,8 +73,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const [reportForm, setReportForm] = useState({
     itemName: '',
     category: 'Electronics',
-    color: COLORS[0].value,
-    brand: '',
     building: '',
     floor: '',
     roomArea: '',
@@ -139,8 +130,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setReportForm({
       itemName: '',
       category: 'Electronics',
-      color: COLORS[0].value,
-      brand: '',
       building: '',
       floor: '',
       roomArea: '',
@@ -246,31 +235,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                         <option value="Accessories">Accessories</option>
                       </select>
                     </label>
-                    <div className="lf2-field">
-                      <span className="lf2-label">Color</span>
-                      <div className="lf2-color-swatches">
-                        {COLORS.map(c => (
-                          <button
-                            key={c.value}
-                            type="button"
-                            className="lf2-swatch"
-                            style={{ background: c.value }}
-                            title={c.name}
-                            aria-pressed={reportForm.color === c.value}
-                            onClick={() => setReportForm(f => ({ ...f, color: c.value }))}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <label className="lf2-field">
-                      <span className="lf2-label">Brand (if any)</span>
-                      <input
-                        type="text"
-                        placeholder="e.g. Apple, Nike, Sony"
-                        value={reportForm.brand}
-                        onChange={e => setReportForm(f => ({ ...f, brand: e.target.value }))}
-                      />
-                    </label>
                   </div>
                 </section>
 
@@ -278,31 +242,36 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                   <h2 className="lf2-section-title">
                     <span className="lf2-section-icon"><IconPin /></span>
                     Location
+                    {view === 'report-found' && <span className="lf2-required-hint"> *</span>}
+                    {view === 'report-lost' && <span className="lf2-optional-hint"> (optional)</span>}
                   </h2>
                   <div className="lf2-fields">
                     <label className="lf2-field">
-                      <span className="lf2-label">Building</span>
+                      <span className="lf2-label">Building{view === 'report-found' ? ' *' : ''}</span>
                       <input
                         type="text"
-                        placeholder="Select building..."
+                        required={view === 'report-found'}
+                        placeholder={view === 'report-found' ? 'Select building...' : 'Select building... (optional)'}
                         value={reportForm.building}
                         onChange={e => setReportForm(f => ({ ...f, building: e.target.value }))}
                       />
                     </label>
                     <label className="lf2-field">
-                      <span className="lf2-label">Floor</span>
+                      <span className="lf2-label">Floor{view === 'report-found' ? ' *' : ''}</span>
                       <input
                         type="text"
-                        placeholder="e.g. 2nd Floor"
+                        required={view === 'report-found'}
+                        placeholder={view === 'report-found' ? 'e.g. 2nd Floor' : 'e.g. 2nd Floor (optional)'}
                         value={reportForm.floor}
                         onChange={e => setReportForm(f => ({ ...f, floor: e.target.value }))}
                       />
                     </label>
                     <label className="lf2-field">
-                      <span className="lf2-label">Room/Area</span>
+                      <span className="lf2-label">Room/Area{view === 'report-found' ? ' *' : ''}</span>
                       <input
                         type="text"
-                        placeholder="Room 302"
+                        required={view === 'report-found'}
+                        placeholder={view === 'report-found' ? 'Room 302' : 'Room 302 (optional)'}
                         value={reportForm.roomArea}
                         onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
                       />
@@ -312,8 +281,31 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
 
                 <section className="lf2-section">
                   <h2 className="lf2-section-title">
+                    <span className="lf2-section-icon lf2-section-icon--info"><IconInfo /></span>
+                    Description
+                  </h2>
+                  <p className="lf2-section-desc">Describe the item to help identify it.</p>
+                  <div className="lf2-fields">
+                    <label className="lf2-field">
+                      <span className="lf2-label">Description</span>
+                      <textarea
+                        rows={4}
+                        placeholder="Describe the item..."
+                        maxLength={MAX_DESCRIPTION_LENGTH}
+                        value={reportForm.description}
+                        onChange={e => setReportForm(f => ({ ...f, description: e.target.value.slice(0, MAX_DESCRIPTION_LENGTH) }))}
+                      />
+                      <span className="lf2-char-count">{reportForm.description.length}/{MAX_DESCRIPTION_LENGTH}</span>
+                    </label>
+                  </div>
+                </section>
+
+                <section className="lf2-section">
+                  <h2 className="lf2-section-title">
                     <span className="lf2-section-icon"><IconCamera /></span>
                     Photos
+                    {view === 'report-found' && <span className="lf2-required-hint"> *</span>}
+                    {view === 'report-lost' && <span className="lf2-optional-hint"> (optional)</span>}
                   </h2>
                   <label
                     className="lf2-dropzone"
@@ -324,6 +316,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                       type="file"
                       accept="image/png,image/jpeg,image/jpg"
                       multiple
+                      required={view === 'report-found'}
                       onChange={handlePhotoChange}
                       className="lf2-dropzone-input"
                     />

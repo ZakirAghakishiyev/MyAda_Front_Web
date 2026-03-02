@@ -61,18 +61,10 @@ const AnnounceFoundItem = () => {
                   <option value="other">Other</option>
                 </select>
               </label>
-              <div className="lf-field-row">
-                <label className="lf-field">
-                  <input type="text" placeholder="Color" />
-                </label>
-                <label className="lf-field">
-                  <input type="text" placeholder="Brand" />
-                </label>
-              </div>
             </div>
           </section>
 
-          {/* 2. Location Details */}
+          {/* 2. Location Details (required for found items) */}
           <section className="lf-report-section">
             <h2 className="lf-report-section-title">
               <span className="lf-report-section-num">2</span>
@@ -91,10 +83,10 @@ const AnnounceFoundItem = () => {
               </label>
               <div className="lf-field-row">
                 <label className="lf-field">
-                  <input type="text" placeholder="Floor" />
+                  <input type="text" required placeholder="Floor *" />
                 </label>
                 <label className="lf-field">
-                  <input type="text" placeholder="Room/Area" />
+                  <input type="text" required placeholder="Room/Area *" />
                 </label>
               </div>
               <label className="lf-field">
@@ -123,17 +115,17 @@ const AnnounceFoundItem = () => {
             </div>
           </section>
 
-          {/* 4. Additional Details */}
+          {/* 4. Description */}
           <section className="lf-report-section">
             <h2 className="lf-report-section-title">
               <span className="lf-report-section-num">4</span>
-              Additional Details
+              Description
             </h2>
             <div className="lf-report-fields">
               <label className="lf-field lf-field-textarea-wrap">
                 <textarea
                   rows={4}
-                  placeholder="Description"
+                  placeholder="Describe the item"
                   value={description}
                   onChange={handleDescriptionChange}
                   maxLength={MAX_DESCRIPTION_LENGTH}
@@ -143,7 +135,7 @@ const AnnounceFoundItem = () => {
             </div>
           </section>
 
-          {/* 5. Photos */}
+          {/* 5. Photos (required for found items) */}
           <section className="lf-report-section">
             <h2 className="lf-report-section-title">
               <span className="lf-report-section-num">5</span>
@@ -155,10 +147,11 @@ const AnnounceFoundItem = () => {
                   type="file"
                   accept="image/*"
                   className="lf-add-photo-input"
+                  required
                   onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
                 />
                 <span className="lf-add-photo-icon">🖼️+</span>
-                <span className="lf-add-photo-text">Add Photo</span>
+                <span className="lf-add-photo-text">Add Photo *</span>
                 {photoFile && <span className="lf-add-photo-filename">{photoFile.name}</span>}
               </label>
             </div>

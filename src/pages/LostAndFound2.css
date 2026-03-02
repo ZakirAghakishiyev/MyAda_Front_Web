@@ -655,8 +655,25 @@
   color: #374151;
 }
 
+.lf2-required-hint {
+  color: #dc2626;
+}
+
+.lf2-optional-hint {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.lf2-char-count {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
 .lf2-field input,
-.lf2-field select {
+.lf2-field select,
+.lf2-field textarea {
   padding: 10px 14px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -666,10 +683,16 @@
 }
 
 .lf2-field input:focus,
-.lf2-field select:focus {
+.lf2-field select:focus,
+.lf2-field textarea:focus {
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.lf2-field textarea {
+  resize: vertical;
+  min-height: 80px;
 }
 
 /* Color swatches */

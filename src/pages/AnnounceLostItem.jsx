@@ -53,26 +53,18 @@ const AnnounceLostItem = () => {
               <input type="text" required placeholder="Item Name *" />
             </label>
             <label className="lf-field">
-              <select required defaultValue="">
-                <option value="" disabled>Category *</option>
-                <option value="electronics">Electronics</option>
-                <option value="documents">Documents</option>
-                <option value="clothing">Clothing</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <div className="lf-field-row">
-              <label className="lf-field">
-                <input type="text" placeholder="Color" />
+                <select required defaultValue="">
+                  <option value="" disabled>Category *</option>
+                  <option value="electronics">Electronics</option>
+                  <option value="documents">Documents</option>
+                  <option value="clothing">Clothing</option>
+                  <option value="other">Other</option>
+                </select>
               </label>
-              <label className="lf-field">
-                <input type="text" placeholder="Brand" />
-              </label>
-            </div>
           </div>
         </section>
 
-        {/* 2. Location Details */}
+        {/* 2. Location Details (optional for lost items) */}
         <section className="lf-report-section">
           <h2 className="lf-report-section-title">
             <span className="lf-report-section-num">2</span>
@@ -80,8 +72,8 @@ const AnnounceLostItem = () => {
           </h2>
           <div className="lf-report-fields">
             <label className="lf-field">
-              <select required defaultValue="">
-                <option value="" disabled>Building *</option>
+              <select defaultValue="">
+                <option value="">Building (optional)</option>
                 <option value="main">Main Building</option>
                 <option value="library">Library</option>
                 <option value="sports">Sports Complex</option>
@@ -91,14 +83,14 @@ const AnnounceLostItem = () => {
             </label>
             <div className="lf-field-row">
               <label className="lf-field">
-                <input type="text" placeholder="Floor" />
+                <input type="text" placeholder="Floor (optional)" />
               </label>
               <label className="lf-field">
-                <input type="text" placeholder="Room/Area" />
+                <input type="text" placeholder="Room/Area (optional)" />
               </label>
             </div>
             <label className="lf-field">
-              <input type="text" required placeholder="Last Known Location *" />
+              <input type="text" placeholder="Last Known Location" />
             </label>
           </div>
         </section>
@@ -123,17 +115,17 @@ const AnnounceLostItem = () => {
           </div>
         </section>
 
-        {/* 4. Additional Details */}
+        {/* 4. Description */}
         <section className="lf-report-section">
           <h2 className="lf-report-section-title">
             <span className="lf-report-section-num">4</span>
-            Additional Details
+            Description
           </h2>
           <div className="lf-report-fields">
             <label className="lf-field lf-field-textarea-wrap">
               <textarea
                 rows={4}
-                placeholder="Description"
+                placeholder="Describe the item (optional)"
                 value={description}
                 onChange={handleDescriptionChange}
                 maxLength={MAX_DESCRIPTION_LENGTH}
@@ -143,7 +135,7 @@ const AnnounceLostItem = () => {
           </div>
         </section>
 
-        {/* 5. Photos */}
+        {/* 5. Photos (optional for lost items) */}
         <section className="lf-report-section">
           <h2 className="lf-report-section-title">
             <span className="lf-report-section-num">5</span>

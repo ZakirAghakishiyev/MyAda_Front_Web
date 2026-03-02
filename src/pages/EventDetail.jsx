@@ -24,11 +24,49 @@ const IconMapPin = () => (
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
   </svg>
 )
+const IconInfo = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+  </svg>
+)
+const IconShare = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+)
+const IconBell = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13 21a1 1 0 0 1-2 0" />
+  </svg>
+)
+const IconBookmark = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+)
 
 const formatDate = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
+
+const formatTimeRange = (start, end) => {
+  if (!start) return ''
+  const fmt = (t) => {
+    const [h, m] = t.split(':').map(Number)
+    const period = h >= 12 ? 'PM' : 'AM'
+    const hour = h % 12 || 12
+    return `${hour}:${m.toString().padStart(2, '0')} ${period}`
+  }
+  return end ? `${fmt(start)} - ${fmt(end)}` : fmt(start)
+}
+
+const EVENT_HIGHLIGHTS = [
+  'Live professional commentary',
+  'Free energy drinks and snacks',
+  'Limited edition event merch',
+  'Raffle for a high-end gaming chair'
+]
 
 const EventDetail = () => {
   const navigate = useNavigate()
@@ -39,85 +77,161 @@ const EventDetail = () => {
 
   if (!event) {
     return (
-      <div className="event-detail-overlay" onClick={() => navigate(-1)}>
-        <div className="event-detail-popup" onClick={(e) => e.stopPropagation()}>
+      <div className="ed-page">
+        <div className="ed-not-found">
           <p>Event not found.</p>
-          <button type="button" className="event-detail-back-btn" onClick={() => navigate(-1)}>
-            Back
+          <button type="button" className="ed-btn ed-btn--primary" onClick={() => navigate('/clubs/events')}>
+            Back to Events
           </button>
         </div>
       </div>
     )
   }
 
-  const handleBack = () => navigate(-1)
+  const handleBack = () => navigate('/clubs/events')
 
   const handleRegister = () => {
     registerEvent(id)
+    navigate(`/clubs/events/${id}/ticket`, { state: { fromRegistration: true } })
   }
 
-  const scheduleTime = event.endTime ? `${event.time} – ${event.endTime}` : event.time
+  const scheduleTime = formatTimeRange(event.time, event.endTime)
+  const remainingSlots = 42
+  const totalSlots = 150
 
   return (
-    <div
-      className="event-detail-overlay"
-      onClick={(e) => e.target === e.currentTarget && navigate(-1)}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="event-detail-title"
-    >
-      <div className="event-detail-popup" onClick={(e) => e.stopPropagation()}>
-        <header className="event-detail-header">
-          <button type="button" className="event-detail-back" onClick={handleBack} aria-label="Back">
-            <IconBack />
-          </button>
-        </header>
+    <div className="ed-page">
+      <header className="ed-nav">
+        <button type="button" className="ed-back" onClick={handleBack} aria-label="Back">
+          <IconBack />
+        </button>
+        <span className="ed-nav-logo">CampusEvents</span>
+        <nav className="ed-nav-links">
+          <button type="button" onClick={() => navigate('/clubs/events')}>Explore</button>
+          <button type="button" onClick={() => navigate('/clubs')}>Clubs</button>
+          <button type="button" className="ed-nav-active" onClick={() => navigate('/clubs/events/my-registrations')}>My Events</button>
+          <span>Calendar</span>
+        </nav>
+        <div className="ed-nav-search">
+          <input type="text" placeholder="Search events..." readOnly aria-label="Search" />
+        </div>
+        <span className="ed-nav-profile">Profile</span>
+      </header>
 
-        <div className="event-detail-body">
-          <div className="event-detail-hero">
-            <span className="event-detail-category">{event.category}</span>
-            <h1 id="event-detail-title" className="event-detail-title">{event.title}</h1>
-            <p className="event-detail-club">{event.clubName}</p>
-          </div>
+      <div
+        className="ed-hero"
+        style={event.image ? { backgroundImage: `url(${event.image})` } : undefined}
+      >
+        <span className="ed-hero-category">{event.category.toUpperCase()}</span>
+        <h1 id="event-detail-title" className="ed-hero-title">{event.title}</h1>
+      </div>
 
-          <section className="event-detail-schedule">
-            <h2 className="event-detail-section-title">Schedule</h2>
-            <div className="event-detail-schedule-list">
-              <div className="event-detail-schedule-item">
-                <IconCalendar />
-                <span>{formatDate(event.date)}</span>
-              </div>
-              <div className="event-detail-schedule-item">
-                <IconClock />
-                <span>{scheduleTime}</span>
-              </div>
-              <div className="event-detail-schedule-item">
-                <IconMapPin />
-                <span>{event.location}</span>
-              </div>
-            </div>
-          </section>
-
-          {event.description && (
-            <section className="event-detail-description">
-              <h2 className="event-detail-section-title">About</h2>
-              <p className="event-detail-desc-text">{event.description}</p>
-            </section>
-          )}
-
-          <div className="event-detail-actions">
-            {registered ? (
-              <div className="event-detail-registered">
-                You are registered for this event.
-              </div>
-            ) : (
-              <button type="button" className="event-detail-register-btn" onClick={handleRegister}>
-                Register for Event
-              </button>
-            )}
-          </div>
+      <div className="ed-info-cards">
+        <div className="ed-info-card">
+          <IconCalendar />
+          <span>{formatDate(event.date)}</span>
+        </div>
+        <div className="ed-info-card">
+          <IconClock />
+          <span>{scheduleTime}</span>
+        </div>
+        <div className="ed-info-card">
+          <IconMapPin />
+          <span>{event.location}</span>
         </div>
       </div>
+
+      <div className="ed-main">
+        <div className="ed-content">
+          <section className="ed-section">
+            <h2 className="ed-section-title">
+              <IconInfo />
+              About the Event
+            </h2>
+            <p className="ed-desc">{event.description}</p>
+          </section>
+
+          <section className="ed-section">
+            <h2 className="ed-section-title">Event Highlights</h2>
+            <ul className="ed-highlights">
+              {EVENT_HIGHLIGHTS.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="ed-section">
+            <div className="ed-map-placeholder">
+              <div className="ed-map-img" />
+              <button type="button" className="ed-map-btn">View Interactive Map</button>
+            </div>
+          </section>
+        </div>
+
+        <aside className="ed-sidebar">
+          <div className="ed-sidebar-card">
+            <span className="ed-sidebar-label">Entry Fee</span>
+            <p className="ed-sidebar-fee">Free <small>for students</small></p>
+            {registered ? (
+              <button
+                type="button"
+                className="ed-btn ed-btn--primary ed-btn--full"
+                onClick={() => navigate(`/clubs/events/${id}/ticket`)}
+              >
+                View Ticket
+              </button>
+            ) : (
+              <>
+                <button type="button" className="ed-btn ed-btn--primary ed-btn--full" onClick={handleRegister}>
+                  <IconCalendar />
+                  Register for Event
+                </button>
+                <button type="button" className="ed-btn ed-btn--secondary ed-btn--full">
+                  Add to Calendar
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="ed-sidebar-card">
+            <span className="ed-sidebar-label">Remaining Slots</span>
+            <p className="ed-sidebar-slots">{remainingSlots} / {totalSlots}</p>
+            <div className="ed-progress">
+              <div className="ed-progress-fill" style={{ width: `${((totalSlots - remainingSlots) / totalSlots) * 100}%` }} />
+            </div>
+          </div>
+
+          <div className="ed-sidebar-card">
+            <span className="ed-sidebar-label">Hosted by</span>
+            <div className="ed-host">
+              <div className="ed-host-avatar">{event.clubName.charAt(0)}</div>
+              <div>
+                <strong>{event.clubName}</strong>
+                <span>2,400 members</span>
+                <span>Established 2015</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="ed-sidebar-card">
+            <span className="ed-sidebar-label">Stay Updated</span>
+            <div className="ed-stay-btns">
+              <button type="button" className="ed-stay-btn" aria-label="Share"><IconShare /></button>
+              <button type="button" className="ed-stay-btn" aria-label="Notify"><IconBell /></button>
+              <button type="button" className="ed-stay-btn" aria-label="Save"><IconBookmark /></button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <footer className="ed-footer">
+        <span className="ed-footer-logo">CampusEvents</span>
+        <span className="ed-footer-copy">© 2023 University Student Association. All rights reserved.</span>
+        <nav className="ed-footer-links">
+          <span>Privacy Policy</span>
+          <span>Contact Support</span>
+        </nav>
+      </footer>
     </div>
   )
 }

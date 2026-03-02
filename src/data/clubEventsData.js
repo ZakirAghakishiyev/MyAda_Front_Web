@@ -10,7 +10,7 @@ export const mockClubEvents = [
     time: '14:00',
     endTime: '18:00',
     location: 'Student Center, Room 201',
-    image: null
+    image: '/events/esports.png'
   },
   {
     id: 2,
@@ -23,7 +23,7 @@ export const mockClubEvents = [
     time: '16:00',
     endTime: '18:30',
     location: 'Computer Lab, Building B',
-    image: null
+    image: '/events/game-dev.png'
   },
   {
     id: 3,
@@ -49,7 +49,7 @@ export const mockClubEvents = [
     time: '17:00',
     endTime: '19:30',
     location: 'Auditorium',
-    image: null
+    image: '/events/startup.png'
   },
   {
     id: 5,
@@ -75,7 +75,7 @@ export const mockClubEvents = [
     time: '19:00',
     endTime: '22:00',
     location: 'Student Lounge',
-    image: null
+    image: '/events/open-mic.png'
   }
 ]
 

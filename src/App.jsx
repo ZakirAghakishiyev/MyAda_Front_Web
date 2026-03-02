@@ -29,6 +29,7 @@ import VacancyDetail from './pages/VacancyDetail'
 import ApplyVacancy from './pages/ApplyVacancy'
 import ClubEvents from './pages/ClubEvents'
 import EventDetail from './pages/EventDetail'
+import EventTicket from './pages/EventTicket'
 import MyRegisteredEvents from './pages/MyRegisteredEvents'
 import ClubAdminLayout from './pages/club-admin/ClubAdminLayout'
 import ClubAdminDashboard from './pages/club-admin/ClubAdminDashboard'
@@ -69,6 +70,7 @@ const AppContent = () => {
   const isVacancyDetailRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+$/)
   const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+\/apply$/)
   const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/\d+$/)
+  const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/\d+\/ticket$/)
   const isItemDetailRoute = location.pathname.match(/^\/lost-and-found\/item\/\d+$/)
   const isAdminItemDetailRoute = location.pathname.match(/^\/admin\/lost-and-found\/item\/\d+$/)
 
@@ -91,7 +93,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute)
 
   return (
     <div className="app">
@@ -106,6 +108,7 @@ const AppContent = () => {
           <Route path="/clubs/my-memberships" element={<MyMemberships />} />
           <Route path="/clubs/vacancies" element={<ClubVacancies />} />
           <Route path="/clubs/events/my-registrations" element={<MyRegisteredEvents />} />
+          <Route path="/clubs/events/:id/ticket" element={<EventTicket />} />
           <Route path="/clubs/events/:id" element={
             <>
               <ClubEvents />
