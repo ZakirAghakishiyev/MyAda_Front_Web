@@ -928,6 +928,32 @@
   margin-top: 8px;
 }
 
+.ss-events-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ss-events-list-item {
+  padding: 14px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ss-events-list-item:last-child {
+  border-bottom: none;
+}
+.ss-events-list-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ss-events-list-item-title {
+  font-weight: 600;
+  color: #0f172a;
+}
+.ss-events-list-item-meta {
+  font-size: 13px;
+  color: #64748b;
+}
+
 .ss-main-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;

@@ -31,6 +31,7 @@ import ClubEvents from './pages/ClubEvents'
 import EventDetail from './pages/EventDetail'
 import EventTicket from './pages/EventTicket'
 import MyRegisteredEvents from './pages/MyRegisteredEvents'
+import MyVacancyApplications from './pages/MyVacancyApplications'
 import ClubAdminLayout from './pages/club-admin/ClubAdminLayout'
 import ClubAdminDashboard from './pages/club-admin/ClubAdminDashboard'
 import ClubAdminApplications from './pages/club-admin/ClubAdminApplications'
@@ -60,6 +61,7 @@ const AppContent = () => {
     '/clubs',
     '/clubs/my-memberships',
     '/clubs/vacancies',
+    '/clubs/vacancies/my-applications',
     '/clubs/events',
     '/clubs/events/my-registrations',
     '/student-services'
@@ -107,6 +109,7 @@ const AppContent = () => {
           <Route path="/clubs" element={<ClubsList />} />
           <Route path="/clubs/my-memberships" element={<MyMemberships />} />
           <Route path="/clubs/vacancies" element={<ClubVacancies />} />
+          <Route path="/clubs/vacancies/my-applications" element={<MyVacancyApplications />} />
           <Route path="/clubs/events/my-registrations" element={<MyRegisteredEvents />} />
           <Route path="/clubs/events/:id/ticket" element={<EventTicket />} />
           <Route path="/clubs/events/:id" element={

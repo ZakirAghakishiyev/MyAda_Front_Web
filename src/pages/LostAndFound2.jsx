@@ -8,6 +8,22 @@ const CATEGORIES = ['All Items', 'Electronics', 'Documents', 'Personal Items', '
 const ITEMS_PER_PAGE = 8
 const MAX_DESCRIPTION_LENGTH = 500
 
+const BUILDINGS = [
+  { value: 'main', label: 'Main Building' },
+  { value: 'library', label: 'Library' },
+  { value: 'sports', label: 'Sports Complex' },
+  { value: 'cafeteria', label: 'Cafeteria' },
+  { value: 'other', label: 'Other / External' }
+]
+
+const ROOMS_BY_BUILDING = {
+  main: ['101', '102', '201', '202', '301', '302'],
+  library: ['Reading Hall', 'Computer Room', 'Silent Zone'],
+  sports: ['Court 1', 'Court 2', 'Gym'],
+  cafeteria: ['Main Hall'],
+  other: ['Room 1', 'Room 2']
+}
+
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
@@ -73,9 +89,12 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const [reportForm, setReportForm] = useState({
     itemName: '',
     category: 'Electronics',
+    locationType: '',
     building: '',
     floor: '',
     roomArea: '',
+    isRoom: '',
+    campusLocation: '',
     description: '',
     photos: []
   })
@@ -130,9 +149,12 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setReportForm({
       itemName: '',
       category: 'Electronics',
+      locationType: '',
       building: '',
       floor: '',
       roomArea: '',
+      isRoom: '',
+      campusLocation: '',
       description: '',
       photos: []
     })
@@ -190,18 +212,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
           <div className="lf2-report-header-spacer" />
         </header>
 
-        <div className="lf2-stepper">
-          {STEPS.map((label, i) => (
-            <React.Fragment key={label}>
-              <div className={`lf2-step ${i === reportStep ? 'lf2-step--active' : ''} ${i < reportStep ? 'lf2-step--done' : ''}`}>
-                <span className="lf2-step-num">{i + 1}</span>
-                <span className="lf2-step-label">{label}</span>
-              </div>
-              {i < STEPS.length - 1 && <div className="lf2-step-line" />}
-            </React.Fragment>
-          ))}
-        </div>
-
         <form className="lf2-form" onSubmit={handleReportSubmit}>
           <div className="lf2-form-card">
             {reportStep === 0 && (
@@ -247,35 +257,178 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                   </h2>
                   <div className="lf2-fields">
                     <label className="lf2-field">
-                      <span className="lf2-label">Building{view === 'report-found' ? ' *' : ''}</span>
-                      <input
-                        type="text"
-                        required={view === 'report-found'}
-                        placeholder={view === 'report-found' ? 'Select building...' : 'Select building... (optional)'}
-                        value={reportForm.building}
-                        onChange={e => setReportForm(f => ({ ...f, building: e.target.value }))}
-                      />
+                      <span className="lf2-label">
+                        Location
+                        {view === 'report-found' && ' *'}
+                      </span>
+                      <div className="lf2-fields">
+                        <label className="lf2-field">
+                          <span className="lf2-label">Choose location type</span>
+                          <div className="lf2-field">
+                            <label>
+                              <input
+                                type="radio"
+                                name="locationType"
+                                value="building"
+                                checked={reportForm.locationType === 'building'}
+                                onChange={e =>
+                                  setReportForm(f => ({
+                                    ...f,
+                                    locationType: e.target.value,
+                                    building: '',
+                                    floor: '',
+                                    roomArea: '',
+                                    isRoom: '',
+                                    campusLocation: ''
+                                  }))
+                                }
+                                required={view === 'report-found'}
+                              />{' '}
+                              Building
+                            </label>
+                            <label>
+                              <input
+                                type="radio"
+                                name="locationType"
+                                value="campus"
+                                checked={reportForm.locationType === 'campus'}
+                                onChange={e =>
+                                  setReportForm(f => ({
+                                    ...f,
+                                    locationType: e.target.value,
+                                    building: '',
+                                    floor: '',
+                                    roomArea: '',
+                                    isRoom: ''
+                                  }))
+                                }
+                                required={view === 'report-found'}
+                              />{' '}
+                              Campus
+                            </label>
+                          </div>
+                        </label>
+                      </div>
                     </label>
-                    <label className="lf2-field">
-                      <span className="lf2-label">Floor{view === 'report-found' ? ' *' : ''}</span>
-                      <input
-                        type="text"
-                        required={view === 'report-found'}
-                        placeholder={view === 'report-found' ? 'e.g. 2nd Floor' : 'e.g. 2nd Floor (optional)'}
-                        value={reportForm.floor}
-                        onChange={e => setReportForm(f => ({ ...f, floor: e.target.value }))}
-                      />
-                    </label>
-                    <label className="lf2-field">
-                      <span className="lf2-label">Room/Area{view === 'report-found' ? ' *' : ''}</span>
-                      <input
-                        type="text"
-                        required={view === 'report-found'}
-                        placeholder={view === 'report-found' ? 'Room 302' : 'Room 302 (optional)'}
-                        value={reportForm.roomArea}
-                        onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
-                      />
-                    </label>
+
+                    {reportForm.locationType === 'campus' && (
+                      <label className="lf2-field">
+                        <span className="lf2-label">
+                          Campus location
+                          {view === 'report-found' && ' *'}
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="Describe where on campus (e.g. main yard, parking area)"
+                          value={reportForm.campusLocation}
+                          onChange={e => setReportForm(f => ({ ...f, campusLocation: e.target.value }))}
+                          required={view === 'report-found'}
+                        />
+                      </label>
+                    )}
+
+                    {reportForm.locationType === 'building' && (
+                      <>
+                        <label className="lf2-field">
+                          <span className="lf2-label">
+                            Building
+                            {view === 'report-found' && ' *'}
+                          </span>
+                          <select
+                            value={reportForm.building}
+                            onChange={e =>
+                              setReportForm(f => ({
+                                ...f,
+                                building: e.target.value,
+                                roomArea: '',
+                                isRoom: ''
+                              }))
+                            }
+                            required={view === 'report-found'}
+                          >
+                            <option value="">Select building...</option>
+                            {BUILDINGS.map(b => (
+                              <option key={b.value} value={b.value}>
+                                {b.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        {/* <label className="lf2-field">
+                          <span className="lf2-label">
+                            Floor
+                            {view === 'report-found' && ' *'}
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="e.g. 2nd Floor"
+                            value={reportForm.floor}
+                            onChange={e => setReportForm(f => ({ ...f, floor: e.target.value }))}
+                            required={view === 'report-found'}
+                          />
+                        </label> */}
+
+                        <label className="lf2-field">
+                          <span className="lf2-label">
+                            Is it a room?
+                            {view === 'report-found' && ' *'}
+                          </span>
+                          <select
+                            value={reportForm.isRoom}
+                            onChange={e =>
+                              setReportForm(f => ({
+                                ...f,
+                                isRoom: e.target.value,
+                                roomArea: ''
+                              }))
+                            }
+                            required={view === 'report-found'}
+                          >
+                            <option value="">Select...</option>
+                            <option value="yes">Yes, it is a room</option>
+                            <option value="no">No, another area</option>
+                          </select>
+                        </label>
+
+                        {reportForm.isRoom === 'yes' && (
+                          <label className="lf2-field">
+                            <span className="lf2-label">
+                              Room
+                              {view === 'report-found' && ' *'}
+                            </span>
+                            <select
+                              value={reportForm.roomArea}
+                              onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
+                              required={view === 'report-found'}
+                            >
+                              <option value="">Select room...</option>
+                              {(ROOMS_BY_BUILDING[reportForm.building] || []).map(room => (
+                                <option key={room} value={room}>
+                                  {room}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+
+                        {reportForm.isRoom === 'no' && (
+                          <label className="lf2-field">
+                            <span className="lf2-label">
+                              Location details
+                              {view === 'report-found' && ' *'}
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="e.g. Lobby near reception"
+                              value={reportForm.roomArea}
+                              onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
+                              required={view === 'report-found'}
+                            />
+                          </label>
+                        )}
+                      </>
+                    )}
                   </div>
                 </section>
 

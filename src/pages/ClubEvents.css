@@ -1,13 +1,97 @@
 /* Club Events – CampusEvents-style layout */
 .ce-page {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px 32px 48px;
   box-sizing: border-box;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.ce-main {
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.ce-topnav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ce-topnav-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #374151;
+}
+
+.ce-topnav-back:hover {
+  background: #e5e7eb;
+}
+
+.ce-topnav-logo {
+  display: flex;
+  align-items: center;
+}
+
+.ce-ada-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+}
+
+.ce-topnav-links {
+  display: flex;
+  gap: 16px;
+  margin-left: 24px;
+}
+
+.ce-topnav-links button {
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.ce-topnav-links button:hover {
+  color: #111827;
+}
+
+.ce-topnav-active {
+  color: #2563eb !important;
+  font-weight: 600;
+  border-bottom: 2px solid #2563eb;
+}
+
+.ce-topnav-profile {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #f3f4f6;
+  cursor: pointer;
+  color: #374151;
+}
+
+.ce-topnav-profile:hover {
+  background: #e5e7eb;
 }
 
 .ce-header {
@@ -233,28 +317,28 @@
   margin-left: auto;
 }
 
-/* Event card – dark theme like image */
+/* Event card – light theme */
 .ce-card {
   display: flex;
   flex-direction: column;
-  background: #374151;
+  background: #ffffff;
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border: 1px solid #4b5563;
+  border: 1px solid #e5e7eb;
 }
 
 .ce-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
 }
 
 .ce-card-media {
   position: relative;
   width: 100%;
   padding-top: 56%;
-  background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -304,7 +388,7 @@
 .ce-card-title {
   font-size: 16px;
   font-weight: 700;
-  color: #fff;
+  color: #111827;
   margin: 0;
   line-height: 1.3;
   display: -webkit-box;
@@ -315,7 +399,7 @@
 
 .ce-card-club {
   font-size: 13px;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .ce-card-meta {
@@ -323,7 +407,7 @@
   flex-wrap: wrap;
   gap: 12px;
   font-size: 12px;
-  color: #9ca3af;
+  color: #6b7280;
   margin-top: 4px;
 }
 

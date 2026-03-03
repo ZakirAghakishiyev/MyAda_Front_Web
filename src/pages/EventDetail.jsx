@@ -50,23 +50,18 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-const formatTimeRange = (start, end) => {
-  if (!start) return ''
-  const fmt = (t) => {
-    const [h, m] = t.split(':').map(Number)
-    const period = h >= 12 ? 'PM' : 'AM'
-    const hour = h % 12 || 12
-    return `${hour}:${m.toString().padStart(2, '0')} ${period}`
-  }
-  return end ? `${fmt(start)} - ${fmt(end)}` : fmt(start)
+const formatTime = (t) => {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour = h % 12 || 12
+  return `${hour}:${m.toString().padStart(2, '0')} ${period}`
 }
 
-const EVENT_HIGHLIGHTS = [
-  'Live professional commentary',
-  'Free energy drinks and snacks',
-  'Limited edition event merch',
-  'Raffle for a high-end gaming chair'
-]
+const formatTimeRange = (start, end) => {
+  if (!start) return ''
+  return end ? `${formatTime(start)} - ${formatTime(end)}` : formatTime(start)
+}
 
 const EventDetail = () => {
   const navigate = useNavigate()
@@ -146,24 +141,40 @@ const EventDetail = () => {
           <section className="ed-section">
             <h2 className="ed-section-title">
               <IconInfo />
-              About the Event
+              Purpose / Objectives of the Event
             </h2>
             <p className="ed-desc">{event.description}</p>
           </section>
 
           <section className="ed-section">
-            <h2 className="ed-section-title">Event Highlights</h2>
-            <ul className="ed-highlights">
-              {EVENT_HIGHLIGHTS.map((item, i) => (
-                <li key={i}>{item}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="ed-section">
-            <div className="ed-map-placeholder">
-              <div className="ed-map-img" />
-              <button type="button" className="ed-map-btn">View Interactive Map</button>
+            <h2 className="ed-section-title">Event Agenda / Schedule (Sub-events)</h2>
+            <div className="ed-agenda-wrap">
+              <table className="ed-agenda">
+                <thead>
+                  <tr>
+                    <th>Sub-event Title</th>
+                    <th>Sub-event Start Time</th>
+                    <th>Sub-event End Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.isArray(event.subEvents) && event.subEvents.length > 0 ? (
+                    event.subEvents.map((sub, index) => (
+                      <tr key={index}>
+                        <td>{sub.title}</td>
+                        <td>{formatTime(sub.startTime)}</td>
+                        <td>{formatTime(sub.endTime)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td>{event.title}</td>
+                      <td>{formatTime(event.time)}</td>
+                      <td>{formatTime(event.endTime)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
         </div>

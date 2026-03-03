@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { mockClubEvents } from '../data/clubEventsData'
+import adaLogo from '../assets/ada-logo.png'
 import './ClubEvents.css'
 
 const IconBack = () => (
@@ -110,49 +111,73 @@ const ClubEvents = () => {
 
   return (
     <div className="ce-page">
-      <header className="ce-header">
-        <button type="button" className="ce-back" onClick={() => navigate('/')} aria-label="Back">
-          <IconBack />
-        </button>
-        <div className="ce-header-title">
-          <h1>Club Events</h1>
-          <span className="ce-subtitle">{filteredEvents.length} events discovered</span>
-        </div>
-        <div className="ce-header-right">
-          <div className="ce-search-wrap">
-            <span className="ce-search-icon"><IconSearch /></span>
-            <input
-              type="text"
-              className="ce-search-input"
-              placeholder="Find an event..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search events"
-            />
+      <header className="vacancies-nav">
+        <div className="vacancies-nav-left">
+          <div
+            className="vacancies-nav-logo"
+            onClick={() => navigate('/')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+          >
+            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
           </div>
-          <button
-            type="button"
-            className="ce-my-registrations-btn"
-            onClick={() => navigate('/clubs/events/my-registrations')}
-          >
-            <IconCalendar />
-            My Registrations
-          </button>
-          <button type="button" className="ce-icon-btn" aria-label="Notifications">
-            <IconBell />
-          </button>
-          <button
-            type="button"
-            className="ce-icon-btn ce-profile-btn"
-            onClick={() => navigate('/clubs/my-memberships')}
-            aria-label="Profile"
-          >
-            <IconPerson />
-          </button>
+          <nav className="vacancies-nav-links">
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
+            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Events</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs')}>Clubs</button>
+          </nav>
+        </div>
+        <div className="vacancies-nav-right">
+          <button type="button" className="vacancies-nav-icon" aria-label="Notifications"><IconBell /></button>
+          <div className="vacancies-nav-avatar" aria-hidden="true">U</div>
         </div>
       </header>
+      <div className="ce-main">
+        <header className="ce-header">
+          <button type="button" className="ce-back" onClick={() => navigate('/')} aria-label="Back">
+            <IconBack />
+          </button>
+          <div className="ce-header-title">
+            <h1>Club Events</h1>
+            <span className="ce-subtitle">{filteredEvents.length} events discovered</span>
+          </div>
+          <div className="ce-header-right">
+            <div className="ce-search-wrap">
+              <span className="ce-search-icon"><IconSearch /></span>
+              <input
+                type="text"
+                className="ce-search-input"
+                placeholder="Find an event..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search events"
+              />
+            </div>
+            <button
+              type="button"
+              className="ce-my-registrations-btn"
+              onClick={() => navigate('/clubs/events/my-registrations')}
+            >
+              <IconCalendar />
+              My Registrations
+            </button>
+            <button type="button" className="ce-icon-btn" aria-label="Notifications">
+              <IconBell />
+            </button>
+            <button
+              type="button"
+              className="ce-icon-btn ce-profile-btn"
+              onClick={() => navigate('/clubs/my-memberships')}
+              aria-label="Profile"
+            >
+              <IconPerson />
+            </button>
+          </div>
+        </header>
 
-      <div className="ce-tabs-row">
+        <div className="ce-tabs-row">
         <div className="ce-tabs">
           {CATEGORIES.map((cat) => (
             <button
@@ -183,9 +208,9 @@ const ClubEvents = () => {
             <IconList />
           </button>
         </div>
-      </div>
+        </div>
 
-      <div className={`ce-grid ce-grid--${viewMode}`}>
+        <div className={`ce-grid ce-grid--${viewMode}`}>
         {filteredEvents.map((event) => (
           <article
             key={event.id}
@@ -227,27 +252,28 @@ const ClubEvents = () => {
             <span>Register your club activity</span>
           </div>
         </article>
-      </div>
-
-      {filteredEvents.length > 0 && (
-        <div className="ce-load-more-wrap">
-          <button type="button" className="ce-load-more">
-            <span>Load More Events</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
-          </button>
         </div>
-      )}
 
-      <footer className="ce-footer">
-        <span className="ce-footer-logo">CampusEvents</span>
-        <nav className="ce-footer-nav">
-          <button type="button" onClick={() => navigate('/clubs')}>Clubs Directory</button>
-          <span>Safety Guidelines</span>
-          <span>Contact Support</span>
-          <span>Privacy Policy</span>
-        </nav>
-        <span className="ce-footer-copy">© 2024 University Student Life. All rights reserved.</span>
-      </footer>
+        {filteredEvents.length > 0 && (
+          <div className="ce-load-more-wrap">
+            <button type="button" className="ce-load-more">
+              <span>Load More Events</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+          </div>
+        )}
+
+        <footer className="ce-footer">
+          <span className="ce-footer-logo">CampusEvents</span>
+          <nav className="ce-footer-nav">
+            <button type="button" onClick={() => navigate('/clubs')}>Clubs Directory</button>
+            <span>Safety Guidelines</span>
+            <span>Contact Support</span>
+            <span>Privacy Policy</span>
+          </nav>
+          <span className="ce-footer-copy">© 2024 University Student Life. All rights reserved.</span>
+        </footer>
+      </div>
     </div>
   )
 }

@@ -1,0 +1,278 @@
+.mva-page {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mva-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: none;
+  background: #f3f4f6;
+  cursor: pointer;
+  color: #374151;
+}
+
+.mva-back:hover {
+  background: #e5e7eb;
+}
+
+.mva-logo {
+  display: flex;
+  align-items: center;
+}
+
+.mva-ada-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+}
+
+.mva-nav {
+  display: flex;
+  gap: 16px;
+  margin-left: 32px;
+}
+
+.mva-nav button {
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.mva-nav button:hover {
+  color: #111827;
+}
+
+.mva-nav-active {
+  color: #2563eb !important;
+  font-weight: 600;
+  border-bottom: 2px solid #2563eb;
+}
+
+.mva-profile {
+  margin-left: auto;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.mva-main {
+  padding: 32px;
+  flex: 1;
+}
+
+.mva-breadcrumb {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.mva-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.mva-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.mva-tag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.mva-desc {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 24px;
+}
+
+.mva-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mva-btn--primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.mva-btn--primary:hover {
+  background: #1d4ed8;
+}
+
+.mva-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mva-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.mva-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.mva-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mva-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.mva-card-position {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.mva-card-club {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.mva-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.mva-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mva-card-id {
+  font-weight: 500;
+}
+
+.mva-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mva-status-pill--accepted {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.mva-status-pill--review {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.mva-status-pill--submitted {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.mva-status-pill--other {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.mva-empty {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 16px;
+}
+
+.mva-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 32px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.mva-footer-logo {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.mva-footer-copy {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+@media (max-width: 768px) {
+  .mva-header {
+    flex-wrap: wrap;
+  }
+
+  .mva-nav {
+    margin-left: 0;
+  }
+
+  .mva-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

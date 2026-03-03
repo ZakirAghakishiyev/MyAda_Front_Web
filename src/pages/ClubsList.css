@@ -1,16 +1,17 @@
 .clubs-page {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px 32px 48px;
   box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-.clubs-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+.clubs-main {
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
 .clubs-back {
@@ -31,56 +32,47 @@
   background: #e5e7eb;
 }
 
-.clubs-header-title {
-  flex: 1;
+.clubs-topnav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.clubs-header-title h1 {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0;
+.clubs-topnav-logo {
+  display: flex;
+  align-items: center;
 }
 
-.clubs-subtitle {
-  font-size: 13px;
-  color: #6b7280;
+.clubs-ada-logo {
+  height: 28px;
+  width: auto;
   display: block;
-  margin-top: 2px;
 }
 
-.clubs-propose-btn {
-  padding: 10px 20px;
+.clubs-topnav-links {
+  display: flex;
+  gap: 16px;
+  margin-left: 24px;
+}
+
+.clubs-topnav-links button {
+  background: none;
   border: none;
-  border-radius: 8px;
-  background: #dc2626;
-  color: #fff;
+  padding: 8px 0;
   font-size: 14px;
-  font-weight: 600;
+  color: #6b7280;
   cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
 }
 
-.clubs-propose-btn:hover {
-  background: #b91c1c;
+.clubs-topnav-links button:hover {
+  color: #111827;
 }
 
-.clubs-vacancies-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 14px;
+.clubs-topnav-active {
+  color: #2563eb !important;
   font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.clubs-vacancies-btn:hover {
-  background: #1d4ed8;
+  border-bottom: 2px solid #2563eb;
 }
 
 .clubs-profile-btn {

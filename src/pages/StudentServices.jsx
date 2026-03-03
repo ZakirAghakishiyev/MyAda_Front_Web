@@ -442,6 +442,12 @@ const DIRECTORY_ACTIVITY = [
   { id: '2', title: 'Annual Gala Booked', detail: '1 hour ago by Events Lead', icon: 'calendar', iconColor: 'green' },
   { id: '3', title: 'Funding Audit Alert', detail: '3 hours ago from Finance System', icon: 'alert', iconColor: 'red' },
 ]
+/* Upcoming approved events for the Events section (separate from proposals) */
+const UPCOMING_EVENTS = [
+  { id: 'u1', title: 'Annual Spring Tech Symposium', date: 'Apr 24, 2024', club: 'Robotics Club', venue: 'Grand Ballroom' },
+  { id: 'u2', title: 'Jazz Night', date: 'May 2, 2024', club: 'Modern Jazz Collective', venue: 'Student Union Hall' },
+  { id: 'u3', title: 'Startup Pitch Day', date: 'May 15, 2024', club: 'Entrepreneurs Society', venue: 'Business Building' },
+]
 
 const StudentServices = () => {
   const navigate = useNavigate()
@@ -597,7 +603,7 @@ const StudentServices = () => {
     setPendingEmployeePosition((prev) => { const next = { ...prev }; delete next[employeeId]; return next })
   }
 
-  const renderCommandClubDetail = () => {
+  const renderCommandClubDetail = (backLabel = 'Back to Master Directory') => {
     if (!selectedDirectoryClub) return null
     const MEMBER_POSITIONS = Array.isArray(MEMBER_POSITIONS_LIST) ? MEMBER_POSITIONS_LIST : ['Member']
     const EMPLOYEE_POSITIONS = Array.isArray(EMPLOYEE_POSITIONS_LIST) ? EMPLOYEE_POSITIONS_LIST : ['President', 'Vice President', 'Secretary', 'Treasurer']
@@ -605,8 +611,8 @@ const StudentServices = () => {
     return (
       <>
         <div className="ss-cc-club-detail">
-          <button type="button" className="ss-cc-back" onClick={() => setDirectorySelectedClubId(null)} aria-label="Back to directory">
-            ← Back to Master Directory
+          <button type="button" className="ss-cc-back" onClick={() => setDirectorySelectedClubId(null)} aria-label="Back">
+            ← {backLabel}
           </button>
           <header className="ss-cc-club-header">
             <div className="ss-cc-club-header-left">
@@ -1739,6 +1745,105 @@ const StudentServices = () => {
     </>
   )
 
+  const renderClubsSection = () => {
+    if (directorySelectedClubId && selectedDirectoryClub) {
+      return renderCommandClubDetail('Back to Clubs')
+    }
+    return (
+      <>
+        {renderHeader('Clubs', 'View approved campus clubs. Click a club to manage members, employees, and settings.')}
+        <div className="ss-card" style={{ marginTop: 20 }}>
+          <h2>Approved Clubs</h2>
+          <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>Click a club row to open its detail page (members, employees, settings).</p>
+          <div className="ss-cc-table-wrap" style={{ marginBottom: 0 }}>
+            <table className="ss-cc-table">
+              <thead>
+                <tr>
+                  <th>CLUB NAME</th>
+                  <th>PRESIDENT</th>
+                  <th>MEMBERS</th>
+                  <th>CATEGORY</th>
+                  <th>STATUS</th>
+                </tr>
+              </thead>
+              <tbody
+                role="presentation"
+                onClick={(e) => {
+                  const row = e.target.closest('tr[data-club-id]')
+                  if (row) {
+                    const id = row.getAttribute('data-club-id')
+                    if (id != null) setDirectorySelectedClubId(id)
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  const row = e.target.closest('tr[data-club-id]')
+                  if (row) {
+                    const id = row.getAttribute('data-club-id')
+                    if (id != null) setDirectorySelectedClubId(id)
+                  }
+                }}
+              >
+                {directoryClubs.map((c) => (
+                  <tr
+                    key={c.id}
+                    data-club-id={c.id}
+                    className="ss-cc-table-row-clickable"
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <td>
+                      <div className="ss-cc-club-cell">
+                        <span className={`ss-cc-club-icon ss-cc-club-icon--${c.iconColor}`}>{getClubIcon(c.iconColor)}</span>
+                        <div>
+                          <span className="ss-cc-club-name">{c.name}</span>
+                          <span className="ss-cc-club-established">Established {c.established}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div>
+                        <span className="ss-cc-president-name">{c.president}</span>
+                        <span className="ss-cc-president-id">ID: {c.presidentId}</span>
+                      </div>
+                    </td>
+                    <td>{c.members}</td>
+                    <td><span className="ss-cc-pill">{c.category}</span></td>
+                    <td>
+                      <span className={`ss-cc-status ss-cc-status--${c.status === 'Active' ? 'active' : 'probation'}`}>
+                        <span className="ss-cc-status-dot" /> {c.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const renderEventsSection = () => (
+    <>
+      {renderHeader('Events', 'View upcoming approved events across campus.')}
+      <div className="ss-card" style={{ marginTop: 20 }}>
+        <h2>Upcoming Events</h2>
+        <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>Approved events. To review new proposals, go to Event Proposals.</p>
+        <ul className="ss-events-list">
+          {UPCOMING_EVENTS.map((ev) => (
+            <li key={ev.id} className="ss-events-list-item">
+              <div className="ss-events-list-item-main">
+                <span className="ss-events-list-item-title">{ev.title}</span>
+                <span className="ss-events-list-item-meta">{ev.date} · {ev.club} · {ev.venue}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  )
+
   const renderStaffManagement = () => (
     <>
       {renderHeader('Club Ecosystem & Staff Manager', 'View active clubs, advisors, and officer rosters.')}
@@ -1853,8 +1958,10 @@ const StudentServices = () => {
   )
 
   const renderContent = () => {
-    if (section === 'clubs') return renderClubProposals()
-    if (section === 'events') return renderEventApprovals()
+    if (section === 'club-proposals') return renderClubProposals()
+    if (section === 'event-proposals') return renderEventApprovals()
+    if (section === 'clubs') return renderClubsSection()
+    if (section === 'events') return renderEventsSection()
     if (section === 'staff') return renderStaffManagement()
     return renderCommandCenter()
   }
@@ -1886,21 +1993,21 @@ const StudentServices = () => {
             <IconOverview />
             <span>Command Center</span>
           </button>
-          <button className={`ss-nav-item ${section === 'clubs' ? 'ss-nav-item--active' : ''}`} type="button" onClick={() => setSection('clubs')}>
+          <button className={`ss-nav-item ${section === 'club-proposals' ? 'ss-nav-item--active' : ''}`} type="button" onClick={() => setSection('club-proposals')}>
             <IconClubs />
             <span>Club Proposals</span>
           </button>
+          <button className={`ss-nav-item ${section === 'event-proposals' ? 'ss-nav-item--active' : ''}`} type="button" onClick={() => setSection('event-proposals')}>
+            <IconEvents />
+            <span>Event Proposals</span>
+          </button>
+          <button className={`ss-nav-item ${section === 'clubs' ? 'ss-nav-item--active' : ''}`} type="button" onClick={() => setSection('clubs')}>
+            <IconClubs />
+            <span>Clubs</span>
+          </button>
           <button className={`ss-nav-item ${section === 'events' ? 'ss-nav-item--active' : ''}`} type="button" onClick={() => setSection('events')}>
             <IconEvents />
-            <span>Event Approvals</span>
-          </button>
-          <button className={`ss-nav-item ${section === 'staff' ? 'ss-nav-item--active' : ''}`} type="button" onClick={() => setSection('staff')}>
-            <IconStaff />
-            <span>Staff Management</span>
-          </button>
-          <button className="ss-nav-item" type="button">
-            <IconSettings />
-            <span>Policy Settings</span>
+            <span>Events</span>
           </button>
         </nav>
 

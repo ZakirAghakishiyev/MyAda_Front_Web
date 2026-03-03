@@ -198,49 +198,38 @@
   margin: 0;
 }
 
-.ed-highlights {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.ed-highlights li {
-  font-size: 15px;
-  color: #4b5563;
-  margin-bottom: 8px;
-  line-height: 1.5;
-}
-
-.ed-map-placeholder {
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #e5e7eb;
-}
-
-.ed-map-img {
+.ed-agenda-wrap {
   width: 100%;
-  height: 200px;
-  background: linear-gradient(180deg, #e5e7eb 0%, #d1d5db 100%);
+  overflow-x: auto;
 }
 
-.ed-map-btn {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  padding: 12px 24px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+.ed-agenda {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.ed-map-btn:hover {
+.ed-agenda thead {
   background: #f9fafb;
+}
+
+.ed-agenda th,
+.ed-agenda td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ed-agenda th {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.ed-agenda td {
+  color: #374151;
 }
 
 /* Sidebar */
