@@ -442,12 +442,48 @@ const DIRECTORY_ACTIVITY = [
   { id: '2', title: 'Annual Gala Booked', detail: '1 hour ago by Events Lead', icon: 'calendar', iconColor: 'green' },
   { id: '3', title: 'Funding Audit Alert', detail: '3 hours ago from Finance System', icon: 'alert', iconColor: 'red' },
 ]
-/* Upcoming approved events for the Events section (separate from proposals) */
-const UPCOMING_EVENTS = [
-  { id: 'u1', title: 'Annual Spring Tech Symposium', date: 'Apr 24, 2024', club: 'Robotics Club', venue: 'Grand Ballroom' },
-  { id: 'u2', title: 'Jazz Night', date: 'May 2, 2024', club: 'Modern Jazz Collective', venue: 'Student Union Hall' },
-  { id: 'u3', title: 'Startup Pitch Day', date: 'May 15, 2024', club: 'Entrepreneurs Society', venue: 'Business Building' },
+/* Approved events for the Events section (separate from proposals) */
+const APPROVED_EVENTS = [
+  {
+    id: 'u1',
+    title: 'Annual Spring Tech Symposium',
+    date: '2026-04-24',
+    club: 'Robotics Club',
+    venue: 'Grand Ballroom',
+    capacity: 250,
+    durationHours: 3,
+    description: 'Flagship tech symposium bringing together student projects, guest speakers and demos.',
+    subEvents: [],
+  },
+  {
+    id: 'u2',
+    title: 'Jazz Night',
+    date: '2025-11-02',
+    club: 'Modern Jazz Collective',
+    venue: 'Student Union Hall',
+    capacity: 180,
+    durationHours: 2,
+    description: 'Evening of live jazz featuring student bands and guest artists.',
+    subEvents: [],
+  },
+  {
+    id: 'u3',
+    title: 'Startup Pitch Day',
+    date: '2026-09-15',
+    club: 'Entrepreneurs Society',
+    venue: 'Business Building',
+    capacity: 120,
+    durationHours: 4,
+    description: 'Pitch competition and networking event for early–stage student startups.',
+    subEvents: [],
+  },
 ]
+
+const SUB_EVENT_LOCATIONS = {
+  'Main Building': ['Auditorium A', 'Auditorium B', 'Lecture Hall 101'],
+  'Student Center': ['Grand Ballroom', 'Activity Room 1', 'Activity Room 2'],
+  'Business Building': ['Conference Room 1', 'Conference Room 2'],
+}
 
 const StudentServices = () => {
   const navigate = useNavigate()
@@ -493,6 +529,161 @@ const StudentServices = () => {
   const [clubEditName, setClubEditName] = useState('')
   const [clubEditStatus, setClubEditStatus] = useState('')
   const [clubEditImage, setClubEditImage] = useState(null)
+
+  // Student Services – Events (approved events overview)
+  const [approvedEvents, setApprovedEvents] = useState(APPROVED_EVENTS)
+  const [eventsFilterStatus, setEventsFilterStatus] = useState('upcoming') // 'all' | 'upcoming' | 'past'
+  const [eventsSearch, setEventsSearch] = useState('')
+  const [editingApprovedEvent, setEditingApprovedEvent] = useState(null)
+  const [editEventTitle, setEditEventTitle] = useState('')
+  const [editEventDate, setEditEventDate] = useState('')
+  const [editEventVenue, setEditEventVenue] = useState('')
+  const [editEventBuilding, setEditEventBuilding] = useState('')
+  const [editEventRoom, setEditEventRoom] = useState('')
+  const [editEventDuration, setEditEventDuration] = useState('')
+  const [editEventCapacity, setEditEventCapacity] = useState('')
+  const [editEventDescription, setEditEventDescription] = useState('')
+  const [editSubEvents, setEditSubEvents] = useState([])
+  const [editSubTitle, setEditSubTitle] = useState('')
+  const [editSubCapacity, setEditSubCapacity] = useState('')
+  const [editSubDate, setEditSubDate] = useState('')
+  const [editSubStart, setEditSubStart] = useState('')
+  const [editSubEnd, setEditSubEnd] = useState('')
+  const [editSubError, setEditSubError] = useState('')
+  const [editSubBuilding, setEditSubBuilding] = useState('')
+  const [editSubRoom, setEditSubRoom] = useState('')
+
+  const todayIso = new Date().toISOString().slice(0, 10)
+
+  const filteredApprovedEvents = useMemo(() => {
+    const q = eventsSearch.trim().toLowerCase()
+    return approvedEvents.filter((ev) => {
+      const isUpcoming = !ev.date || ev.date >= todayIso
+      if (eventsFilterStatus === 'upcoming' && !isUpcoming) return false
+      if (eventsFilterStatus === 'past' && isUpcoming) return false
+      if (!q) return true
+      return (
+        ev.title.toLowerCase().includes(q) ||
+        ev.club.toLowerCase().includes(q) ||
+        (ev.venue && ev.venue.toLowerCase().includes(q))
+      )
+    })
+  }, [approvedEvents, eventsFilterStatus, eventsSearch, todayIso])
+
+  const startEditApprovedEvent = (ev) => {
+    setEditingApprovedEvent(ev)
+    setEditEventTitle(ev.title || '')
+    setEditEventDate(ev.date || '')
+    setEditEventVenue(ev.venue || '')
+    // Try to infer building/room from existing venue
+    let foundBuilding = ''
+    let foundRoom = ''
+    if (ev.venue) {
+      Object.entries(SUB_EVENT_LOCATIONS).forEach(([building, rooms]) => {
+        rooms.forEach((room) => {
+          if (!foundRoom && (ev.venue === room || ev.venue.includes(room))) {
+            foundBuilding = building
+            foundRoom = room
+          }
+        })
+      })
+    }
+    setEditEventBuilding(foundBuilding)
+    setEditEventRoom(foundRoom)
+    setEditEventDuration(String(ev.durationHours ?? ''))
+    setEditEventCapacity(String(ev.capacity ?? ''))
+    setEditEventDescription(ev.description || '')
+    setEditSubEvents(ev.subEvents || [])
+    setEditSubTitle('')
+    setEditSubCapacity('')
+    setEditSubDate('')
+    setEditSubStart('')
+    setEditSubEnd('')
+    setEditSubError('')
+    setEditSubBuilding('')
+    setEditSubRoom('')
+  }
+
+  const cancelEditApprovedEvent = () => {
+    setEditingApprovedEvent(null)
+    setEditEventTitle('')
+    setEditEventDate('')
+    setEditEventVenue('')
+    setEditEventBuilding('')
+    setEditEventRoom('')
+    setEditEventDuration('')
+    setEditEventCapacity('')
+    setEditEventDescription('')
+    setEditSubEvents([])
+    setEditSubTitle('')
+    setEditSubCapacity('')
+    setEditSubDate('')
+    setEditSubStart('')
+    setEditSubEnd('')
+    setEditSubError('')
+    setEditSubBuilding('')
+    setEditSubRoom('')
+  }
+
+  const addEditSubEvent = () => {
+    const title = editSubTitle.trim()
+    const capacity = editSubCapacity.trim()
+    const start = editSubStart.trim()
+    const end = editSubEnd.trim()
+    const date = (editSubDate || editEventDate).trim()
+    const building = editSubBuilding.trim()
+    const room = editSubRoom.trim()
+
+    if (!title || !capacity || !start || !end || !building || !room) {
+      setEditSubError('Please fill in title, capacity, times, building and room.')
+      return
+    }
+    if (start && end && start >= end) {
+      setEditSubError('End time must be later than start time.')
+      return
+    }
+
+    setEditSubEvents((prev) => [...prev, { title, capacity, start, end, date, building, room }])
+    setEditSubError('')
+    setEditSubTitle('')
+    setEditSubCapacity('')
+    setEditSubDate('')
+    setEditSubStart('')
+    setEditSubEnd('')
+    setEditSubBuilding('')
+    setEditSubRoom('')
+  }
+
+  const removeEditSubEvent = (index) => {
+    setEditSubEvents((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const confirmEditApprovedEvent = (e) => {
+    e.preventDefault()
+    if (!editingApprovedEvent) return
+    setApprovedEvents((prev) =>
+      prev.map((ev) =>
+        ev.id === editingApprovedEvent.id
+          ? {
+              ...ev,
+              title: editEventTitle || ev.title,
+              date: editEventDate || ev.date,
+              venue:
+                (editEventBuilding && editEventRoom && `${editEventBuilding} – ${editEventRoom}`) ||
+                editEventVenue ||
+                ev.venue,
+              durationHours:
+                editEventDuration !== '' ? Number(editEventDuration) || ev.durationHours : ev.durationHours,
+              capacity:
+                editEventCapacity !== '' ? Number(editEventCapacity) || ev.capacity : ev.capacity,
+              description: editEventDescription || ev.description,
+              subEvents: editSubEvents,
+            }
+          : ev
+      )
+    )
+    cancelEditApprovedEvent()
+  }
 
   const renderHeader = (title, subtitle) => (
     <header className="ss-main-header">
@@ -1824,25 +2015,396 @@ const StudentServices = () => {
     )
   }
 
-  const renderEventsSection = () => (
-    <>
-      {renderHeader('Events', 'View upcoming approved events across campus.')}
-      <div className="ss-card" style={{ marginTop: 20 }}>
-        <h2>Upcoming Events</h2>
-        <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>Approved events. To review new proposals, go to Event Proposals.</p>
-        <ul className="ss-events-list">
-          {UPCOMING_EVENTS.map((ev) => (
-            <li key={ev.id} className="ss-events-list-item">
-              <div className="ss-events-list-item-main">
-                <span className="ss-events-list-item-title">{ev.title}</span>
-                <span className="ss-events-list-item-meta">{ev.date} · {ev.club} · {ev.venue}</span>
+  const renderEventsSection = () => {
+    if (editingApprovedEvent) {
+      const isUpcoming = !editingApprovedEvent.date || editingApprovedEvent.date >= todayIso
+      return (
+        <>
+          {renderHeader('Events', 'Review and update approved club events.')}
+          <div className="ss-card" style={{ marginTop: 20 }}>
+            <h2>Edit Event</h2>
+            {!isUpcoming && (
+              <p style={{ margin: '0 0 12px', fontSize: 13, color: '#b91c1c' }}>
+                This event is in the past. Edits here will only update the record for reporting.
+              </p>
+            )}
+            <form onSubmit={confirmEditApprovedEvent}>
+              <div className="club-admin-form-row">
+                <div className="club-admin-field">
+                  <label>Event name</label>
+                  <input
+                    type="text"
+                    value={editEventTitle}
+                    onChange={(ev) => setEditEventTitle(ev.target.value)}
+                    placeholder="Event title"
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label>Club</label>
+                  <input type="text" value={editingApprovedEvent.club} disabled />
+                </div>
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </>
-  )
+
+              <div className="club-admin-form-row">
+                <div className="club-admin-field">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={editEventDate}
+                    onChange={(ev) => setEditEventDate(ev.target.value)}
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label>Building</label>
+                  <select
+                    value={editEventBuilding}
+                    onChange={(ev) => {
+                      setEditEventBuilding(ev.target.value)
+                      setEditEventRoom('')
+                    }}
+                  >
+                    <option value="">Select building</option>
+                    {Object.keys(SUB_EVENT_LOCATIONS).map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="club-admin-field">
+                  <label>Room</label>
+                  <select
+                    value={editEventRoom}
+                    onChange={(ev) => setEditEventRoom(ev.target.value)}
+                    disabled={!editEventBuilding}
+                  >
+                    <option value="">{editEventBuilding ? 'Select room' : 'Select building first'}</option>
+                    {editEventBuilding &&
+                      (SUB_EVENT_LOCATIONS[editEventBuilding] || []).map((room) => (
+                        <option key={room} value={room}>{room}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="club-admin-form-row">
+                <div className="club-admin-field">
+                  <label>Duration (hours)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={editEventDuration}
+                    onChange={(ev) => setEditEventDuration(ev.target.value)}
+                    placeholder="e.g. 2"
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label>Capacity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editEventCapacity}
+                    onChange={(ev) => setEditEventCapacity(ev.target.value)}
+                    placeholder="e.g. 200"
+                  />
+                </div>
+              </div>
+
+              <div className="club-admin-field">
+                <label>Description</label>
+                <textarea
+                  value={editEventDescription}
+                  onChange={(ev) => setEditEventDescription(ev.target.value)}
+                  rows={4}
+                  placeholder="Short description of the event..."
+                />
+              </div>
+
+              <div className="club-admin-field">
+                <label>Sub-events</label>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Date (optional)</label>
+                  <input
+                    type="date"
+                    value={editSubDate}
+                    onChange={(ev) => {
+                      setEditSubDate(ev.target.value)
+                      if (editSubError) setEditSubError('')
+                    }}
+                  />
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                    If left empty, the sub-event will use the main event&apos;s date.
+                  </div>
+                </div>
+                <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                  <div className="club-admin-field">
+                    <label style={{ fontSize: 12 }}>Title</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Opening remarks"
+                      value={editSubTitle}
+                      onChange={(ev) => {
+                        setEditSubTitle(ev.target.value)
+                        if (editSubError) setEditSubError('')
+                      }}
+                    />
+                  </div>
+                  <div className="club-admin-field">
+                    <label style={{ fontSize: 12 }}>Capacity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 100"
+                      value={editSubCapacity}
+                      onChange={(ev) => {
+                        setEditSubCapacity(ev.target.value)
+                        if (editSubError) setEditSubError('')
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                  <div className="club-admin-field">
+                    <label style={{ fontSize: 12 }}>Building</label>
+                    <select
+                      value={editSubBuilding}
+                      onChange={(ev) => {
+                        setEditSubBuilding(ev.target.value)
+                        setEditSubRoom('')
+                        if (editSubError) setEditSubError('')
+                      }}
+                    >
+                      <option value="">Select building</option>
+                      {Object.keys(SUB_EVENT_LOCATIONS).map((b) => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="club-admin-field">
+                    <label style={{ fontSize: 12 }}>Room</label>
+                    <select
+                      value={editSubRoom}
+                      onChange={(ev) => {
+                        setEditSubRoom(ev.target.value)
+                        if (editSubError) setEditSubError('')
+                      }}
+                      disabled={!editSubBuilding}
+                    >
+                      <option value="">{editSubBuilding ? 'Select room' : 'Select building first'}</option>
+                      {editSubBuilding &&
+                        (SUB_EVENT_LOCATIONS[editSubBuilding] || []).map((room) => (
+                          <option key={room} value={room}>{room}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                  <div className="club-admin-field">
+                    <label style={{ fontSize: 12 }}>Start time</label>
+                    <input
+                      type="time"
+                      value={editSubStart}
+                      onChange={(ev) => {
+                        setEditSubStart(ev.target.value)
+                        if (editSubError) setEditSubError('')
+                      }}
+                    />
+                  </div>
+                  <div className="club-admin-field">
+                    <label style={{ fontSize: 12 }}>End time</label>
+                    <input
+                      type="time"
+                      value={editSubEnd}
+                      onChange={(ev) => {
+                        setEditSubEnd(ev.target.value)
+                        if (editSubError) setEditSubError('')
+                      }}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="club-admin-btn-primary"
+                  style={{ marginTop: 10 }}
+                  onClick={addEditSubEvent}
+                >
+                  + Add sub-event
+                </button>
+                {editSubError && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#b91c1c' }}>
+                    {editSubError}
+                  </div>
+                )}
+                {editSubEvents.length > 0 && (
+                  <table className="club-admin-table" style={{ marginTop: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Title</th>
+                        <th>Capacity</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Building</th>
+                        <th>Room</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editSubEvents.map((se, index) => (
+                        <tr key={`${se.title}-${index}`}>
+                          <td>{se.date}</td>
+                          <td>{se.title}</td>
+                          <td>{se.capacity}</td>
+                          <td>{se.start}</td>
+                          <td>{se.end}</td>
+                          <td>{se.building || '—'}</td>
+                          <td>{se.room || '—'}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="club-admin-btn-icon"
+                              onClick={() => removeEditSubEvent(index)}
+                              aria-label="Remove sub-event"
+                            >
+                              <IconTrash />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="club-admin-btn-secondary" onClick={cancelEditApprovedEvent}>
+                  Cancel
+                </button>
+                <button type="submit" className="club-admin-btn-primary">
+                  <IconConfirm /> Confirm changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        {renderHeader('Events', 'View and manage approved club events across campus.')}
+        <div className="ss-card" style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Events</h2>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                Upcoming and past events that have been approved.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  className="club-admin-chip-btn"
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    background: eventsFilterStatus === 'upcoming' ? '#16a34a' : 'transparent',
+                    color: eventsFilterStatus === 'upcoming' ? '#f0fdf4' : '#64748b',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setEventsFilterStatus('upcoming')}
+                >
+                  Upcoming
+                </button>
+                <button
+                  type="button"
+                  className="club-admin-chip-btn"
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    background: eventsFilterStatus === 'past' ? '#e11d48' : 'transparent',
+                    color: eventsFilterStatus === 'past' ? '#fef2f2' : '#64748b',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setEventsFilterStatus('past')}
+                >
+                  Past
+                </button>
+                <button
+                  type="button"
+                  className="club-admin-chip-btn"
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    background: eventsFilterStatus === 'all' ? '#0f172a' : 'transparent',
+                    color: eventsFilterStatus === 'all' ? '#f8fafc' : '#64748b',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setEventsFilterStatus('all')}
+                >
+                  All
+                </button>
+              </div>
+              <div className="club-admin-header-search" style={{ maxWidth: 260 }}>
+                <IconSearch />
+                <input
+                  type="text"
+                  placeholder="Search events..."
+                  value={eventsSearch}
+                  onChange={(ev) => setEventsSearch(ev.target.value)}
+                  aria-label="Search approved events"
+                />
+              </div>
+            </div>
+          </div>
+
+          <ul className="ss-events-list">
+            {filteredApprovedEvents.map((ev) => {
+              const isUpcoming = !ev.date || ev.date >= todayIso
+              return (
+                <li key={ev.id} className="ss-events-list-item">
+                  <div className="ss-events-list-item-main">
+                    <span className="ss-events-list-item-title">{ev.title}</span>
+                    <span className="ss-events-list-item-meta">
+                      {ev.date} · {ev.club} · {ev.venue}
+                      {typeof ev.capacity !== 'undefined' && ` · Cap: ${ev.capacity}`}
+                    </span>
+                  </div>
+                  <div className="ss-events-list-item-actions">
+                    <span
+                      className={`ss-pill ${
+                        isUpcoming ? 'ss-pill--success' : 'ss-pill--muted'
+                      }`}
+                    >
+                      {isUpcoming ? 'Upcoming' : 'Past'}
+                    </span>
+                    {isUpcoming && (
+                      <button
+                        type="button"
+                        className="club-admin-btn-secondary"
+                        style={{ padding: '6px 10px', fontSize: 12 }}
+                        onClick={() => startEditApprovedEvent(ev)}
+                      >
+                        <IconPen /> Edit
+                      </button>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+            {filteredApprovedEvents.length === 0 && (
+              <li className="ss-events-list-item">
+                <span style={{ fontSize: 14, color: '#64748b' }}>No events found for this filter.</span>
+              </li>
+            )}
+          </ul>
+        </div>
+      </>
+    )
+  }
 
   const renderStaffManagement = () => (
     <>

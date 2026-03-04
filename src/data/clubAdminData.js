@@ -44,15 +44,87 @@ export const mockClubMembers = [
 
 // Employee/role positions (job titles for filled vacancies, including leadership)
 export const EMPLOYEE_POSITIONS = [
-  'President',
-  'Vice President',
-  'Secretary',
-  'Treasurer',
-  'Marketing Coordinator',
-  'Event Coordinator',
-  'Lead Designer',
-  'Content Writer',
-  'Outreach Lead'
+  {
+    id: 1,
+    title: 'President',
+    category: 'Other',
+    requirements: [
+      'Strong leadership experience within student organizations.',
+      'Ability to coordinate multiple teams and initiatives.'
+    ]
+  },
+  {
+    id: 2,
+    title: 'Vice President',
+    category: 'Other',
+    requirements: [
+      'Experience supporting executive leadership.',
+      'Comfort stepping in to lead events and meetings.'
+    ]
+  },
+  {
+    id: 3,
+    title: 'Secretary',
+    category: 'Other',
+    requirements: [
+      'Excellent note‑taking and documentation skills.',
+      'Strong attention to detail and organization.'
+    ]
+  },
+  {
+    id: 4,
+    title: 'Treasurer',
+    category: 'Finance',
+    requirements: [
+      'Basic budgeting and finance knowledge.',
+      'Comfort working with spreadsheets and reports.'
+    ]
+  },
+  {
+    id: 5,
+    title: 'Marketing Coordinator',
+    category: 'Marketing',
+    requirements: [
+      'Experience with social media or basic design tools.',
+      'Interest in growing club visibility on campus.'
+    ]
+  },
+  {
+    id: 6,
+    title: 'Event Coordinator',
+    category: 'Events',
+    requirements: [
+      'Prior experience organizing events or logistics.',
+      'Strong communication and time‑management skills.'
+    ]
+  },
+  {
+    id: 7,
+    title: 'Lead Designer',
+    category: 'Content',
+    requirements: [
+      'Portfolio of design work (posters, social graphics, etc.).',
+      'Comfort working with tools like Figma or Illustrator.'
+    ]
+  },
+  {
+    id: 8,
+    title: 'Content Writer',
+    category: 'Content',
+    requirements: [
+      'Good writing skills in English.',
+      'Ability to adapt tone for different audiences.'
+    ]
+  },
+  {
+    id: 9,
+    title: 'Outreach Lead',
+    category: 'Outreach',
+    requirements: [
+      'Confident communication with external partners.',
+      'Interest in building collaborations and sponsorships.'
+    ]
+  }
 ]
 
 // Mock club employees (members who hold job/leadership positions)

@@ -1,0 +1,676 @@
+import React, { useMemo, useRef, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { mockClubEvents } from '../../data/clubEventsData'
+import { getClubById } from '../../data/clubsData'
+import './ClubAdmin.css'
+
+const IconSearch = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+)
+
+const IconEdit = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+    <path d="M14.06 4.94 16.88 7.76" />
+  </svg>
+)
+
+const IconCheck = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+)
+
+const IconX = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+)
+
+const IconUpload = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+)
+
+const IconTrash = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+)
+
+const IconMegaphone = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="m3 11 18-5v12L3 14v-3z" />
+    <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+  </svg>
+)
+
+const todayIso = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '—'
+  const d = new Date(`${dateStr}T00:00:00`)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const ClubAdminEvents = () => {
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const clubIdParam = searchParams.get('club')
+  const activeClub = clubIdParam ? getClubById(clubIdParam) : null
+
+  const initialEvents = useMemo(() => {
+    if (activeClub) {
+      return mockClubEvents.filter((e) => e.clubId === activeClub.id)
+    }
+    return mockClubEvents
+  }, [activeClub])
+
+  const [events, setEvents] = useState(initialEvents)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [editingEvent, setEditingEvent] = useState(null)
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState('')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [duration, setDuration] = useState('')
+  const [capacity, setCapacity] = useState('')
+  const [locationField, setLocationField] = useState('')
+  const [description, setDescription] = useState('')
+  const [subEvents, setSubEvents] = useState([])
+  const [subEventTitle, setSubEventTitle] = useState('')
+  const [subEventCapacity, setSubEventCapacity] = useState('')
+  const [subEventDate, setSubEventDate] = useState('')
+  const [subEventStart, setSubEventStart] = useState('')
+  const [subEventEnd, setSubEventEnd] = useState('')
+  const [subEventError, setSubEventError] = useState('')
+  const [posterFile, setPosterFile] = useState(null)
+  const posterInputRef = useRef(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const filteredEvents = useMemo(() => {
+    const today = todayIso()
+    let list = events
+    const q = search.trim().toLowerCase()
+    if (q) {
+      list = list.filter(
+        (e) =>
+          e.title.toLowerCase().includes(q) ||
+          e.clubName.toLowerCase().includes(q) ||
+          (e.description && e.description.toLowerCase().includes(q))
+      )
+    }
+    if (statusFilter === 'upcoming') {
+      list = list.filter((e) => !e.date || e.date >= today)
+    } else if (statusFilter === 'past') {
+      list = list.filter((e) => e.date && e.date < today)
+    }
+    return list
+  }, [events, search, statusFilter])
+
+  const startEdit = (event) => {
+    setEditingEvent(event)
+    setTitle(event.title || '')
+    setCategory(event.category || '')
+    setDate(event.date || '')
+    setTime(event.time || '')
+    setEndTime(event.endTime || '')
+    setDuration('')
+    setCapacity('')
+    setLocationField(event.location || '')
+    setDescription(event.description || '')
+    setSubEvents([])
+    setSubEventTitle('')
+    setSubEventCapacity('')
+    setSubEventDate('')
+    setSubEventStart('')
+    setSubEventEnd('')
+    setSubEventError('')
+    setPosterFile(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingEvent(null)
+    setTitle('')
+    setCategory('')
+    setDate('')
+    setTime('')
+    setEndTime('')
+    setDuration('')
+    setCapacity('')
+    setLocationField('')
+    setDescription('')
+    setSubEvents([])
+    setSubEventTitle('')
+    setSubEventCapacity('')
+    setSubEventDate('')
+    setSubEventStart('')
+    setSubEventEnd('')
+    setSubEventError('')
+    setPosterFile(null)
+  }
+
+  const addSubEvent = () => {
+    const t = subEventTitle.trim()
+    const cap = subEventCapacity.trim()
+    const start = subEventStart.trim()
+    const end = subEventEnd.trim()
+    const dateVal = (subEventDate || date).trim()
+
+    if (!t || !cap || !start || !end) {
+      setSubEventError('Please fill in title, capacity, start, and end time.')
+      return
+    }
+    if (start && end && start >= end) {
+      setSubEventError('End time must be later than start time.')
+      return
+    }
+
+    setSubEvents((prev) => [...prev, { title: t, capacity: cap, start, end, date: dateVal }])
+    setSubEventError('')
+    setSubEventTitle('')
+    setSubEventCapacity('')
+    setSubEventStart('')
+    setSubEventEnd('')
+    setSubEventDate('')
+  }
+
+  const removeSubEvent = (index) => {
+    setSubEvents((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const saveEdit = async (e) => {
+    e.preventDefault()
+    if (!editingEvent) return
+    setIsSubmitting(true)
+
+    const payload = {
+      eventId: editingEvent.id,
+      clubId: editingEvent.clubId,
+      clubName: editingEvent.clubName,
+      title: title || editingEvent.title,
+      category: category || editingEvent.category,
+      date: date || editingEvent.date,
+      time: time || editingEvent.time,
+      endTime: endTime || editingEvent.endTime,
+      duration,
+      capacity,
+      location: locationField || editingEvent.location,
+      description: description || editingEvent.description,
+      subEvents,
+      posterFileName: posterFile?.name || null
+    }
+
+    try {
+      await fetch('/api/student-services/club-events/edit-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to send event edit request', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+
+    setEvents((prev) =>
+      prev.map((ev) =>
+        ev.id === editingEvent.id
+          ? {
+              ...ev,
+              title: payload.title,
+              category: payload.category,
+              date: payload.date,
+              time: payload.time,
+              endTime: payload.endTime,
+              location: payload.location,
+              description: payload.description
+            }
+          : ev
+      )
+    )
+    cancelEdit()
+  }
+
+  if (editingEvent) {
+    return (
+      <>
+        <header className="club-admin-header">
+          <h1 className="club-admin-header-title">Edit Event</h1>
+        </header>
+
+        <div className="club-admin-content">
+          <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
+            <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+            <span style={{ margin: '0 8px' }}>&gt;</span>
+            <Link to="/club-admin/events" style={{ color: '#64748b' }}>Events</Link>
+            <span style={{ margin: '0 8px' }}>&gt;</span>
+            <span style={{ color: '#0f172a', fontWeight: 600 }}>Edit Event</span>
+          </nav>
+
+          <form className="club-admin-card" style={{ marginLeft: 24, marginRight: 24 }} onSubmit={saveEdit}>
+            <div className="club-admin-card-head">
+              <h2 className="club-admin-card-title">Edit Event</h2>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="club-admin-btn-secondary" onClick={cancelEdit}>
+                  <IconX /> Cancel
+                </button>
+                <button type="submit" className="club-admin-btn-primary" disabled={isSubmitting}>
+                  <IconCheck /> {isSubmitting ? 'Sending...' : 'Send request'}
+                </button>
+              </div>
+            </div>
+
+            <div className="club-admin-form-row">
+              <div className="club-admin-field">
+                <label>Event name</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Event title"
+                />
+              </div>
+              <div className="club-admin-field">
+                <label>Category</label>
+                <input
+                  type="text"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="e.g. Technology"
+                />
+              </div>
+            </div>
+
+            <div className="club-admin-form-row">
+              <div className="club-admin-field">
+                <label>Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+              <div className="club-admin-field">
+                <label>Start time</label>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                />
+              </div>
+              <div className="club-admin-field">
+                <label>End time</label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                />
+              </div>
+              <div className="club-admin-field">
+                <label>Duration (hours)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  placeholder="e.g. 2"
+                />
+              </div>
+            </div>
+
+            <div className="club-admin-form-row">
+              <div className="club-admin-field">
+                <label>Capacity</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                  placeholder="e.g. 200"
+                />
+              </div>
+              <div className="club-admin-field">
+                <label>Location</label>
+                <input
+                  type="text"
+                  value={locationField}
+                  onChange={(e) => setLocationField(e.target.value)}
+                  placeholder="Where will it take place?"
+                />
+              </div>
+            </div>
+
+            <div className="club-admin-field">
+              <label>Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                placeholder="Short description of the event..."
+              />
+            </div>
+
+            <div className="club-admin-field">
+              <label>Poster / Cover image</label>
+              <div
+                className="club-admin-upload-zone"
+                onClick={(e) => {
+                  if (e.target instanceof HTMLElement && e.target.closest('button')) return
+                  posterInputRef.current?.click()
+                }}
+              >
+                <input
+                  ref={posterInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                  onChange={(e) => setPosterFile(e.target.files?.[0] ?? null)}
+                />
+                <IconUpload style={{ color: '#2563eb', marginBottom: 8 }} />
+                <div>Click to upload or drag &amp; drop</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>PNG, JPG, or SVG up to 10MB</div>
+                <button
+                  type="button"
+                  className="club-admin-btn-primary"
+                  style={{ marginTop: 12 }}
+                  onClick={(e) => { e.preventDefault(); posterInputRef.current?.click() }}
+                >
+                  Select file
+                </button>
+                {posterFile && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>
+                    {posterFile.name}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="club-admin-field">
+              <label>Sub-events</label>
+              <div className="club-admin-field">
+                <label style={{ fontSize: 12 }}>Date (optional)</label>
+                <input
+                  type="date"
+                  value={subEventDate}
+                  onChange={(e) => {
+                    setSubEventDate(e.target.value)
+                    if (subEventError) setSubEventError('')
+                  }}
+                />
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                  If left empty, the sub-event will use the main event&apos;s date.
+                </div>
+              </div>
+              <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Opening ceremony"
+                    value={subEventTitle}
+                    onChange={(e) => {
+                      setSubEventTitle(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Capacity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 100"
+                    value={subEventCapacity}
+                    onChange={(e) => {
+                      setSubEventCapacity(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>Start time</label>
+                  <input
+                    type="time"
+                    value={subEventStart}
+                    onChange={(e) => {
+                      setSubEventStart(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label style={{ fontSize: 12 }}>End time</label>
+                  <input
+                    type="time"
+                    value={subEventEnd}
+                    onChange={(e) => {
+                      setSubEventEnd(e.target.value)
+                      if (subEventError) setSubEventError('')
+                    }}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="club-admin-btn-primary"
+                style={{ marginTop: 10 }}
+                onClick={addSubEvent}
+              >
+                + Add sub-event
+              </button>
+              {subEventError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#b91c1c' }}>
+                  {subEventError}
+                </div>
+              )}
+              {subEvents.length > 0 && (
+                <table className="club-admin-table" style={{ marginTop: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Title</th>
+                      <th>Capacity</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subEvents.map((se, index) => (
+                      <tr key={`${se.title}-${index}`}>
+                        <td>{se.date}</td>
+                        <td>{se.title}</td>
+                        <td>{se.capacity}</td>
+                        <td>{se.start}</td>
+                        <td>{se.end}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="club-admin-btn-icon"
+                            onClick={() => removeSubEvent(index)}
+                            aria-label="Remove sub-event"
+                          >
+                            <IconTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </form>
+        </div>
+      </>
+    )
+  }
+
+  const today = todayIso()
+
+  return (
+    <>
+      <header className="club-admin-header">
+        <h1 className="club-admin-header-title">Club Events</h1>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+          <div className="club-admin-header-search">
+            <IconSearch />
+            <input
+              type="text"
+              placeholder="Search events by title or club..."
+              aria-label="Search events"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Link
+            to="/club-admin/events/propose"
+            className="club-admin-btn-primary"
+            style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
+          >
+            <IconMegaphone /> Suggest event
+          </Link>
+        </div>
+      </header>
+
+      <div className="club-admin-content">
+        <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
+          <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+          <span style={{ margin: '0 8px' }}>&gt;</span>
+          <span style={{ color: '#0f172a', fontWeight: 600 }}>Events</span>
+        </nav>
+
+        <div className="club-admin-card" style={{ marginLeft: 24, marginRight: 24 }}>
+          <div className="club-admin-card-head">
+            <h2 className="club-admin-card-title">All Club Events</h2>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+                <span style={{ color: '#64748b' }}>Status:</span>
+                <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('all')}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: statusFilter === 'all' ? '#0f172a' : 'transparent',
+                      color: statusFilter === 'all' ? '#f8fafc' : '#64748b',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('upcoming')}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: statusFilter === 'upcoming' ? '#16a34a' : 'transparent',
+                      color: statusFilter === 'upcoming' ? '#f0fdf4' : '#64748b',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Upcoming
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('past')}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      background: statusFilter === 'past' ? '#e11d48' : 'transparent',
+                      color: statusFilter === 'past' ? '#fef2f2' : '#64748b',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Past
+                  </button>
+                </div>
+              </div>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                {filteredEvents.length} events
+              </span>
+            </div>
+          </div>
+
+          <table className="club-admin-table">
+            <thead>
+              <tr>
+                <th style={{ width: '26%' }}>Title</th>
+                <th style={{ width: '22%' }}>Club</th>
+                <th style={{ width: '12%' }}>Category</th>
+                <th style={{ width: '14%' }}>Date</th>
+                <th style={{ width: '14%' }}>Time</th>
+                <th style={{ width: '12%' }}>Status</th>
+                <th style={{ width: '10%' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEvents.map((e) => {
+                const isUpcoming = !e.date || e.date >= today
+                return (
+                  <tr key={e.id}>
+                    <td>{e.title}</td>
+                    <td>{e.clubName}</td>
+                    <td>{e.category || '—'}</td>
+                    <td>{formatDate(e.date)}</td>
+                    <td>{e.time || '—'}</td>
+                    <td>
+                      <span className="club-admin-pill" style={isUpcoming ? { background: '#dcfce7', color: '#166534' } : { background: '#fee2e2', color: '#b91c1c' }}>
+                        {isUpcoming ? 'Upcoming' : 'Past'}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="club-admin-btn-secondary"
+                        onClick={() => startEdit(e)}
+                      >
+                        <IconEdit /> Edit
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {filteredEvents.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="club-admin-table-empty">
+                    No events match your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default ClubAdminEvents
+

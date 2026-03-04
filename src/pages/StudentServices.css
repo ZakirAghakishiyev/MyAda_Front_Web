@@ -82,6 +82,11 @@
   display: none;
 }
 
+.ss-layout--sidebar-closed .ss-main {
+  /* Add left padding so the floating sidebar button does not overlap content */
+  padding-left: 80px;
+}
+
 .ss-sidebar-open-btn {
   position: fixed;
   top: 20px;

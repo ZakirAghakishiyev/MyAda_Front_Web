@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { getClubById } from '../../data/clubsData'
 import './ClubAdmin.css'
 
 const IconHome = () => (
@@ -54,6 +55,17 @@ const IconBriefcase = () => (
   </svg>
 )
 
+const IconList = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+)
+
 const IconTag = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a2 2 0 0 0-2 2v5.59A2 2 0 0 0 2.59 12L12.17 21.6a2 2 0 0 0 2.83 0l5.59-5.59a2 2 0 0 0 0-2.83Z" />
@@ -70,9 +82,14 @@ const IconPlus = () => (
 
 export default function ClubAdminLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [showNotificationModal, setShowNotificationModal] = useState(false)
   const [notificationTitle, setNotificationTitle] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
+
+  const searchParams = new URLSearchParams(location.search)
+  const clubIdParam = searchParams.get('club')
+  const activeClub = clubIdParam ? getClubById(clubIdParam) : null
 
   const openNotificationModal = () => {
     setNotificationTitle('')
@@ -97,7 +114,22 @@ export default function ClubAdminLayout() {
         <button type="button" className="club-admin-nav-item club-admin-sidebar-home" onClick={() => navigate('/')} aria-label="Back to home">
           <IconHome /> Back to Home
         </button>
-        <div className="club-admin-sidebar-title">Club Admin</div>
+        <div className="club-admin-sidebar-title">
+          {activeClub ? (
+            <div className="club-admin-sidebar-club">
+              <div
+                className="club-admin-sidebar-club-logo"
+                style={activeClub.image ? { backgroundImage: `url(${activeClub.image})` } : undefined}
+              />
+              <div className="club-admin-sidebar-club-text">
+                <div className="club-admin-sidebar-club-name">{activeClub.name}</div>
+                <div className="club-admin-sidebar-club-subtitle">Club Admin</div>
+              </div>
+            </div>
+          ) : (
+            'Club Admin'
+          )}
+        </div>
 
         <nav className="club-admin-sidebar-nav">
           <NavLink to="/club-admin" end className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
@@ -108,6 +140,14 @@ export default function ClubAdminLayout() {
             <IconApplications /> Applications
           </NavLink>
 
+          <NavLink to="/club-admin/vacancies" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
+            <IconList /> Vacancies
+          </NavLink>
+
+          <NavLink to="/club-admin/events" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
+            <IconCalendar /> Events
+          </NavLink>
+
           <NavLink to="/club-admin/members" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
             <IconPeople /> Members
           </NavLink>
@@ -116,16 +156,8 @@ export default function ClubAdminLayout() {
             <IconBriefcase /> Employees
           </NavLink>
 
-          <NavLink to="/club-admin/vacancies/new" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
-            <IconMegaphone /> Announce Vacancy
-          </NavLink>
-
-          <NavLink to="/club-admin/positions/new" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
-            <IconTag /> Create Position
-          </NavLink>
-
-          <NavLink to="/club-admin/events/propose" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
-            <IconCalendar /> Suggest Event
+          <NavLink to="/club-admin/positions" className={({ isActive }) => isActive ? 'club-admin-nav-item club-admin-nav-item--active' : 'club-admin-nav-item'}>
+            <IconTag /> Positions
           </NavLink>
         </nav>
 

@@ -20,6 +20,7 @@ import MyRequests from './pages/MyRequests'
 import RequestDetail from './pages/RequestDetail'
 import ComingSoonPage from './pages/ComingSoonPage'
 import ClubsList from './pages/ClubsList'
+import ClubNotifications from './pages/ClubNotifications'
 import MyMemberships from './pages/MyMemberships'
 import ClubDetail from './pages/ClubDetail'
 import ProposeClub from './pages/ProposeClub'
@@ -35,7 +36,10 @@ import MyVacancyApplications from './pages/MyVacancyApplications'
 import ClubAdminLayout from './pages/club-admin/ClubAdminLayout'
 import ClubAdminDashboard from './pages/club-admin/ClubAdminDashboard'
 import ClubAdminApplications from './pages/club-admin/ClubAdminApplications'
+import ClubAdminVacancies from './pages/club-admin/ClubAdminVacancies'
 import ClubAdminNewVacancy from './pages/club-admin/ClubAdminNewVacancy'
+import ClubAdminEvents from './pages/club-admin/ClubAdminEvents'
+import ClubAdminPositions from './pages/club-admin/ClubAdminPositions'
 import ClubAdminNewPosition from './pages/club-admin/ClubAdminNewPosition'
 import ClubAdminSuggestEvent from './pages/club-admin/ClubAdminSuggestEvent'
 import ClubAdminMembers from './pages/club-admin/ClubAdminMembers'
@@ -64,6 +68,7 @@ const AppContent = () => {
     '/clubs/vacancies/my-applications',
     '/clubs/events',
     '/clubs/events/my-registrations',
+    '/clubs/notifications',
     '/student-services'
   ]
   const isClubDetailRoute = location.pathname.match(/^\/clubs\/\d+$/)
@@ -107,6 +112,7 @@ const AppContent = () => {
           <Route path="/coming-soon" element={<ComingSoonPage />} />
           <Route path="/student-services" element={<StudentServices />} />
           <Route path="/clubs" element={<ClubsList />} />
+          <Route path="/clubs/notifications" element={<ClubNotifications />} />
           <Route path="/clubs/my-memberships" element={<MyMemberships />} />
           <Route path="/clubs/vacancies" element={<ClubVacancies />} />
           <Route path="/clubs/vacancies/my-applications" element={<MyVacancyApplications />} />
@@ -142,9 +148,12 @@ const AppContent = () => {
           <Route path="/club-admin" element={<ClubAdminLayout />}>
             <Route index element={<ClubAdminDashboard />} />
             <Route path="applications" element={<ClubAdminApplications />} />
+            <Route path="vacancies" element={<ClubAdminVacancies />} />
             <Route path="members" element={<ClubAdminMembers />} />
             <Route path="employees" element={<ClubAdminEmployees />} />
             <Route path="vacancies/new" element={<ClubAdminNewVacancy />} />
+             <Route path="events" element={<ClubAdminEvents />} />
+            <Route path="positions" element={<ClubAdminPositions />} />
             <Route path="positions/new" element={<ClubAdminNewPosition />} />
             <Route path="events/propose" element={<ClubAdminSuggestEvent />} />
           </Route>

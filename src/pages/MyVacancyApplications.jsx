@@ -128,8 +128,22 @@ const MyVacancyApplications = () => {
               readOnly
             />
           </div>
-          <button type="button" className="vacancies-nav-icon" aria-label="Notifications"><IconBell /></button>
-          <div className="vacancies-nav-avatar" aria-hidden="true">U</div>
+          <button
+            type="button"
+            className="vacancies-nav-icon"
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+          </button>
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="My memberships"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
+          </button>
         </div>
       </header>
 

@@ -130,15 +130,29 @@ const ClubEvents = () => {
           </nav>
         </div>
         <div className="vacancies-nav-right">
-          <button type="button" className="vacancies-nav-icon" aria-label="Notifications"><IconBell /></button>
-          <div className="vacancies-nav-avatar" aria-hidden="true">U</div>
+          <button
+            type="button"
+            className="vacancies-nav-icon"
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+          </button>
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="My memberships"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
+          </button>
         </div>
       </header>
       <div className="ce-main">
         <header className="ce-header">
-          <button type="button" className="ce-back" onClick={() => navigate('/')} aria-label="Back">
+          {/* <button type="button" className="ce-back" onClick={() => navigate('/')} aria-label="Back">
             <IconBack />
-          </button>
+          </button> */}
           <div className="ce-header-title">
             <h1>Club Events</h1>
             <span className="ce-subtitle">{filteredEvents.length} events discovered</span>
@@ -163,7 +177,12 @@ const ClubEvents = () => {
               <IconCalendar />
               My Registrations
             </button>
-            <button type="button" className="ce-icon-btn" aria-label="Notifications">
+            {/* <button
+              type="button"
+              className="ce-icon-btn"
+              aria-label="Notifications"
+              onClick={() => navigate('/clubs/notifications')}
+            >
               <IconBell />
             </button>
             <button
@@ -173,7 +192,7 @@ const ClubEvents = () => {
               aria-label="Profile"
             >
               <IconPerson />
-            </button>
+            </button> */}
           </div>
         </header>
 

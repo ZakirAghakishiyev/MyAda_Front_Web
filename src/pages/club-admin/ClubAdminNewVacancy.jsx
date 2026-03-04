@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { VACANCY_CATEGORIES } from '../../data/clubAdminData'
+import { EMPLOYEE_POSITIONS } from '../../data/clubAdminData'
 import './ClubAdmin.css'
 
 const IconCheck = () => (
@@ -30,29 +30,18 @@ const IconHelp = () => (
 
 const ClubAdminNewVacancy = () => {
   const navigate = useNavigate()
-  const [roleTitle, setRoleTitle] = useState('')
-  const [category, setCategory] = useState('')
+  const [positionId, setPositionId] = useState('')
   const [deadline, setDeadline] = useState('')
   const [description, setDescription] = useState('')
-  const [requirementInput, setRequirementInput] = useState('')
-  const [requirements, setRequirements] = useState([
-    'Excellent communication and teamwork skills.',
-    'Enthusiasm for university events and student life.'
-  ])
 
-  const addRequirement = () => {
-    const t = requirementInput.trim()
-    if (!t) return
-    setRequirements((prev) => [...prev, t])
-    setRequirementInput('')
-  }
-
-  const removeRequirement = (index) => {
-    setRequirements((prev) => prev.filter((_, i) => i !== index))
-  }
+  const selectedPosition = useMemo(
+    () => EMPLOYEE_POSITIONS.find((p) => String(p.id) === String(positionId)) || null,
+    [positionId]
+  )
 
   const handlePublish = (e) => {
     e.preventDefault()
+    if (!positionId) return
     navigate('/club-admin')
   }
 
@@ -80,19 +69,20 @@ const ClubAdminNewVacancy = () => {
             <div style={{ flex: 1 }}>
               <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Basic Information</h3>
               <div className="club-admin-field">
-                <label>Role Title</label>
-                <input type="text" placeholder="e.g. Marketing Coordinator" value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} />
+                <label>Position</label>
+                <select
+                  value={positionId}
+                  onChange={(e) => setPositionId(e.target.value)}
+                >
+                  <option value="">Select a position</option>
+                  {EMPLOYEE_POSITIONS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="club-admin-form-row">
-                <div className="club-admin-field">
-                  <label>Category</label>
-                  <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="">Select a category</option>
-                    {VACANCY_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
                 <div className="club-admin-field">
                   <label>Application Deadline</label>
                   <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
@@ -100,6 +90,25 @@ const ClubAdminNewVacancy = () => {
               </div>
             </div>
           </div>
+
+          {selectedPosition && (
+            <div className="club-admin-card" style={{ marginLeft: 24, marginRight: 24, marginTop: 0, background: '#f8fafc' }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                Requirements for {selectedPosition.title}
+              </h3>
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748b' }}>
+                These come from the position definition and help applicants understand expectations.
+              </p>
+              <ul className="club-admin-requirements-list">
+                {(selectedPosition.requirements || []).map((r, i) => (
+                  <li key={i}>
+                    <IconCheck />
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 14, marginBottom: 20 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconDoc style={{ color: '#0284c7' }} /></div>
@@ -113,31 +122,13 @@ const ClubAdminNewVacancy = () => {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 14, marginBottom: 24 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconList style={{ color: '#0284c7' }} /></div>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Key Requirements</h3>
-              <div className="club-admin-add-row">
-                <input type="text" placeholder="Add a qualification (e.g. Previous experience with Canva)" value={requirementInput} onChange={(e) => setRequirementInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())} />
-                <button type="button" className="club-admin-btn-primary" onClick={addRequirement}>+ Add</button>
-              </div>
-              <ul className="club-admin-requirements-list">
-                {requirements.map((r, i) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <IconCheck />
-                    <span style={{ flex: 1 }}>{r}</span>
-                    <button type="button" className="club-admin-btn-icon" onClick={() => removeRequirement(i)} aria-label="Remove">×</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
             <span style={{ fontSize: 13, color: '#64748b' }}>Draft saved 2 mins ago</span>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" className="club-admin-btn-secondary"><IconEye /> Preview</button>
-              <button type="submit" className="club-admin-btn-primary"><IconUpload /> Publish Vacancy</button>
+              {/* <button type="button" className="club-admin-btn-secondary"><IconEye /> Preview</button> */}
+              <button type="submit" className="club-admin-btn-primary" disabled={!positionId}>
+                <IconUpload /> Publish Vacancy
+              </button>
             </div>
           </div>
         </form>

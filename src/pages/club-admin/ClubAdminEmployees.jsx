@@ -3,7 +3,9 @@ import { mockClubEmployees as initialEmployees, EMPLOYEE_POSITIONS as employeePo
 import './ClubAdmin.css'
 
 const mockClubEmployees = Array.isArray(initialEmployees) ? initialEmployees : []
-const EMPLOYEE_POSITIONS = Array.isArray(employeePositionsList) ? employeePositionsList : ['Marketing Coordinator', 'Event Coordinator', 'Lead Designer', 'Content Writer', 'Treasurer', 'Outreach Lead']
+const EMPLOYEE_POSITION_TITLES = Array.isArray(employeePositionsList)
+  ? employeePositionsList.map((p) => (typeof p === 'string' ? p : p.title))
+  : ['Marketing Coordinator', 'Event Coordinator', 'Lead Designer', 'Content Writer', 'Treasurer', 'Outreach Lead']
 
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -123,7 +125,7 @@ const ClubAdminEmployees = () => {
                       onChange={(ev) => handleUpdatePosition(e.id, ev.target.value)}
                       aria-label={`Update position for ${e.name} ${e.surname}`}
                     >
-                      {EMPLOYEE_POSITIONS.map((pos) => (
+                      {EMPLOYEE_POSITION_TITLES.map((pos) => (
                         <option key={pos} value={pos}>{pos}</option>
                       ))}
                     </select>

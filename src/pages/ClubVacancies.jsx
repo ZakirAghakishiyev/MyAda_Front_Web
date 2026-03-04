@@ -138,16 +138,30 @@ const ClubVacancies = () => {
               aria-label="Search roles or clubs"
             />
           </div>
-          <button type="button" className="vacancies-nav-icon" aria-label="Notifications"><IconBell /></button>
-          <div className="vacancies-nav-avatar" aria-hidden="true">U</div>
+          <button
+            type="button"
+            className="vacancies-nav-icon"
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+          </button>
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="My memberships"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
+          </button>
         </div>
       </header>
 
       <div className="vacancies-content">
-        <a href="/clubs" className="vacancies-back-link" onClick={(e) => { e.preventDefault(); navigate('/clubs') }}>
+        {/* <a href="/clubs" className="vacancies-back-link" onClick={(e) => { e.preventDefault(); navigate('/clubs') }}>
           <IconBack />
           Back to Dashboard
-        </a>
+        </a> */}
 
         <div className="vacancies-header">
           <div className="vacancies-header-title">
