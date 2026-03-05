@@ -117,7 +117,14 @@ const RequestDetail = () => {
             <button type="button" className="rd-back" onClick={() => navigate('/my-requests')} aria-label="Back">
               <IconBack />
             </button>
-            <button type="button" className="rd-share" aria-label="Share"><IconShare /></button>
+            <div className="rd-header-right">
+              <button type="button" className="rd-header-btn">
+                Print
+              </button>
+              <button type="button" className="rd-header-btn">
+                <IconShare /> Share
+              </button>
+            </div>
           </header>
 
           <div className="rd-summary">
@@ -127,107 +134,120 @@ const RequestDetail = () => {
           </div>
 
           <div className="rd-popup-scroll">
-          <div className="rd-status-row">
-            <div className="rd-status-card">
-              <span className="rd-status-label">Status</span>
-              <span className={`rd-status-value rd-status-value--${request.status.toLowerCase().replace(' ', '-')}`}>
-                {request.status}
-              </span>
+            <div className="rd-status-row">
+              <div className="rd-status-card">
+                <span className="rd-status-label">Status</span>
+                <span className={`rd-status-value rd-status-value--${request.status.toLowerCase().replace(' ', '-')}`}>
+                  {request.status}
+                </span>
+              </div>
+              <div className="rd-status-card">
+                <span className="rd-status-label">Priority</span>
+                <span className={`rd-priority-value rd-priority-value--${priorityLabel.toLowerCase()}`}>
+                  {priorityLabel}
+                </span>
+              </div>
             </div>
-            <div className="rd-status-card">
-              <span className="rd-status-label">Priority</span>
-              <span className={`rd-priority-value rd-priority-value--${priorityLabel.toLowerCase()}`}>
-                {priorityLabel}
-              </span>
-            </div>
-          </div>
 
-          <section className="rd-card rd-card--details">
-            <h2 className="rd-card-title">Ticket Details</h2>
-            <div className="rd-detail-row">
-              <IconPin />
-              <span className="rd-detail-label">Location</span>
-              <span className="rd-detail-value">{request.location}</span>
-            </div>
-            <div className="rd-detail-row">
-              <IconClock />
-              <span className="rd-detail-label">Created</span>
-              <span className="rd-detail-value">{request.created}</span>
-            </div>
-            {isCompleted && request.completed && (
+            <section className="rd-card rd-card--details">
+              <h2 className="rd-card-title">Ticket Details</h2>
               <div className="rd-detail-row">
-                <IconCheck />
-                <span className="rd-detail-label">Completed</span>
-                <span className="rd-detail-value">{request.completed}</span>
+                <IconPin />
+                <span className="rd-detail-label">Location</span>
+                <span className="rd-detail-value">{request.location}</span>
+              </div>
+              <div className="rd-detail-row">
+                <IconClock />
+                <span className="rd-detail-label">Created</span>
+                <span className="rd-detail-value">{request.created}</span>
+              </div>
+              {isCompleted && request.completed && (
+                <div className="rd-detail-row">
+                  <IconCheck />
+                  <span className="rd-detail-label">Completed</span>
+                  <span className="rd-detail-value">{request.completed}</span>
+                </div>
+              )}
+            </section>
+
+            <section className="rd-card">
+              <h2 className="rd-card-title">
+                <IconDoc /> Description
+              </h2>
+              <p className="rd-description">{request.descriptionFull || request.description}</p>
+            </section>
+
+            {request.assignedTo && (
+              <section className="rd-card rd-card--assigned">
+                <h2 className="rd-card-title">
+                  <IconPerson /> Assigned To
+                </h2>
+                <p className="rd-assigned-name">{request.assignedTo}</p>
+              </section>
+            )}
+
+            {isCompleted && request.rating != null && (
+              <section className="rd-card rd-card--completed">
+                <span className="rd-completed-icon">✓</span>
+                <span className="rd-completed-label">Completed</span>
+                <p className="rd-rating-label">Your Rating:</p>
+                <div className="rd-stars">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <span key={i} className={`rd-star ${i <= request.rating ? 'rd-star--filled' : ''}`}>
+                      <IconStar />
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {isCancelledStatus && request.cancelReason && (
+              <section className="rd-card rd-card--cancelled">
+                <h2 className="rd-card-title">
+                  <span className="rd-cancel-icon">
+                    <IconX />
+                  </span>
+                  Cancelled
+                </h2>
+                <p className="rd-cancel-reason">Reason: {request.cancelReason}</p>
+              </section>
+            )}
+
+            <section className="rd-card">
+              <h2 className="rd-card-title">
+                <IconTimeline /> Timeline
+              </h2>
+              <ul className="rd-timeline">
+                {request.timeline.map((item, i) => (
+                  <li key={i} className={`rd-timeline-item ${item.done ? 'rd-timeline-item--done' : ''}`}>
+                    <span className="rd-timeline-dot">{item.done ? <IconCheck /> : null}</span>
+                    <div className="rd-timeline-content">
+                      <span className="rd-timeline-step">{item.step}</span>
+                      {item.detail && <span className="rd-timeline-detail">{item.detail}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {isOpen && !isCancelledStatus && (
+              <div className="rd-actions">
+                <button type="button" className="rd-btn rd-btn--contact" onClick={() => setShowContactModal(true)}>
+                  <IconChat /> Contact Staff
+                </button>
+                <button type="button" className="rd-btn rd-btn--cancel" onClick={() => setShowCancelModal(true)}>
+                  <IconX /> Cancel Ticket
+                </button>
               </div>
             )}
-          </section>
 
-          <section className="rd-card">
-            <h2 className="rd-card-title"><IconDoc /> Description</h2>
-            <p className="rd-description">{request.descriptionFull || request.description}</p>
-          </section>
-
-          {request.assignedTo && (
-            <section className="rd-card rd-card--assigned">
-              <h2 className="rd-card-title"><IconPerson /> Assigned To</h2>
-              <p className="rd-assigned-name">{request.assignedTo}</p>
-            </section>
-          )}
-
-          {isCompleted && request.rating != null && (
-            <section className="rd-card rd-card--completed">
-              <span className="rd-completed-icon">✓</span>
-              <span className="rd-completed-label">Completed</span>
-              <p className="rd-rating-label">Your Rating:</p>
-              <div className="rd-stars">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <span key={i} className={`rd-star ${i <= request.rating ? 'rd-star--filled' : ''}`}><IconStar /></span>
-                ))}
+            {isCompleted && (
+              <div className="rd-actions">
+                <button type="button" className="rd-btn rd-btn--rate">
+                  <IconStar /> Rate This Ticket
+                </button>
               </div>
-            </section>
-          )}
-
-          {isCancelledStatus && request.cancelReason && (
-            <section className="rd-card rd-card--cancelled">
-              <h2 className="rd-card-title"><span className="rd-cancel-icon"><IconX /></span> Cancelled</h2>
-              <p className="rd-cancel-reason">Reason: {request.cancelReason}</p>
-            </section>
-          )}
-
-          <section className="rd-card">
-            <h2 className="rd-card-title"><IconTimeline /> Timeline</h2>
-            <ul className="rd-timeline">
-              {request.timeline.map((item, i) => (
-                <li key={i} className={`rd-timeline-item ${item.done ? 'rd-timeline-item--done' : ''}`}>
-                  <span className="rd-timeline-dot">{item.done ? <IconCheck /> : null}</span>
-                  <div className="rd-timeline-content">
-                    <span className="rd-timeline-step">{item.step}</span>
-                    {item.detail && <span className="rd-timeline-detail">{item.detail}</span>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {isOpen && !isCancelledStatus && (
-            <div className="rd-actions">
-              <button type="button" className="rd-btn rd-btn--contact" onClick={() => setShowContactModal(true)}>
-                <IconChat /> Contact Staff
-              </button>
-              <button type="button" className="rd-btn rd-btn--cancel" onClick={() => setShowCancelModal(true)}>
-                <IconX /> Cancel Ticket
-              </button>
-            </div>
-          )}
-
-          {isCompleted && (
-            <div className="rd-actions">
-              <button type="button" className="rd-btn rd-btn--rate">
-                <IconStar /> Rate This Ticket
-              </button>
-            </div>
-          )}
+            )}
           </div>
         </div>
       </div>

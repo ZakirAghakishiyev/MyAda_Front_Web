@@ -18,6 +18,14 @@ import ITSupport from './pages/ITSupport'
 import FMSupport from './pages/FMSupport'
 import MyRequests from './pages/MyRequests'
 import RequestDetail from './pages/RequestDetail'
+import SupportDispatcher from './pages/SupportDispatcher'
+import AssignTask from './pages/AssignTask'
+import RequestDetailDispatcher from './pages/RequestDetailDispatcher'
+import SupportStaffDirectory from './pages/SupportStaffDirectory'
+import StaffPortalLayout from './pages/StaffPortalLayout'
+import StaffPortal from './pages/StaffPortal'
+import StaffPortalHistory from './pages/StaffPortalHistory'
+import StaffTicketDetail from './pages/StaffTicketDetail'
 import ComingSoonPage from './pages/ComingSoonPage'
 import ClubsList from './pages/ClubsList'
 import ClubNotifications from './pages/ClubNotifications'
@@ -45,12 +53,15 @@ import ClubAdminSuggestEvent from './pages/club-admin/ClubAdminSuggestEvent'
 import ClubAdminMembers from './pages/club-admin/ClubAdminMembers'
 import ClubAdminEmployees from './pages/club-admin/ClubAdminEmployees'
 import StudentServices from './pages/StudentServices'
+import StudentServicesEventDetail from './pages/StudentServicesEventDetail'
 import './App.css'
 
 const AppContent = () => {
   const location = useLocation()
   const isRequestDetailRoute = location.pathname.match(/^\/my-requests\/T-\d+$/)
+  const isDispatcherTicketRoute = location.pathname.match(/^\/support-dispatcher\/T-\d+$/)
   const isClubAdminRoute = location.pathname.startsWith('/club-admin')
+  const isStaffPortalRoute = location.pathname.startsWith('/staff-portal')
   const hideHeaderOnRoutes = [
     '/scheduling',
     '/lost-and-found',
@@ -69,7 +80,10 @@ const AppContent = () => {
     '/clubs/events',
     '/clubs/events/my-registrations',
     '/clubs/notifications',
-    '/student-services'
+    '/student-services',
+    '/support-dispatcher',
+    '/support-dispatcher/staff',
+    '/support-dispatcher/assign-task'
   ]
   const isClubDetailRoute = location.pathname.match(/^\/clubs\/\d+$/)
   const isProposeClubRoute = location.pathname === '/clubs/propose'
@@ -78,6 +92,7 @@ const AppContent = () => {
   const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+\/apply$/)
   const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/\d+$/)
   const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/\d+\/ticket$/)
+  const isStudentServicesEventDetailRoute = location.pathname.match(/^\/student-services\/events\/[^/]+$/)
   const isItemDetailRoute = location.pathname.match(/^\/lost-and-found\/item\/\d+$/)
   const isAdminItemDetailRoute = location.pathname.match(/^\/admin\/lost-and-found\/item\/\d+$/)
 
@@ -100,7 +115,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
 
   return (
     <div className="app">
@@ -111,6 +126,7 @@ const AppContent = () => {
           <Route path="/scheduling" element={<SchedulingPage />} />
           <Route path="/coming-soon" element={<ComingSoonPage />} />
           <Route path="/student-services" element={<StudentServices />} />
+          <Route path="/student-services/events/:id" element={<StudentServicesEventDetail />} />
           <Route path="/clubs" element={<ClubsList />} />
           <Route path="/clubs/notifications" element={<ClubNotifications />} />
           <Route path="/clubs/my-memberships" element={<MyMemberships />} />
@@ -234,6 +250,28 @@ const AppContent = () => {
               <RequestDetail />
             </>
           } />
+          <Route path="/support-dispatcher" element={<SupportDispatcher />} />
+          <Route path="/support-dispatcher/:id" element={
+            <>
+              <SupportDispatcher />
+              <RequestDetailDispatcher />
+            </>
+          } />
+          <Route path="/support-dispatcher/staff" element={<SupportStaffDirectory />} />
+          <Route path="/staff-portal" element={<StaffPortalLayout />}>
+            <Route index element={<StaffPortal />} />
+            <Route path="history" element={<StaffPortalHistory />} />
+            <Route path="ticket/:id" element={<StaffTicketDetail />} />
+          </Route>
+          <Route
+            path="/support-dispatcher/assign-task"
+            element={
+              <>
+                {location.state?.from === 'staff' ? <SupportStaffDirectory /> : <SupportDispatcher />}
+                <AssignTask />
+              </>
+            }
+          />
         </Routes>
       </main>
     </div>

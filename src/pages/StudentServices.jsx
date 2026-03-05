@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { mockClubMembers as initialMembers, mockClubEmployees as initialEmployees, MEMBER_POSITIONS as MEMBER_POSITIONS_LIST, EMPLOYEE_POSITIONS as EMPLOYEE_POSITIONS_LIST } from '../data/clubAdminData'
 import './StudentServices.css'
 import './club-admin/ClubAdmin.css'
@@ -174,6 +174,15 @@ const IconPlusCircle = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
   </svg>
+)
+const IconUpload = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+)
+const IconImage = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+)
+const IconClipboard = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
 )
 const IconMonitor = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -454,6 +463,7 @@ const APPROVED_EVENTS = [
     durationHours: 3,
     description: 'Flagship tech symposium bringing together student projects, guest speakers and demos.',
     subEvents: [],
+    image: null,
   },
   {
     id: 'u2',
@@ -465,6 +475,7 @@ const APPROVED_EVENTS = [
     durationHours: 2,
     description: 'Evening of live jazz featuring student bands and guest artists.',
     subEvents: [],
+    image: null,
   },
   {
     id: 'u3',
@@ -476,6 +487,7 @@ const APPROVED_EVENTS = [
     durationHours: 4,
     description: 'Pitch competition and networking event for early–stage student startups.',
     subEvents: [],
+    image: null,
   },
 ]
 
@@ -485,9 +497,19 @@ const SUB_EVENT_LOCATIONS = {
   'Business Building': ['Conference Room 1', 'Conference Room 2'],
 }
 
+/* Same venue options as Club Admin suggest event */
+const VENUES = ['Main Auditorium', 'Student Center', 'Conference Room A', 'Outdoor Quad', 'Lecture Hall B']
+
 const StudentServices = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const [section, setSection] = useState('command')
+
+  useEffect(() => {
+    if (location.state?.section === 'events') {
+      setSection('events')
+    }
+  }, [location.state?.section])
   const [clubProposals, setClubProposals] = useState(INITIAL_CLUB_PROPOSALS)
   const [selectedProposalId, setSelectedProposalId] = useState('1')
   const [proposalSearch, setProposalSearch] = useState('')
@@ -552,6 +574,34 @@ const StudentServices = () => {
   const [editSubError, setEditSubError] = useState('')
   const [editSubBuilding, setEditSubBuilding] = useState('')
   const [editSubRoom, setEditSubRoom] = useState('')
+  const [editEventImage, setEditEventImage] = useState('')
+  const editEventPosterInputRef = React.useRef(null)
+
+  // Add Event (same fields as club admin; confirmed automatically)
+  const [addEventOpen, setAddEventOpen] = useState(false)
+  const [addEventName, setAddEventName] = useState('')
+  const [addEventDate, setAddEventDate] = useState('')
+  const [addEventTime, setAddEventTime] = useState('')
+  const [addEventDuration, setAddEventDuration] = useState('3')
+  const [addEventAttendance, setAddEventAttendance] = useState('250')
+  const [addEventVenue, setAddEventVenue] = useState('Main Auditorium')
+  const [addEventPosterFile, setAddEventPosterFile] = useState(null)
+  const [addEventDescription, setAddEventDescription] = useState('')
+  const [addEventObjectives, setAddEventObjectives] = useState('')
+  const [addEventSubEvents, setAddEventSubEvents] = useState([])
+  const [addEventSubTitle, setAddEventSubTitle] = useState('')
+  const [addEventSubCapacity, setAddEventSubCapacity] = useState('')
+  const [addEventSubStart, setAddEventSubStart] = useState('')
+  const [addEventSubEnd, setAddEventSubEnd] = useState('')
+  const [addEventSubDate, setAddEventSubDate] = useState('')
+  const [addEventSubError, setAddEventSubError] = useState('')
+  const [addEventAvSetup, setAddEventAvSetup] = useState(false)
+  const [addEventSecurity, setAddEventSecurity] = useState(true)
+  const [addEventCatering, setAddEventCatering] = useState(false)
+  const [addEventCleaning, setAddEventCleaning] = useState(true)
+  const [addEventOtherNeeds, setAddEventOtherNeeds] = useState('')
+  const [addEventClub, setAddEventClub] = useState('Student Services')
+  const addEventPosterInputRef = React.useRef(null)
 
   const todayIso = new Date().toISOString().slice(0, 10)
 
@@ -570,11 +620,13 @@ const StudentServices = () => {
     })
   }, [approvedEvents, eventsFilterStatus, eventsSearch, todayIso])
 
-  const startEditApprovedEvent = (ev) => {
+  const startEditApprovedEvent = (ev, e) => {
+    if (e) e.stopPropagation()
     setEditingApprovedEvent(ev)
     setEditEventTitle(ev.title || '')
     setEditEventDate(ev.date || '')
     setEditEventVenue(ev.venue || '')
+    setEditEventImage(ev.image || '')
     // Try to infer building/room from existing venue
     let foundBuilding = ''
     let foundRoom = ''
@@ -614,6 +666,7 @@ const StudentServices = () => {
     setEditEventDuration('')
     setEditEventCapacity('')
     setEditEventDescription('')
+    setEditEventImage('')
     setEditSubEvents([])
     setEditSubTitle('')
     setEditSubCapacity('')
@@ -678,11 +731,88 @@ const StudentServices = () => {
                 editEventCapacity !== '' ? Number(editEventCapacity) || ev.capacity : ev.capacity,
               description: editEventDescription || ev.description,
               subEvents: editSubEvents,
+              image: editEventImage || ev.image,
             }
           : ev
       )
     )
     cancelEditApprovedEvent()
+  }
+
+  const openAddEvent = () => {
+    setAddEventOpen(true)
+    setAddEventName('')
+    setAddEventDate('')
+    setAddEventTime('')
+    setAddEventDuration('3')
+    setAddEventAttendance('250')
+    setAddEventVenue('Main Auditorium')
+    setAddEventPosterFile(null)
+    setAddEventDescription('')
+    setAddEventObjectives('')
+    setAddEventSubEvents([])
+    setAddEventSubTitle('')
+    setAddEventSubCapacity('')
+    setAddEventSubStart('')
+    setAddEventSubEnd('')
+    setAddEventSubDate('')
+    setAddEventSubError('')
+    setAddEventAvSetup(false)
+    setAddEventSecurity(true)
+    setAddEventCatering(false)
+    setAddEventCleaning(true)
+    setAddEventOtherNeeds('')
+    setAddEventClub('Student Services')
+  }
+
+  const closeAddEvent = () => setAddEventOpen(false)
+
+  const addEventAddSubEvent = () => {
+    const title = addEventSubTitle.trim()
+    const capacity = addEventSubCapacity.trim()
+    const start = addEventSubStart.trim()
+    const end = addEventSubEnd.trim()
+    const date = (addEventSubDate || addEventDate).trim()
+    if (!title || !capacity || !start || !end) {
+      setAddEventSubError('Please fill in title, capacity, start, and end time.')
+      return
+    }
+    if (start && end && start >= end) {
+      setAddEventSubError('End time must be later than start time.')
+      return
+    }
+    setAddEventSubEvents((prev) => [...prev, { title, capacity, start, end, date }])
+    setAddEventSubError('')
+    setAddEventSubTitle('')
+    setAddEventSubCapacity('')
+    setAddEventSubStart('')
+    setAddEventSubEnd('')
+    setAddEventSubDate('')
+  }
+
+  const addEventRemoveSubEvent = (index) => {
+    setAddEventSubEvents((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const submitAddEvent = (e) => {
+    e.preventDefault()
+    if (!addEventName.trim()) return
+    const dateIso = addEventDate || new Date().toISOString().slice(0, 10)
+    const imageUrl = addEventPosterFile ? URL.createObjectURL(addEventPosterFile) : null
+    const newEvent = {
+      id: `ss-${Date.now()}`,
+      title: addEventName.trim(),
+      date: dateIso,
+      club: addEventClub.trim() || 'Student Services',
+      venue: addEventVenue,
+      capacity: Number(addEventAttendance) || 0,
+      durationHours: Number(addEventDuration) || 0,
+      description: addEventDescription.trim() || '',
+      subEvents: addEventSubEvents,
+      image: imageUrl,
+    }
+    setApprovedEvents((prev) => [newEvent, ...prev])
+    closeAddEvent()
   }
 
   const renderHeader = (title, subtitle) => (
@@ -2120,6 +2250,42 @@ const StudentServices = () => {
               </div>
 
               <div className="club-admin-field">
+                <label>Poster / Cover Image</label>
+                <div
+                  className="club-admin-upload-zone"
+                  style={{ minHeight: 100 }}
+                  onClick={(e) => { if ((e.target instanceof HTMLElement) && e.target.closest('button')) return; editEventPosterInputRef.current?.click(); }}
+                >
+                  <input
+                    ref={editEventPosterInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                    onChange={(ev) => {
+                      const file = ev.target.files?.[0]
+                      if (file) setEditEventImage(URL.createObjectURL(file))
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  {editEventImage ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <img src={editEventImage} alt="Event" style={{ maxHeight: 80, maxWidth: 120, objectFit: 'cover', borderRadius: 8 }} />
+                      <div>
+                        <button type="button" className="club-admin-btn-secondary" style={{ marginRight: 8 }} onClick={(e) => { e.stopPropagation(); editEventPosterInputRef.current?.click(); }}>Change image</button>
+                        <button type="button" className="club-admin-btn-secondary" onClick={(e) => { e.stopPropagation(); setEditEventImage(''); }}>Remove</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <IconUpload style={{ color: '#2563eb', marginBottom: 8 }} />
+                      <div>Click to upload or drag &amp; drop</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>PNG, JPG, or SVG</div>
+                      <button type="button" className="club-admin-btn-primary" style={{ marginTop: 12 }} onClick={(e) => { e.stopPropagation(); editEventPosterInputRef.current?.click(); }}>Select File</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="club-admin-field">
                 <label>Sub-events</label>
                 <div className="club-admin-field">
                   <label style={{ fontSize: 12 }}>Date (optional)</label>
@@ -2301,6 +2467,14 @@ const StudentServices = () => {
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="club-admin-btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                onClick={openAddEvent}
+              >
+                <IconPlus /> Add event
+              </button>
               <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                 <button
                   type="button"
@@ -2365,7 +2539,20 @@ const StudentServices = () => {
             {filteredApprovedEvents.map((ev) => {
               const isUpcoming = !ev.date || ev.date >= todayIso
               return (
-                <li key={ev.id} className="ss-events-list-item">
+                <li
+                  key={ev.id}
+                  className="ss-events-list-item"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate('/student-services/events/' + encodeURIComponent(ev.id), { state: { event: ev } })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate('/student-services/events/' + encodeURIComponent(ev.id), { state: { event: ev } })
+                    }
+                  }}
+                >
                   <div className="ss-events-list-item-main">
                     <span className="ss-events-list-item-title">{ev.title}</span>
                     <span className="ss-events-list-item-meta">
@@ -2373,7 +2560,7 @@ const StudentServices = () => {
                       {typeof ev.capacity !== 'undefined' && ` · Cap: ${ev.capacity}`}
                     </span>
                   </div>
-                  <div className="ss-events-list-item-actions">
+                  <div className="ss-events-list-item-actions" onClick={(e) => e.stopPropagation()}>
                     <span
                       className={`ss-pill ${
                         isUpcoming ? 'ss-pill--success' : 'ss-pill--muted'
@@ -2386,7 +2573,7 @@ const StudentServices = () => {
                         type="button"
                         className="club-admin-btn-secondary"
                         style={{ padding: '6px 10px', fontSize: 12 }}
-                        onClick={() => startEditApprovedEvent(ev)}
+                        onClick={(e) => startEditApprovedEvent(ev, e)}
                       >
                         <IconPen /> Edit
                       </button>
@@ -2402,6 +2589,192 @@ const StudentServices = () => {
             )}
           </ul>
         </div>
+
+        {addEventOpen && (
+          <div
+            className="ss-modal-overlay"
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflow: 'auto', zIndex: 1000 }}
+            onClick={closeAddEvent}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-event-title"
+          >
+            <div
+              className="ss-modal ss-card"
+              style={{ width: '100%', maxWidth: 900, margin: 'auto', position: 'relative' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <h2 id="add-event-title" style={{ margin: 0, fontSize: 20 }}>Add event (confirmed automatically)</h2>
+                <button type="button" className="club-admin-btn-icon" onClick={closeAddEvent} aria-label="Close">
+                  <IconCloseX />
+                </button>
+              </div>
+              <form onSubmit={submitAddEvent}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                  <div>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconInfo style={{ color: '#0284c7' }} /></div>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Event Basics</h3>
+                    </div>
+                    <div className="club-admin-field">
+                      <label>Event Name</label>
+                      <input type="text" placeholder="e.g. Annual Tech Symposium 2024" value={addEventName} onChange={(e) => setAddEventName(e.target.value)} required />
+                    </div>
+                    <div className="club-admin-form-row">
+                      <div className="club-admin-field">
+                        <label>Date</label>
+                        <input type="date" value={addEventDate} onChange={(e) => setAddEventDate(e.target.value)} />
+                      </div>
+                      <div className="club-admin-field">
+                        <label>Time</label>
+                        <input type="time" value={addEventTime} onChange={(e) => setAddEventTime(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="club-admin-form-row">
+                      <div className="club-admin-field">
+                        <label>Duration (Hours)</label>
+                        <input type="text" value={addEventDuration} onChange={(e) => setAddEventDuration(e.target.value)} />
+                      </div>
+                      <div className="club-admin-field">
+                        <label>Estimated Attendance</label>
+                        <input type="text" value={addEventAttendance} onChange={(e) => setAddEventAttendance(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="club-admin-field">
+                      <label>Venue Preference</label>
+                      <select value={addEventVenue} onChange={(e) => setAddEventVenue(e.target.value)}>
+                        {VENUES.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="club-admin-field">
+                      <label>Club / Organizer</label>
+                      <input type="text" placeholder="e.g. Student Services" value={addEventClub} onChange={(e) => setAddEventClub(e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconImage style={{ color: '#0284c7' }} /></div>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Poster / Cover Image</h3>
+                    </div>
+                    <div
+                      className="club-admin-upload-zone"
+                      onClick={(e) => { if ((e.target instanceof HTMLElement) && e.target.closest('button')) return; addEventPosterInputRef.current?.click() }}
+                    >
+                      <input
+                        ref={addEventPosterInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                        onChange={(e) => setAddEventPosterFile(e.target.files?.[0] ?? null)}
+                        style={{ display: 'none' }}
+                      />
+                      <IconUpload style={{ color: '#2563eb', marginBottom: 8 }} />
+                      <div>Click to upload or drag &amp; drop</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>PNG, JPG, or SVG up to 10MB</div>
+                      <button type="button" className="club-admin-btn-primary" style={{ marginTop: 12 }} onClick={(e) => { e.preventDefault(); addEventPosterInputRef.current?.click(); }}>Select File</button>
+                      {addEventPosterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{addEventPosterFile.name}</div>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }} className="club-admin-card">
+                  <div>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconDoc style={{ color: '#0284c7' }} /></div>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Event Content</h3>
+                    </div>
+                    <div className="club-admin-field">
+                      <label>Event Description</label>
+                      <textarea placeholder="Briefly describe what happens during the event..." value={addEventDescription} onChange={(e) => setAddEventDescription(e.target.value)} rows={3} />
+                    </div>
+                    <div className="club-admin-field">
+                      <label>Purpose &amp; Objectives</label>
+                      <textarea placeholder="What is the goal of this event?" value={addEventObjectives} onChange={(e) => setAddEventObjectives(e.target.value)} rows={3} />
+                    </div>
+                    <div className="club-admin-field">
+                      <label>Sub-events Included</label>
+                      <div className="club-admin-field">
+                        <label style={{ fontSize: 12 }}>Date (optional)</label>
+                        <input type="date" value={addEventSubDate} onChange={(e) => { setAddEventSubDate(e.target.value); if (addEventSubError) setAddEventSubError(''); }} />
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>If left empty, uses main event date.</div>
+                      </div>
+                      <div className="club-admin-form-row">
+                        <div className="club-admin-field">
+                          <label style={{ fontSize: 12 }}>Title</label>
+                          <input type="text" placeholder="e.g. Opening Ceremony" value={addEventSubTitle} onChange={(e) => { setAddEventSubTitle(e.target.value); if (addEventSubError) setAddEventSubError(''); }} />
+                        </div>
+                        <div className="club-admin-field">
+                          <label style={{ fontSize: 12 }}>Capacity</label>
+                          <input type="number" min="1" placeholder="e.g. 150" value={addEventSubCapacity} onChange={(e) => { setAddEventSubCapacity(e.target.value); if (addEventSubError) setAddEventSubError(''); }} />
+                        </div>
+                      </div>
+                      <div className="club-admin-form-row" style={{ marginTop: 8 }}>
+                        <div className="club-admin-field">
+                          <label style={{ fontSize: 12 }}>Start Time</label>
+                          <input type="time" value={addEventSubStart} onChange={(e) => { setAddEventSubStart(e.target.value); if (addEventSubError) setAddEventSubError(''); }} />
+                        </div>
+                        <div className="club-admin-field">
+                          <label style={{ fontSize: 12 }}>End Time</label>
+                          <input type="time" value={addEventSubEnd} onChange={(e) => { setAddEventSubEnd(e.target.value); if (addEventSubError) setAddEventSubError(''); }} />
+                        </div>
+                      </div>
+                      <button type="button" className="club-admin-btn-primary" style={{ marginTop: 10 }} onClick={addEventAddSubEvent}>+ Add Sub-event</button>
+                      {addEventSubError && <div style={{ marginTop: 8, fontSize: 12, color: '#b91c1c' }}>{addEventSubError}</div>}
+                      {addEventSubEvents.length > 0 && (
+                        <table className="club-admin-table" style={{ marginTop: 12 }}>
+                          <thead>
+                            <tr><th>Date</th><th>Title</th><th>Capacity</th><th>Start</th><th>End</th><th>Actions</th></tr>
+                          </thead>
+                          <tbody>
+                            {addEventSubEvents.map((se, index) => (
+                              <tr key={`${se.title}-${index}`}>
+                                <td>{se.date}</td><td>{se.title}</td><td>{se.capacity}</td><td>{se.start}</td><td>{se.end}</td>
+                                <td>
+                                  <button type="button" className="club-admin-btn-icon" onClick={() => addEventRemoveSubEvent(index)} aria-label="Remove sub-event"><IconTrash /></button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconClipboard style={{ color: '#0284c7' }} /></div>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Logistical Requirements</h3>
+                    </div>
+                    <label className="club-admin-checkbox-item">
+                      <input type="checkbox" checked={addEventAvSetup} onChange={(e) => setAddEventAvSetup(e.target.checked)} />
+                      <div><span>Audio/Visual Setup</span><small>Mics, Speakers, Projectors</small></div>
+                    </label>
+                    <label className="club-admin-checkbox-item">
+                      <input type="checkbox" checked={addEventSecurity} onChange={(e) => setAddEventSecurity(e.target.checked)} />
+                      <div><span>Security Presence</span><small>Crowd control and check-in</small></div>
+                    </label>
+                    <label className="club-admin-checkbox-item">
+                      <input type="checkbox" checked={addEventCatering} onChange={(e) => setAddEventCatering(e.target.checked)} />
+                      <div><span>Catering Services</span><small>Refreshments and snacks</small></div>
+                    </label>
+                    <label className="club-admin-checkbox-item">
+                      <input type="checkbox" checked={addEventCleaning} onChange={(e) => setAddEventCleaning(e.target.checked)} />
+                      <div><span>Cleaning Staff</span><small>Pre and post-event cleanup</small></div>
+                    </label>
+                    <div className="club-admin-field" style={{ marginTop: 16 }}>
+                      <label>Other Resource Requests</label>
+                      <textarea placeholder="Describe any other specific needs...." value={addEventOtherNeeds} onChange={(e) => setAddEventOtherNeeds(e.target.value)} rows={3} />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                  <button type="button" className="club-admin-btn-secondary" onClick={closeAddEvent}>Cancel</button>
+                  <button type="submit" className="club-admin-btn-primary">Add event (confirmed)</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </>
     )
   }

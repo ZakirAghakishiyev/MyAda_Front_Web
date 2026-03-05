@@ -134,8 +134,12 @@ const Home = () => {
       onClick: () => navigate('/my-requests')
     },
     {
-      text: 'View All',
-      onClick: () => navigate('/coming-soon', { state: { title: 'View All Requests' } })
+      text: 'Support Dispatcher',
+      onClick: () => navigate('/support-dispatcher')
+    },
+    {
+      text: 'Staff Portal',
+      onClick: () => navigate('/staff-portal')
     }
   ]
 

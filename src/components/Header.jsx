@@ -1,5 +1,5 @@
 import React from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import { useFilter } from '../contexts/FilterContext'
 import adaLogo from '../assets/ada-logo.png'
 import campusBanner from '../assets/campus-banner.png'
@@ -30,9 +30,9 @@ const Header = () => {
             <span></span>
             <span></span>
           </button>
-          <div className="logo">
+          <Link to="/" className="logo" aria-label="Go to home">
             <img src={adaLogo} alt="ADA University" className="logo-image" />
-          </div>
+          </Link>
         </div>
         <div className="header-right">
           <button className="icon-button calendar-icon" aria-label="Calendar">
