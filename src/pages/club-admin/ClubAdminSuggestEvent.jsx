@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import './ClubAdmin.css'
 
@@ -32,6 +32,39 @@ const IconTrash = () => (
 
 const VENUES = ['Main Auditorium', 'Student Center', 'Conference Room A', 'Outdoor Quad', 'Lecture Hall B']
 
+const SUGGEST_EVENT_DRAFT_COOKIE_KEY = 'club_admin_suggest_event_draft'
+
+const setDraftCookie = (key, value, days = 7) => {
+  if (typeof document === 'undefined') return
+  try {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    document.cookie = `${key}=${encoded}; expires=${expires}; path=/`
+  } catch (err) {
+    console.error('Failed to save draft cookie', err)
+  }
+}
+
+const getDraftCookie = (key) => {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  const prefix = `${key}=`
+  const raw = cookies.find((c) => c.startsWith(prefix))
+  if (!raw) return null
+  const value = raw.substring(prefix.length)
+  try {
+    return JSON.parse(decodeURIComponent(value))
+  } catch (err) {
+    console.error('Failed to parse draft cookie', err)
+    return null
+  }
+}
+
+const clearDraftCookie = (key) => {
+  if (typeof document === 'undefined') return
+  document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+}
+
 const ClubAdminSuggestEvent = () => {
   const navigate = useNavigate()
   const [step, setStep] = useState(4)
@@ -56,6 +89,55 @@ const ClubAdminSuggestEvent = () => {
   const [catering, setCatering] = useState(false)
   const [cleaning, setCleaning] = useState(true)
   const [otherNeeds, setOtherNeeds] = useState('')
+
+  useEffect(() => {
+    const draft = getDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY)
+    if (!draft) return
+
+    if (typeof draft.step === 'number' && draft.step >= 1 && draft.step <= STEPS) {
+      setStep(draft.step)
+    }
+    setEventName(draft.eventName || '')
+    setDateTime(draft.dateTime || '')
+    setDuration(draft.duration || '3')
+    setAttendance(draft.attendance || '250')
+    setVenue(draft.venue || 'Main Auditorium')
+    setDescription(draft.description || '')
+    setObjectives(draft.objectives || '')
+    setSubEvents(Array.isArray(draft.subEvents) ? draft.subEvents : [])
+    setAvSetup(Boolean(draft.avSetup))
+    setSecurity(draft.security !== undefined ? Boolean(draft.security) : true)
+    setCatering(Boolean(draft.catering))
+    setCleaning(draft.cleaning !== undefined ? Boolean(draft.cleaning) : true)
+    setOtherNeeds(draft.otherNeeds || '')
+  }, [])
+
+  const handleSaveDraft = () => {
+    const payload = {
+      step,
+      eventName,
+      dateTime,
+      duration,
+      attendance,
+      venue,
+      description,
+      objectives,
+      subEvents,
+      avSetup,
+      security,
+      catering,
+      cleaning,
+      otherNeeds,
+      savedAt: Date.now()
+    }
+    setDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY, payload)
+    alert('Draft saved for this event proposal. It will be restored next time you open this screen from this browser.')
+  }
+
+  const handleSubmit = () => {
+    clearDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY)
+    navigate('/club-admin')
+  }
 
   const addSubEvent = () => {
     const title = subEventTitle.trim()
@@ -378,8 +460,8 @@ const ClubAdminSuggestEvent = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '20px 24px 32px' }}>
           <button type="button" className="club-admin-btn-secondary" onClick={() => setStep((s) => Math.max(1, s - 1))}>← Previous Step</button>
-          <button type="button" className="club-admin-btn-secondary">Save Draft</button>
-          <button type="button" className="club-admin-btn-primary" onClick={() => navigate('/club-admin')}>Submit for Approval →</button>
+          <button type="button" className="club-admin-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
+          <button type="button" className="club-admin-btn-primary" onClick={handleSubmit}>Submit for Approval →</button>
         </div>
       </div>
     </>

@@ -23,10 +23,40 @@ const IconStar = () => (
   </svg>
 )
 
+const STAFF_NOTIFICATIONS = [
+  {
+    id: 1,
+    type: 'instruction',
+    title: 'New internal instructions for Wi‑Fi ticket',
+    message: 'Dispatcher added notes: please check access points in North Wing first.',
+    time: 'Just now',
+    unread: true,
+  },
+  {
+    id: 2,
+    type: 'assignment',
+    title: 'New job assigned',
+    message: 'You have been assigned ticket REQ-8821 (Server Room AC Unit Failure).',
+    time: '10 min ago',
+    unread: true,
+  },
+  {
+    id: 3,
+    type: 'reminder',
+    title: 'Reminder: add completion notes',
+    message: 'Remember to add short completion notes before closing each job.',
+    time: 'Today',
+    unread: false,
+  },
+]
+
 const StaffPortalLayout = () => {
   const navigate = useNavigate()
   const [activeDuty, setActiveDuty] = useState(true)
   const [dutyStatus, setDutyStatus] = useState('available')
+  const [showNotifications, setShowNotifications] = useState(false)
+
+  const hasUnreadNotifications = STAFF_NOTIFICATIONS.some((n) => n.unread)
 
   return (
     <div className="staff-portal staff-portal--light">
@@ -49,8 +79,14 @@ const StaffPortalLayout = () => {
           <input type="text" placeholder="Search Request ID or keyword..." className="sp-search-input" />
         </div>
         <div className="sp-nav-right">
-          <button type="button" className="sp-icon-btn" aria-label="Notifications">
+          <button
+            type="button"
+            className="sp-icon-btn"
+            aria-label="Notifications"
+            onClick={() => setShowNotifications((prev) => !prev)}
+          >
             <IconBell />
+            {hasUnreadNotifications && <span className="sp-badge-unread" aria-hidden="true" />}
           </button>
           <div className="sp-user">
             <div className="sp-user-avatar">JD</div>
@@ -63,6 +99,56 @@ const StaffPortalLayout = () => {
       </header>
 
       <div className="sp-body">
+        {showNotifications && (
+          <div className="sp-notifications-panel" role="dialog" aria-label="Staff notifications and instructions">
+            <div className="sp-notifications-header">
+              <div>
+                <h3 className="sp-notifications-title">Notifications &amp; Instructions</h3>
+                <p className="sp-notifications-subtitle">
+                  Review dispatcher notes and important updates before starting work.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="sp-notifications-close"
+                onClick={() => setShowNotifications(false)}
+                aria-label="Close notifications"
+              >
+                ×
+              </button>
+            </div>
+            <ul className="sp-notifications-list">
+              {STAFF_NOTIFICATIONS.map((n) => (
+                <li
+                  key={n.id}
+                  className={`sp-notification-item ${n.unread ? 'sp-notification-item--unread' : ''}`}
+                >
+                  <div className="sp-notification-main">
+                    <div className="sp-notification-title-row">
+                      <span className="sp-notification-title">{n.title}</span>
+                      {n.unread && <span className="sp-notification-badge">New</span>}
+                    </div>
+                    <p className="sp-notification-message">{n.message}</p>
+                  </div>
+                  <div className="sp-notification-meta-row">
+                    <span className="sp-notification-time">{n.time}</span>
+                    <button
+                      type="button"
+                      className="sp-notification-link"
+                      onClick={() => {
+                        setShowNotifications(false)
+                        navigate('/staff-portal')
+                      }}
+                    >
+                      View job
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <aside className="sp-sidebar">
           <section className="sp-panel">
             <h3 className="sp-panel-title">AVAILABILITY</h3>

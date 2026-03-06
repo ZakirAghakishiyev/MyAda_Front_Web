@@ -20,6 +20,7 @@
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
   gap: 24px;
+  position: relative;
 }
 
 .sp-nav-left {
@@ -121,6 +122,16 @@
   color: #334155;
 }
 
+.sp-badge-unread {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
 .sp-user {
   display: flex;
   align-items: center;
@@ -166,6 +177,127 @@
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+}
+
+.sp-notifications-panel {
+  position: absolute;
+  top: 60px;
+  right: 24px;
+  width: 340px;
+  max-width: calc(100% - 48px);
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+  padding: 14px 16px 12px;
+  z-index: 30;
+}
+
+.sp-notifications-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sp-notifications-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.sp-notifications-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sp-notifications-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #94a3b8;
+}
+
+.sp-notifications-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.sp-notification-item {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+
+.sp-notification-item--unread {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.sp-notification-main {
+  margin-bottom: 4px;
+}
+
+.sp-notification-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sp-notification-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.sp-notification-message {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sp-notification-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #dbeafe;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+
+.sp-notification-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sp-notification-time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.sp-notification-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: #2563eb;
+  cursor: pointer;
 }
 
 /* Left sidebar */
@@ -465,11 +597,27 @@
   cursor: pointer;
 }
 
+.sp-job-card--unseen {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+  background: #eff6ff;
+}
+
 .sp-job-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.sp-job-unseen-pill {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .sp-job-tag {

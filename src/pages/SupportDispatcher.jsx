@@ -49,6 +49,12 @@ const SupportDispatcher = () => {
   const [sortBy, setSortBy] = useState('newest')
   const [assignments, setAssignments] = useState({}) // id -> confirmed staff name
   const [pendingAssignments, setPendingAssignments] = useState({}) // id -> selected but not confirmed
+  const [unseenTickets, setUnseenTickets] = useState(() =>
+    mockRequests.reduce((acc, r) => {
+      if (r.unseen) acc[r.id] = true
+      return acc
+    }, {})
+  )
 
   const getServiceLabel = (request) => {
     const itCategories = [
@@ -94,6 +100,12 @@ const SupportDispatcher = () => {
   }, [enhancedRequests, tab, sortBy])
 
   const handleRowClick = (id) => {
+    setUnseenTickets((prev) => {
+      if (!prev[id]) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
     navigate(`/support-dispatcher/${id}`)
   }
 
@@ -253,25 +265,28 @@ const SupportDispatcher = () => {
             const isMedium = (r.priority || '').toLowerCase() === 'medium'
             const priorityClass = isHigh ? 'sd-priority-pill--high' : isMedium ? 'sd-priority-pill--medium' : 'sd-priority-pill--low'
 
+            const isUnseen = !!unseenTickets[r.id]
+
             const actionPlaceholder = r.service === 'IT' ? 'Select Technician' : 'Select Maintenance Staff'
             const assignedStaff = assignments[r.id]
             const pendingStaff = pendingAssignments[r.id] || ''
 
             return (
-              <div
-                key={r.id}
-                className="sd-row"
-                onClick={() => handleRowClick(r.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleRowClick(r.id)}
-              >
+                <div
+                  key={r.id}
+                  className={`sd-row ${isUnseen ? 'sd-row--unseen' : ''}`}
+                  onClick={() => handleRowClick(r.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRowClick(r.id)}
+                >
                 <div className="sd-cell sd-cell--details">
                   <div className="sd-request-meta">
                     <span className={`sd-service-tag sd-service-tag--${r.service === 'IT' ? 'it' : 'fm'}`}>
                       {r.service}
                     </span>
                     <span className="sd-time-ago">{r.timeAgo}</span>
+                    {isUnseen && <span className="sd-unseen-pill">New</span>}
                   </div>
                   <div className="sd-request-title">{r.description}</div>
                   <div className="sd-request-sub">

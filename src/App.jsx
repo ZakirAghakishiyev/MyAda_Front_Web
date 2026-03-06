@@ -24,6 +24,10 @@ import RequestDetailDispatcher from './pages/RequestDetailDispatcher'
 import SupportStaffDirectory from './pages/SupportStaffDirectory'
 import StaffPortalLayout from './pages/StaffPortalLayout'
 import StaffPortal from './pages/StaffPortal'
+import AttendancePortal from './pages/AttendancePortal'
+import AttendanceCourseList from './pages/AttendanceCourseList'
+import AttendanceStudents from './pages/AttendanceStudents'
+import AttendanceHistory from './pages/AttendanceHistory'
 import StaffPortalHistory from './pages/StaffPortalHistory'
 import StaffTicketDetail from './pages/StaffTicketDetail'
 import ComingSoonPage from './pages/ComingSoonPage'
@@ -62,6 +66,7 @@ const AppContent = () => {
   const isDispatcherTicketRoute = location.pathname.match(/^\/support-dispatcher\/T-\d+$/)
   const isClubAdminRoute = location.pathname.startsWith('/club-admin')
   const isStaffPortalRoute = location.pathname.startsWith('/staff-portal')
+  const isAttendanceLessonRoute = location.pathname.startsWith('/attendance/lesson/')
   const hideHeaderOnRoutes = [
     '/scheduling',
     '/lost-and-found',
@@ -115,7 +120,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceLessonRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
 
   return (
     <div className="app">
@@ -263,6 +268,10 @@ const AppContent = () => {
             <Route path="history" element={<StaffPortalHistory />} />
             <Route path="ticket/:id" element={<StaffTicketDetail />} />
           </Route>
+          <Route path="/attendance" element={<AttendanceCourseList />} />
+          <Route path="/attendance/lesson/:lessonId/students" element={<AttendanceStudents />} />
+          <Route path="/attendance/lesson/:lessonId/history" element={<AttendanceHistory />} />
+          <Route path="/attendance/lesson/:lessonId" element={<AttendancePortal />} />
           <Route
             path="/support-dispatcher/assign-task"
             element={

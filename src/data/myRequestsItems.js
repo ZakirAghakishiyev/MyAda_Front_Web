@@ -19,7 +19,8 @@ export const mockRequests = [
       { step: 'Assigned', detail: 'Assigned to Farid Mammadov', done: true },
       { step: 'In Progress', detail: 'Work started on ticket', done: true },
       { step: 'Completed', detail: null, done: false }
-    ]
+    ],
+    unseen: true,
   },
   {
     id: 'T-1198',
@@ -41,7 +42,8 @@ export const mockRequests = [
       { step: 'Assigned', detail: 'Assigned to Leyla Huseynova', done: true },
       { step: 'In Progress', detail: 'Work started on ticket', done: false },
       { step: 'Completed', detail: null, done: false }
-    ]
+    ],
+    unseen: true,
   },
   {
     id: 'T-1145',
@@ -63,7 +65,8 @@ export const mockRequests = [
       { step: 'Assigned', detail: 'Pending assignment', done: false },
       { step: 'In Progress', detail: 'Work started on ticket', done: false },
       { step: 'Completed', detail: null, done: false }
-    ]
+    ],
+    unseen: true,
   },
   {
     id: 'T-1122',

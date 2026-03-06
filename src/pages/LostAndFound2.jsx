@@ -8,6 +8,42 @@ const CATEGORIES = ['All Items', 'Electronics', 'Documents', 'Personal Items', '
 const ITEMS_PER_PAGE = 8
 const MAX_DESCRIPTION_LENGTH = 500
 
+const DRAFT_COOKIE_KEYS = {
+  'report-lost': 'lf2_draft_lost',
+  'report-found': 'lf2_draft_found'
+}
+
+const setDraftCookie = (key, value, days = 7) => {
+  if (typeof document === 'undefined') return
+  try {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    document.cookie = `${key}=${encoded}; expires=${expires}; path=/`
+  } catch (err) {
+    console.error('Failed to save draft cookie', err)
+  }
+}
+
+const getDraftCookie = (key) => {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  const prefix = `${key}=`
+  const raw = cookies.find(c => c.startsWith(prefix))
+  if (!raw) return null
+  const value = raw.substring(prefix.length)
+  try {
+    return JSON.parse(decodeURIComponent(value))
+  } catch (err) {
+    console.error('Failed to parse draft cookie', err)
+    return null
+  }
+}
+
+const clearDraftCookie = (key) => {
+  if (typeof document === 'undefined') return
+  document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+}
+
 const BUILDINGS = [
   { value: 'main', label: 'Main Building' },
   { value: 'library', label: 'Library' },
@@ -99,6 +135,22 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     photos: []
   })
 
+  useEffect(() => {
+    if (view !== 'report-lost' && view !== 'report-found') return
+    const key = DRAFT_COOKIE_KEYS[view]
+    const draft = key ? getDraftCookie(key) : null
+    if (!draft || !draft.reportForm) return
+
+    setReportForm(prev => ({
+      ...prev,
+      ...draft.reportForm,
+      photos: []
+    }))
+    if (typeof draft.reportStep === 'number' && draft.reportStep >= 0 && draft.reportStep < STEPS.length) {
+      setReportStep(draft.reportStep)
+    }
+  }, [view])
+
   const totalCount = mockItems.length
   const activeCount = mockItems.filter(i => i.status === 'Active').length
   const pendingCount = mockItems.filter(i => i.status.toLowerCase().includes('pending')).length
@@ -167,6 +219,10 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     } else {
       alert('Found item report submitted for review (mock).')
     }
+    const key = DRAFT_COOKIE_KEYS[view]
+    if (key) {
+      clearDraftCookie(key)
+    }
     if (fromAdmin || location.state?.from === 'admin') {
       navigate('/admin/lost-and-found')
       return
@@ -191,6 +247,25 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const reportSubtitle = view === 'report-lost'
     ? 'Provide details about your lost item to help the community return it to you.'
     : 'Provide details about the item you found to help reunite it with its owner.'
+
+  const handleSaveDraft = () => {
+    if (!isReportOpen) return
+    const key = DRAFT_COOKIE_KEYS[view]
+    if (!key) return
+
+    const payload = {
+      view,
+      reportStep,
+      reportForm: {
+        ...reportForm,
+        photos: []
+      },
+      savedAt: Date.now()
+    }
+
+    setDraftCookie(key, payload)
+    alert('Draft saved on this device. It will be restored next time you open this form.')
+  }
 
   const reportPopup = isReportOpen && (
     <div
@@ -494,7 +569,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
               <button type="button" className="lf2-btn lf2-btn--back" onClick={reportStep === 0 ? backToDashboard : () => setReportStep(s => s - 1)}>
                 <span>‹</span> Back
               </button>
-              <button type="button" className="lf2-btn lf2-btn--draft">
+              <button type="button" className="lf2-btn lf2-btn--draft" onClick={handleSaveDraft}>
                 Save as Draft
               </button>
               {reportStep < STEPS.length - 1 ? (

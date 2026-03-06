@@ -4,6 +4,39 @@ import { mockClubMembers as initialMembers, mockClubEmployees as initialEmployee
 import './StudentServices.css'
 import './club-admin/ClubAdmin.css'
 
+const ADD_EVENT_DRAFT_COOKIE_KEY = 'student_services_add_event_draft'
+
+const setDraftCookie = (key, value, days = 7) => {
+  if (typeof document === 'undefined') return
+  try {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    document.cookie = `${key}=${encoded}; expires=${expires}; path=/`
+  } catch (err) {
+    console.error('Failed to save draft cookie', err)
+  }
+}
+
+const getDraftCookie = (key) => {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  const prefix = `${key}=`
+  const raw = cookies.find((c) => c.startsWith(prefix))
+  if (!raw) return null
+  const value = raw.substring(prefix.length)
+  try {
+    return JSON.parse(decodeURIComponent(value))
+  } catch (err) {
+    console.error('Failed to parse draft cookie', err)
+    return null
+  }
+}
+
+const clearDraftCookie = (key) => {
+  if (typeof document === 'undefined') return
+  document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+}
+
 const IconHome = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -603,6 +636,34 @@ const StudentServices = () => {
   const [addEventClub, setAddEventClub] = useState('Student Services')
   const addEventPosterInputRef = React.useRef(null)
 
+  useEffect(() => {
+    if (!addEventOpen) return
+    const draft = getDraftCookie(ADD_EVENT_DRAFT_COOKIE_KEY)
+    if (!draft) return
+
+    setAddEventName(draft.addEventName || '')
+    setAddEventDate(draft.addEventDate || '')
+    setAddEventTime(draft.addEventTime || '')
+    setAddEventDuration(draft.addEventDuration || '3')
+    setAddEventAttendance(draft.addEventAttendance || '250')
+    setAddEventVenue(draft.addEventVenue || 'Main Auditorium')
+    setAddEventDescription(draft.addEventDescription || '')
+    setAddEventObjectives(draft.addEventObjectives || '')
+    setAddEventSubEvents(Array.isArray(draft.addEventSubEvents) ? draft.addEventSubEvents : [])
+    setAddEventSubTitle('')
+    setAddEventSubCapacity('')
+    setAddEventSubStart('')
+    setAddEventSubEnd('')
+    setAddEventSubDate('')
+    setAddEventSubError('')
+    setAddEventAvSetup(Boolean(draft.addEventAvSetup))
+    setAddEventSecurity(draft.addEventSecurity !== undefined ? Boolean(draft.addEventSecurity) : true)
+    setAddEventCatering(Boolean(draft.addEventCatering))
+    setAddEventCleaning(draft.addEventCleaning !== undefined ? Boolean(draft.addEventCleaning) : true)
+    setAddEventOtherNeeds(draft.addEventOtherNeeds || '')
+    setAddEventClub(draft.addEventClub || 'Student Services')
+  }, [addEventOpen])
+
   const todayIso = new Date().toISOString().slice(0, 10)
 
   const filteredApprovedEvents = useMemo(() => {
@@ -812,7 +873,36 @@ const StudentServices = () => {
       image: imageUrl,
     }
     setApprovedEvents((prev) => [newEvent, ...prev])
+    clearDraftCookie(ADD_EVENT_DRAFT_COOKIE_KEY)
     closeAddEvent()
+  }
+
+  const handleSaveAddEventDraft = () => {
+    const payload = {
+      addEventName,
+      addEventDate,
+      addEventTime,
+      addEventDuration,
+      addEventAttendance,
+      addEventVenue,
+      addEventDescription,
+      addEventObjectives,
+      addEventSubEvents,
+      addEventSubTitle,
+      addEventSubCapacity,
+      addEventSubStart,
+      addEventSubEnd,
+      addEventSubDate,
+      addEventAvSetup,
+      addEventSecurity,
+      addEventCatering,
+      addEventCleaning,
+      addEventOtherNeeds,
+      addEventClub,
+      savedAt: Date.now()
+    }
+    setDraftCookie(ADD_EVENT_DRAFT_COOKIE_KEY, payload)
+    alert('Event draft saved. It will be restored next time you open the Add event dialog on this browser.')
   }
 
   const renderHeader = (title, subtitle) => (
@@ -2769,6 +2859,7 @@ const StudentServices = () => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
                   <button type="button" className="club-admin-btn-secondary" onClick={closeAddEvent}>Cancel</button>
+                  <button type="button" className="club-admin-btn-secondary" onClick={handleSaveAddEventDraft}>Save Draft</button>
                   <button type="submit" className="club-admin-btn-primary">Add event (confirmed)</button>
                 </div>
               </form>

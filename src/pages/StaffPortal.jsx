@@ -30,10 +30,10 @@ const IconArrowRight = () => (
 )
 
 const initialJobs = [
-  { id: 'REQ-8821', tag: 'EMERGENCY', tagClass: 'emergency', timeAgo: '12m ago', title: 'Server Room AC Unit Failure', location: 'Main Library, Server Rm 204', sub: 'Facilities Support', status: 'pending', service: 'fm' },
-  { id: 'REQ-8819', tag: 'IT SUPPORT', tagClass: 'it', timeAgo: '25m ago', title: 'Wi-Fi dead zone in North Wing', location: 'North Wing, 3rd Floor', sub: 'Dr. Sarah Jenkins', subIcon: 'person', status: 'pending', service: 'it' },
-  { id: 'REQ-8815', tag: 'FACILITIES', tagClass: 'fm', timeAgo: '1h ago', title: 'Light fixture replacement', location: 'Admin Building, Hallway B', sub: 'Facilities Support', status: 'in_progress', service: 'fm' },
-  { id: 'REQ-8812', tag: 'IT SUPPORT', tagClass: 'it', timeAgo: '2h ago', title: 'Projector not displaying in Room 101', location: 'Main Building, Room 101', sub: 'Prof. James Wilson', subIcon: 'person', status: 'pending', service: 'it' }
+  { id: 'REQ-8821', tag: 'EMERGENCY', tagClass: 'emergency', timeAgo: '12m ago', title: 'Server Room AC Unit Failure', location: 'Main Library, Server Rm 204', sub: 'Facilities Support', status: 'pending', service: 'fm', unseen: true },
+  { id: 'REQ-8819', tag: 'IT SUPPORT', tagClass: 'it', timeAgo: '25m ago', title: 'Wi-Fi dead zone in North Wing', location: 'North Wing, 3rd Floor', sub: 'Dr. Sarah Jenkins', subIcon: 'person', status: 'pending', service: 'it', unseen: true },
+  { id: 'REQ-8815', tag: 'FACILITIES', tagClass: 'fm', timeAgo: '1h ago', title: 'Light fixture replacement', location: 'Admin Building, Hallway B', sub: 'Facilities Support', status: 'in_progress', service: 'fm', unseen: false },
+  { id: 'REQ-8812', tag: 'IT SUPPORT', tagClass: 'it', timeAgo: '2h ago', title: 'Projector not displaying in Room 101', location: 'Main Building, Room 101', sub: 'Prof. James Wilson', subIcon: 'person', status: 'pending', service: 'it', unseen: false }
 ]
 
 const StaffPortal = () => {
@@ -41,11 +41,16 @@ const StaffPortal = () => {
   const [jobs, setJobs] = useState(() => initialJobs.map((j) => ({ ...j })))
   const [updatedId, setUpdatedId] = useState(null)
 
-  const openTicket = (id) => navigate(`/staff-portal/ticket/${id}`)
+  const openTicket = (id) => {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, unseen: false } : j))
+    )
+    navigate(`/staff-portal/ticket/${id}`)
+  }
 
   const handleMarkStarted = useCallback((id) => {
     setJobs((prev) =>
-      prev.map((j) => (j.id === id ? { ...j, status: 'in_progress' } : j))
+      prev.map((j) => (j.id === id ? { ...j, status: 'in_progress', unseen: false } : j))
     )
     setUpdatedId(id)
     setTimeout(() => setUpdatedId(null), 600)
@@ -69,7 +74,7 @@ const StaffPortal = () => {
         {jobs.map((job) => (
           <div
             key={job.id}
-            className={`sp-job-card sp-job-card--transition ${updatedId === job.id ? 'sp-job-card--updated' : ''} sp-job-card--clickable`}
+            className={`sp-job-card sp-job-card--transition ${updatedId === job.id ? 'sp-job-card--updated' : ''} sp-job-card--clickable ${job.unseen ? 'sp-job-card--unseen' : ''}`}
             onClick={() => openTicket(job.id)}
             onKeyDown={(e) => e.key === 'Enter' && openTicket(job.id)}
             role="button"
@@ -78,6 +83,7 @@ const StaffPortal = () => {
             <div className="sp-job-card-top">
               <span className={`sp-job-tag sp-job-tag--${job.tagClass}`}>{job.tag}</span>
               <span className="sp-job-time">{job.timeAgo}</span>
+              {job.unseen && <span className="sp-job-unseen-pill">New</span>}
             </div>
             <h3 className="sp-job-title">{job.title}</h3>
             <div className="sp-job-location">

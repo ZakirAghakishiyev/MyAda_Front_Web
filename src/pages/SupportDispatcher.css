@@ -259,6 +259,15 @@
   background: #f9fafb;
 }
 
+.sd-row--unseen {
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
+}
+
+.sd-row--unseen:hover {
+  background: #e0edff;
+}
+
 .sd-cell {
   padding: 4px 6px;
 }
@@ -268,6 +277,15 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 2px;
+}
+
+.sd-unseen-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .sd-service-tag {

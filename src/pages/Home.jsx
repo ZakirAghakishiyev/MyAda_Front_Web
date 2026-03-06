@@ -120,6 +120,13 @@ const Home = () => {
     }
   ]
 
+  const qrAttendanceButtons = [
+    {
+      text: 'QR Attendance',
+      onClick: () => navigate('/attendance')
+    }
+  ]
+
   const itfmSupportButtons = [
     {
       text: 'IT Support',
@@ -146,6 +153,7 @@ const Home = () => {
   // Define all cards with their categories
   const allCards = [
     { title: 'Scheduling and room allocation', buttons: schedulingButtons, category: 'home', centerButtons: true },
+    { title: 'QR Lesson Attendance', buttons: qrAttendanceButtons, category: 'home', centerButtons: true },
     { title: 'Lost and found', buttons: lostAndFoundButtons, category: 'community' },
     { title: 'Student Life & Clubs', buttons: clubsButtons, category: 'community' },
     { title: 'IT&FM Support', buttons: itfmSupportButtons, category: 'community' },

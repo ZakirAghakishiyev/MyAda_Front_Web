@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import './ITSupport.css'
 
@@ -38,6 +38,39 @@ const ROOMS_BY_BUILDING = {
   sports: ['Court 1', 'Court 2', 'Gym'],
   cafeteria: ['Main Hall'],
   other: ['Room 1', 'Room 2'],
+}
+
+const ASSIGN_TASK_DRAFT_COOKIE_KEY = 'assign_task_draft'
+
+const setDraftCookie = (key, value, days = 7) => {
+  if (typeof document === 'undefined') return
+  try {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    document.cookie = `${key}=${encoded}; expires=${expires}; path=/`
+  } catch (err) {
+    console.error('Failed to save task draft', err)
+  }
+}
+
+const getDraftCookie = (key) => {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  const prefix = `${key}=`
+  const raw = cookies.find((c) => c.startsWith(prefix))
+  if (!raw) return null
+  const value = raw.substring(prefix.length)
+  try {
+    return JSON.parse(decodeURIComponent(value))
+  } catch (err) {
+    console.error('Failed to parse task draft', err)
+    return null
+  }
+}
+
+const clearDraftCookie = (key) => {
+  if (typeof document === 'undefined') return
+  document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
 }
 
 const STAFF_BY_ID = {
@@ -145,6 +178,22 @@ const AssignTask = () => {
 
   const categoryOptions = area === 'it' ? IT_CATEGORY_OPTIONS : FM_CATEGORY_OPTIONS
 
+  useEffect(() => {
+    const draft = getDraftCookie(ASSIGN_TASK_DRAFT_COOKIE_KEY)
+    if (!draft) return
+
+    setArea(draft.area === 'fm' ? 'fm' : 'it')
+    setStaff(draft.staff || initialStaffFromQuery)
+    setIssueCategory(draft.issueCategory || '')
+    setLocationType(draft.locationType || '')
+    setBuilding(draft.building || '')
+    setRoom(draft.room || '')
+    setCampusLocation(draft.campusLocation || '')
+    setDescription(draft.description || '')
+    setInstructions(draft.instructions || '')
+    setUrgency(draft.urgency === 'critical' ? 'critical' : 'standard')
+  }, [])
+
   const goBack = () => {
     if (window.history.length > 1) navigate(-1)
     else navigate('/support-dispatcher/staff')
@@ -153,6 +202,24 @@ const AssignTask = () => {
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files || [])
     setAttachments((prev) => [...prev, ...files])
+  }
+
+  const handleSaveDraft = () => {
+    const payload = {
+      area,
+      staff,
+      issueCategory,
+      locationType,
+      building,
+      room,
+      campusLocation,
+      description,
+      instructions,
+      urgency,
+      savedAt: Date.now(),
+    }
+    setDraftCookie(ASSIGN_TASK_DRAFT_COOKIE_KEY, payload)
+    alert('Task draft saved. It will be restored next time you open this Assign Task form on this browser.')
   }
 
   const handleSubmit = (e) => {
@@ -168,6 +235,7 @@ const AssignTask = () => {
 
     setShowError(false)
     // TODO: send new assigned task to dispatcher API
+    clearDraftCookie(ASSIGN_TASK_DRAFT_COOKIE_KEY)
     navigate('/support-dispatcher/staff')
   }
 
@@ -487,7 +555,7 @@ const AssignTask = () => {
               <button type="button" className="it-support-cancel" onClick={goBack}>
                 Cancel
               </button>
-              <button type="button" className="it-support-draft">
+              <button type="button" className="it-support-draft" onClick={handleSaveDraft}>
                 Save Draft
               </button>
               <button type="submit" className="it-support-submit">

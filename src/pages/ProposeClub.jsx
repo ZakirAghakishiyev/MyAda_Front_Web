@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import adaLogo from '../assets/ada-logo.png'
 import './ProposeClub.css'
 
 const STEPS = 4
@@ -7,6 +8,39 @@ const STEP_LABELS = ['DETAILS', 'LEADERSHIP', 'FACULTY', 'REVIEW']
 const DESC_MAX = 500
 const MIN_ALIGNMENT_WORDS = 200
 const POSITION_OPTIONS = ['Select Position', 'Secretary', 'Treasurer', 'Social Media Manager', 'Event Coordinator', 'Outreach Officer', 'Other']
+
+const PROPOSE_CLUB_DRAFT_COOKIE_KEY = 'clubs_propose_club_draft'
+
+const setDraftCookie = (key, value, days = 7) => {
+  if (typeof document === 'undefined') return
+  try {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    document.cookie = `${key}=${encoded}; expires=${expires}; path=/`
+  } catch (err) {
+    console.error('Failed to save draft cookie', err)
+  }
+}
+
+const getDraftCookie = (key) => {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  const prefix = `${key}=`
+  const raw = cookies.find((c) => c.startsWith(prefix))
+  if (!raw) return null
+  const value = raw.substring(prefix.length)
+  try {
+    return JSON.parse(decodeURIComponent(value))
+  } catch (err) {
+    console.error('Failed to parse draft cookie', err)
+    return null
+  }
+}
+
+const clearDraftCookie = (key) => {
+  if (typeof document === 'undefined') return
+  document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+}
 
 const IconBack = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -88,6 +122,26 @@ const ProposeClub = () => {
   const [logoFile, setLogoFile] = useState(null)
   const [constitutionFile, setConstitutionFile] = useState(null)
 
+  useEffect(() => {
+    const draft = getDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY)
+    if (!draft) return
+
+    if (typeof draft.step === 'number' && draft.step >= 1 && draft.step <= STEPS) {
+      setStep(draft.step)
+    }
+    setClubName(draft.clubName || '')
+    setShortDesc(draft.shortDesc || '')
+    setUniqueDesc(draft.uniqueDesc || '')
+    setGoals(draft.goals || '')
+    setActivities(draft.activities || '')
+    setPresidentId(draft.presidentId || '')
+    setVicePresidentId(draft.vicePresidentId || '')
+    setOtherMembers(Array.isArray(draft.otherMembers) ? draft.otherMembers : [])
+    setAlignment(draft.alignment || '')
+    setVision(draft.vision || '')
+    setCommitment(draft.commitment || '')
+  }, [])
+
   const handleBack = () => {
     if (step === 1) navigate('/clubs')
     else setStep((s) => s - 1)
@@ -134,12 +188,32 @@ const ProposeClub = () => {
   const handleContinue = () => {
     if (step < STEPS) setStep((s) => s + 1)
     else {
-      // Submit placeholder
+      clearDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY)
       navigate('/clubs')
     }
   }
 
   const progressPct = (step / STEPS) * 100
+
+  const handleSaveDraft = () => {
+    const payload = {
+      step,
+      clubName,
+      shortDesc,
+      uniqueDesc,
+      goals,
+      activities,
+      presidentId,
+      vicePresidentId,
+      otherMembers,
+      alignment,
+      vision,
+      commitment,
+      savedAt: Date.now()
+    }
+    setDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY, payload)
+    alert('Club registration draft saved. It will be restored when you reopen this page on this browser.')
+  }
 
   const Sidebar = () => (
     <aside className="propose-sidebar">
@@ -177,19 +251,42 @@ const ProposeClub = () => {
 
   return (
     <div className="propose-page">
-      <header className="propose-header">
-        <div className="propose-header-inner">
-          <Link to="/" className="propose-logo">Campus Organizations</Link>
-          <nav className="propose-nav">
-            <Link to="/clubs">Dashboard</Link>
-            <Link to="/clubs/propose" className="propose-nav-active">Register Club</Link>
-            <Link to="/clubs/my-memberships">My Clubs</Link>
-            <Link to="/clubs/vacancies">Resources</Link>
-          </nav>
-          <div className="propose-header-actions">
-            <button type="button" className="propose-icon-btn" aria-label="Notifications"><IconBell /></button>
-            <button type="button" className="propose-avatar" aria-label="Profile" />
+      <header className="vacancies-nav">
+        <div className="vacancies-nav-left">
+          <div
+            className="vacancies-nav-logo"
+            onClick={() => navigate('/')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+          >
+            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
           </div>
+          <nav className="vacancies-nav-links">
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs')}>Clubs</button>
+            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Propose Club</button>
+          </nav>
+        </div>
+        <div className="vacancies-nav-right">
+          <button
+            type="button"
+            className="vacancies-nav-icon"
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+          </button>
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="My memberships"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
+          </button>
         </div>
       </header>
 
@@ -231,7 +328,7 @@ const ProposeClub = () => {
                 <textarea placeholder="Describe typical events, workshops, or meetings..." value={activities} onChange={(e) => setActivities(e.target.value)} rows={4} />
               </div>
               <div className="propose-actions">
-                <button type="button" className="propose-btn-secondary">Save as Draft</button>
+                <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save as Draft</button>
                 <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue}>
                   Continue to Step 2 <IconChevronRight />
                 </button>
@@ -299,7 +396,7 @@ const ProposeClub = () => {
               )}
               <div className="propose-actions propose-actions--footer">
                 <button type="button" className="propose-btn-secondary" onClick={handleBack}><IconBack /> Back</button>
-                <span className="propose-autosave">Auto-saving progress...</span>
+                <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
                 <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue}>
                   Continue to Step 3 <IconChevronRight />
                 </button>
@@ -349,7 +446,7 @@ const ProposeClub = () => {
               </div>
               <div className="propose-actions propose-actions--footer">
                 <button type="button" className="propose-btn-secondary" onClick={handleBack}><IconBack /> Back</button>
-                <span className="propose-next-hint">Next: Final Review &amp; Submission</span>
+                <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
                 <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue}>
                   Continue <IconChevronRight />
                 </button>
@@ -399,6 +496,7 @@ const ProposeClub = () => {
               </div>
               <div className="propose-actions propose-actions--footer">
                 <button type="button" className="propose-btn-secondary" onClick={handleBack}><IconBack /> Back to Previous Step</button>
+                <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
                 <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue}>
                   Submit Registration <IconChevronRight />
                 </button>

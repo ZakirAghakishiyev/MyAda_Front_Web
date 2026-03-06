@@ -78,6 +78,7 @@ const ClubsList = () => {
             <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
             <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
             <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Clubs</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
           </nav>
         </div>
         <div className="vacancies-nav-right">

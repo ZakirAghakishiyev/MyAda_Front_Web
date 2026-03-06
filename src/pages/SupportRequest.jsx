@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import './ITSupport.css'
 
@@ -38,6 +38,39 @@ const ROOMS_BY_BUILDING = {
   sports: ['Court 1', 'Court 2', 'Gym'],
   cafeteria: ['Main Hall'],
   other: ['Room 1', 'Room 2'],
+}
+
+const SUPPORT_REQUEST_DRAFT_COOKIE_KEY = 'support_request_draft'
+
+const setDraftCookie = (key, value, days = 7) => {
+  if (typeof document === 'undefined') return
+  try {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    document.cookie = `${key}=${encoded}; expires=${expires}; path=/`
+  } catch (err) {
+    console.error('Failed to save support draft', err)
+  }
+}
+
+const getDraftCookie = (key) => {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  const prefix = `${key}=`
+  const raw = cookies.find((c) => c.startsWith(prefix))
+  if (!raw) return null
+  const value = raw.substring(prefix.length)
+  try {
+    return JSON.parse(decodeURIComponent(value))
+  } catch (err) {
+    console.error('Failed to parse support draft', err)
+    return null
+  }
+}
+
+const clearDraftCookie = (key) => {
+  if (typeof document === 'undefined') return
+  document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
 }
 
 const IconBack = () => (
@@ -85,6 +118,20 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const [attachments, setAttachments] = useState([])
   const [showError, setShowError] = useState(false)
 
+  useEffect(() => {
+    const draft = getDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY)
+    if (!draft) return
+
+    setArea(draft.area === 'fm' ? 'fm' : 'it')
+    setIssueCategory(draft.issueCategory || '')
+    setLocationType(draft.locationType || '')
+    setBuilding(draft.building || '')
+    setRoom(draft.room || '')
+    setCampusLocation(draft.campusLocation || '')
+    setDescription(draft.description || '')
+    setUrgency(draft.urgency === 'critical' ? 'critical' : 'standard')
+  }, [])
+
   const categoryOptions = area === 'it' ? IT_CATEGORY_OPTIONS : FM_CATEGORY_OPTIONS
 
   const goBack = () => {
@@ -95,6 +142,22 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files || [])
     setAttachments((prev) => [...prev, ...files])
+  }
+
+  const handleSaveDraft = () => {
+    const payload = {
+      area,
+      issueCategory,
+      locationType,
+      building,
+      room,
+      campusLocation,
+      description,
+      urgency,
+      savedAt: Date.now(),
+    }
+    setDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY, payload)
+    alert('Support request draft saved. It will be restored next time you open this form on this browser.')
   }
 
   const handleSubmit = (e) => {
@@ -108,6 +171,7 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     }
     setShowError(false)
     // TODO: send to unified support API
+    clearDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY)
     navigate('/my-requests')
   }
 
@@ -386,7 +450,7 @@ const SupportRequest = ({ initialArea = 'it' }) => {
               <button type="button" className="it-support-cancel" onClick={goBack}>
                 Cancel Request
               </button>
-              <button type="button" className="it-support-draft">
+              <button type="button" className="it-support-draft" onClick={handleSaveDraft}>
                 Save Draft
               </button>
               <button type="submit" className="it-support-submit">
