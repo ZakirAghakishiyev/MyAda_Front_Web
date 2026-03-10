@@ -1,14 +1,8 @@
 import React, { useState } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { getClubById } from '../../data/clubsData'
+import adaLogo from '../../assets/ada-logo.png'
 import './ClubAdmin.css'
-
-const IconHome = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-)
 
 const IconOverview = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,12 +74,28 @@ const IconPlus = () => (
   </svg>
 )
 
+const IconMenu = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+)
+
+const IconClose = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+)
+
 export default function ClubAdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [showNotificationModal, setShowNotificationModal] = useState(false)
   const [notificationTitle, setNotificationTitle] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const searchParams = new URLSearchParams(location.search)
   const clubIdParam = searchParams.get('club')
@@ -109,10 +119,19 @@ export default function ClubAdminLayout() {
   }
 
   return (
-    <div className="club-admin-layout">
+    <div className={`club-admin-layout ${sidebarOpen ? 'club-admin-layout--sidebar-open' : ''}`}>
+      {sidebarOpen && (
+        <div className="club-admin-sidebar-overlay" aria-hidden onClick={() => setSidebarOpen(false)} />
+      )}
+      <button type="button" className="club-admin-sidebar-menu-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+        <IconMenu />
+      </button>
       <aside className="club-admin-sidebar">
-        <button type="button" className="club-admin-nav-item club-admin-sidebar-home" onClick={() => navigate('/')} aria-label="Back to home">
-          <IconHome /> Back to Home
+        <button type="button" className="club-admin-sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
+          <IconClose />
+        </button>
+        <button type="button" className="club-admin-nav-item club-admin-sidebar-home club-admin-sidebar-ada-logo-wrap" onClick={() => navigate('/')} aria-label="Back to home">
+          <img src={adaLogo} alt="ADA University" className="club-admin-sidebar-ada-logo" />
         </button>
         <div className="club-admin-sidebar-title">
           {activeClub ? (

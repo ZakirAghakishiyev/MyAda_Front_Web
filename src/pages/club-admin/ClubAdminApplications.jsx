@@ -195,6 +195,7 @@ const ClubAdminApplications = () => {
             </div>
           )}
 
+          <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
@@ -249,6 +250,7 @@ const ClubAdminApplications = () => {
               ))}
             </tbody>
           </table>
+          </div>
 
           <div className="club-admin-pagination">
             <span>Showing 1 - {Math.min(filteredList.length, 10)} of {filteredList.length} requests</span>

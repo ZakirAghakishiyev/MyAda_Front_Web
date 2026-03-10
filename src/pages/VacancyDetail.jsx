@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getVacancyById } from '../data/clubVacanciesData'
+import { getSavedVacancyIds, setSavedVacancyIds } from '../utils/savedVacanciesCookie'
 import './VacancyDetail.css'
 
 const IconBack = () => (
@@ -47,7 +48,13 @@ const VacancyDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const vacancy = getVacancyById(id)
-  const [saved, setSaved] = useState(false)
+  const vacancyId = vacancy ? vacancy.id : null
+  const [saved, setSaved] = useState(() => (vacancyId != null ? getSavedVacancyIds().includes(vacancyId) : false))
+
+  useEffect(() => {
+    if (vacancyId == null) return
+    setSaved(getSavedVacancyIds().includes(vacancyId))
+  }, [vacancyId])
 
   if (!vacancy) {
     return (
@@ -167,10 +174,15 @@ const VacancyDetail = () => {
             <button
               type="button"
               className={`vacancy-detail-footer-save ${saved ? 'vacancy-detail-footer-save--saved' : ''}`}
-              onClick={() => setSaved((s) => !s)}
+              onClick={() => {
+                const ids = getSavedVacancyIds()
+                const next = saved ? ids.filter((i) => i !== vacancyId) : [...ids, vacancyId]
+                setSavedVacancyIds(next)
+                setSaved(!saved)
+              }}
             >
               <IconBookmark />
-              Save Vacancy
+              {saved ? 'Unsave' : 'Save Vacancy'}
             </button>
             <button type="button" className="vacancy-detail-footer-apply" onClick={handleApply}>
               Apply Now

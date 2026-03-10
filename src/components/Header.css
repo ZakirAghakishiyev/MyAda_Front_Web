@@ -71,12 +71,33 @@
   border-bottom: 1px solid #e5e7eb;
   position: relative;
   z-index: 2;
+  gap: 16px;
 }
 
 .filter-nav-links {
   display: flex;
   gap: 30px;
   align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.filter-nav-links::-webkit-scrollbar {
+  height: 4px;
+}
+
+.filter-nav-links::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.filter-nav-links .nav-link {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .nav-link {
@@ -226,26 +247,29 @@
 @media (max-width: 768px) {
   .filter-nav-links {
     gap: 15px;
+    padding: 4px 0;
   }
-  
+
   .filter-navbar {
-    padding: 0 15px;
-    height: 45px;
+    padding: 0 12px;
+    height: 48px;
+    gap: 12px;
   }
-  
+
   .nav-link {
-    font-size: 12px;
+    font-size: 13px;
   }
-  
+
   .view-all-cards {
     font-size: 12px;
     padding: 6px 8px;
+    flex-shrink: 0;
   }
-  
+
   .header-right {
     gap: 10px;
   }
-  
+
   .icon-button {
     padding: 6px;
   }

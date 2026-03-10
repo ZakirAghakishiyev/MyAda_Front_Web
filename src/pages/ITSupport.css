@@ -499,3 +499,47 @@
     order: -1;
   }
 }
+
+@media (max-width: 768px) {
+  .it-support-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .it-support-popup {
+    max-height: calc(100vh - 24px);
+    border-radius: 12px;
+  }
+
+  .it-support-header {
+    padding: 12px 16px;
+  }
+
+  .it-support-header-title h1 {
+    font-size: 18px;
+  }
+
+  .it-support-two-column {
+    padding: 12px 16px;
+    gap: 16px;
+  }
+
+  .it-support-section {
+    padding: 16px;
+  }
+
+  .it-support-section-title {
+    font-size: 14px;
+  }
+
+  .it-support-field label,
+  .it-support-label {
+    font-size: 13px;
+  }
+
+  .it-support-input,
+  .it-support-input-wrap input,
+  .it-support-input-wrap select {
+    font-size: 16px;
+  }
+}

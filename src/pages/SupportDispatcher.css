@@ -194,6 +194,21 @@
 .sd-table-tabs {
   display: inline-flex;
   gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.sd-table-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.sd-pill-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .sd-pill-tab {

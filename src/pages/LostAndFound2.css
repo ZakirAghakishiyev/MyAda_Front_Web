@@ -865,3 +865,268 @@
   color: #6b7280;
   margin: 0;
 }
+
+/* ----- Mobile: dashboard page ----- */
+@media (max-width: 768px) {
+  .lf2-page {
+    padding: 16px 12px 32px;
+  }
+
+  .lf2-header {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .lf2-header-titles h1 {
+    font-size: 17px;
+  }
+
+  .lf2-subtitle {
+    font-size: 12px;
+  }
+
+  .lf2-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .lf2-report-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .lf2-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .lf2-stat-card {
+    padding: 14px 16px;
+  }
+
+  .lf2-stat-value {
+    font-size: 18px;
+  }
+
+  .lf2-search-wrap {
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+
+  .lf2-search-input {
+    font-size: 16px;
+    min-width: 0;
+  }
+
+  .lf2-categories {
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .lf2-cat-pill {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .lf2-grid {
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .lf2-card-body {
+    padding: 12px 14px;
+  }
+
+  .lf2-card-title {
+    font-size: 14px;
+  }
+
+  .lf2-card-time,
+  .lf2-card-location,
+  .lf2-card-category,
+  .lf2-card-desc {
+    font-size: 12px;
+  }
+
+  .lf2-footer {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    padding: 14px 12px;
+  }
+
+  .lf2-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .lf2-page-btn {
+    min-width: 36px;
+    padding: 8px 10px;
+  }
+}
+
+/* ----- Mobile: report (announce) form popup ----- */
+@media (max-width: 768px) {
+  .lf2-report-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .lf2-report-popup {
+    max-width: 100%;
+    max-height: calc(100vh - 24px);
+    padding: 16px 16px 24px;
+    border-radius: 12px;
+  }
+
+  .lf2-report-header {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .lf2-back-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+
+  .lf2-report-header-center h1 {
+    font-size: 18px;
+  }
+
+  .lf2-report-subtitle {
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .lf2-report-header-spacer {
+    width: 36px;
+  }
+
+  .lf2-stepper {
+    margin-bottom: 16px;
+  }
+
+  .lf2-step-label {
+    font-size: 11px;
+  }
+
+  .lf2-form-card {
+    padding: 18px 16px 20px;
+  }
+
+  .lf2-section {
+    margin-bottom: 22px;
+  }
+
+  .lf2-section-title {
+    font-size: 14px;
+    gap: 8px;
+  }
+
+  .lf2-section-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .lf2-section-desc {
+    margin: 0 0 14px 0;
+    padding-left: 32px;
+    font-size: 12px;
+    box-sizing: border-box;
+  }
+
+  .lf2-fields {
+    gap: 14px;
+  }
+
+  .lf2-field {
+    gap: 4px;
+  }
+
+  .lf2-label {
+    font-size: 13px;
+  }
+
+  .lf2-field input,
+  .lf2-field select,
+  .lf2-field textarea {
+    padding: 12px 14px;
+    font-size: 16px;
+    border-radius: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .lf2-field textarea {
+    min-height: 100px;
+  }
+
+  .lf2-field .lf2-field label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    min-height: 44px;
+  }
+
+  .lf2-field .lf2-field input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+  }
+
+  .lf2-dropzone {
+    padding: 24px 16px;
+  }
+
+  .lf2-dropzone span,
+  .lf2-dropzone-hint {
+    font-size: 13px;
+  }
+
+  .lf2-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 18px;
+  }
+
+  .lf2-form-actions .lf2-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+  }
+
+  .lf2-form-actions .lf2-btn--back {
+    order: 1;
+  }
+
+  .lf2-form-actions .lf2-btn--draft {
+    order: 2;
+  }
+
+  .lf2-form-actions .lf2-btn--primary {
+    order: 0;
+  }
+
+  .lf2-protip {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .lf2-protip strong {
+    font-size: 13px;
+  }
+
+  .lf2-protip p {
+    font-size: 12px;
+  }
+}

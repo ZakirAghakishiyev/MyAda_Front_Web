@@ -230,6 +230,7 @@ const ClubAdminPositions = () => {
             <span style={{ fontSize: 12, color: '#94a3b8' }}>{filteredPositions.length} positions</span>
           </div>
 
+          <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
@@ -278,6 +279,7 @@ const ClubAdminPositions = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
       </div>

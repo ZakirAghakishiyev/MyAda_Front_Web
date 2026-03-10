@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { mockItems } from '../data/lostAndFoundItems'
 import './LostAndFound2.css'
 
-const STEPS = ['Info', 'Location', 'Time', 'Details', 'Photos', 'Contact']
+const STEPS = ['Info'] /* single step: all fields on one screen, submit directly */
 const CATEGORIES = ['All Items', 'Electronics', 'Documents', 'Personal Items', 'Accessories']
 const ITEMS_PER_PAGE = 8
 const MAX_DESCRIPTION_LENGTH = 500
@@ -147,7 +147,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       photos: []
     }))
     if (typeof draft.reportStep === 'number' && draft.reportStep >= 0 && draft.reportStep < STEPS.length) {
-      setReportStep(draft.reportStep)
+      setReportStep(Math.min(draft.reportStep, STEPS.length - 1))
     }
   }, [view])
 
@@ -559,12 +559,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
               </>
             )}
 
-            {reportStep > 0 && (
-              <section className="lf2-section">
-                <p className="lf2-placeholder-step">Step {reportStep + 1} – More fields can be added here (Time, Details, Contact).</p>
-              </section>
-            )}
-
             <div className="lf2-form-actions">
               <button type="button" className="lf2-btn lf2-btn--back" onClick={reportStep === 0 ? backToDashboard : () => setReportStep(s => s - 1)}>
                 <span>‹</span> Back
@@ -572,15 +566,9 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
               <button type="button" className="lf2-btn lf2-btn--draft" onClick={handleSaveDraft}>
                 Save as Draft
               </button>
-              {reportStep < STEPS.length - 1 ? (
-                <button type="button" className="lf2-btn lf2-btn--primary" onClick={() => setReportStep(s => s + 1)}>
-                  Next Step <span>→</span>
-                </button>
-              ) : (
-                <button type="submit" className="lf2-btn lf2-btn--primary">
-                  Submit
-                </button>
-              )}
+              <button type="submit" className="lf2-btn lf2-btn--primary">
+                Submit
+              </button>
             </div>
           </div>
 

@@ -46,6 +46,22 @@
   align-items: center;
   gap: 20px;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 4px 0;
+}
+
+.ed-nav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.ed-nav-links button,
+.ed-nav-links span {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .ed-nav-links button,
@@ -428,4 +444,190 @@
   gap: 16px;
   font-size: 13px;
   color: #6b7280;
+}
+
+@media (max-width: 768px) {
+  .ed-nav {
+    padding: 12px 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ed-nav-logo {
+    font-size: 16px;
+  }
+
+  .ed-nav-links {
+    gap: 10px;
+    order: 3;
+    width: 100%;
+    padding: 4px 0;
+  }
+
+  .ed-nav-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 160px;
+  }
+
+  .ed-nav-search input {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  .ed-nav-profile {
+    font-size: 13px;
+  }
+
+  .ed-hero {
+    min-height: 240px;
+    padding: 20px 16px 28px;
+  }
+
+  .ed-hero-category {
+    font-size: 10px;
+    padding: 5px 10px;
+    margin-bottom: 10px;
+  }
+
+  .ed-hero-title {
+    font-size: 22px;
+    line-height: 1.25;
+  }
+
+  .ed-info-cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 16px;
+    margin: -16px 16px 0;
+  }
+
+  .ed-info-card {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .ed-info-card span {
+    font-size: 14px;
+  }
+
+  .ed-main {
+    padding: 20px 16px;
+    gap: 24px;
+  }
+
+  .ed-section {
+    margin-bottom: 24px;
+  }
+
+  .ed-section-title {
+    font-size: 16px;
+    gap: 8px;
+  }
+
+  .ed-desc {
+    font-size: 14px;
+  }
+
+  .ed-agenda-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ed-agenda {
+    font-size: 13px;
+    min-width: 320px;
+  }
+
+  .ed-agenda th,
+  .ed-agenda td {
+    padding: 10px 8px;
+  }
+
+  .ed-agenda th {
+    font-size: 11px;
+  }
+
+  .ed-sidebar {
+    position: static;
+    top: 0;
+  }
+
+  .ed-sidebar-card {
+    padding: 16px 18px;
+  }
+
+  .ed-sidebar-label {
+    font-size: 11px;
+  }
+
+  .ed-sidebar-fee {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .ed-sidebar-fee small {
+    font-size: 13px;
+  }
+
+  .ed-btn {
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+
+  .ed-sidebar-slots {
+    font-size: 16px;
+  }
+
+  .ed-host {
+    gap: 10px;
+  }
+
+  .ed-host-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .ed-host strong {
+    font-size: 14px;
+  }
+
+  .ed-host span {
+    font-size: 12px;
+  }
+
+  .ed-stay-btns {
+    flex-wrap: wrap;
+  }
+
+  .ed-stay-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ed-not-found {
+    padding: 32px 16px;
+  }
+
+  .ed-footer {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .ed-footer-logo {
+    font-size: 13px;
+  }
+
+  .ed-footer-copy,
+  .ed-footer-links {
+    font-size: 12px;
+  }
+
+  .ed-footer-links {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 }

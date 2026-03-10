@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { mockVacancies } from '../data/clubVacanciesData'
+import { getSavedVacancyIds, setSavedVacancyIds } from '../utils/savedVacanciesCookie'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubVacancies.css'
 
@@ -49,6 +50,11 @@ const IconClock = () => (
     <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
   </svg>
 )
+const IconBookmark = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+)
 
 const CATEGORY_ICONS = {
   Technology: { color: '#3b82f6', Icon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="14" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="7" y1="15" x2="7.01" y2="15" /></svg> },
@@ -71,16 +77,38 @@ const ClubVacancies = () => {
   const [viewMode, setViewMode] = useState('grid')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [savedOnlyFilter, setSavedOnlyFilter] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [savedIds, setSavedIds] = useState(() => new Set(getSavedVacancyIds()))
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef(null)
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
 
   const categories = useMemo(() => {
     const set = new Set(mockVacancies.map((v) => v.categoryTag || v.category.toUpperCase()))
     return Array.from(set).sort()
   }, [])
 
+  const toggleSave = useCallback((e, vacancyId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSavedIds((prev) => {
+      const next = prev.has(vacancyId)
+        ? new Set([...prev].filter((id) => id !== vacancyId))
+        : new Set([...prev, vacancyId])
+      setSavedVacancyIds([...next])
+      return next
+    })
+  }, [])
+
   const filteredVacancies = useMemo(() => {
     let list = mockVacancies
+    if (savedOnlyFilter) {
+      list = list.filter((v) => savedIds.has(v.id))
+    }
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(
@@ -94,7 +122,7 @@ const ClubVacancies = () => {
       list = list.filter((v) => (v.categoryTag || v.category.toUpperCase()) === categoryFilter)
     }
     return list
-  }, [search, categoryFilter])
+  }, [search, categoryFilter, savedOnlyFilter, savedIds])
 
   const paginatedVacancies = useMemo(() => {
     const start = (currentPage - 1) * POSITIONS_PER_PAGE
@@ -129,7 +157,15 @@ const ClubVacancies = () => {
           </nav>
         </div>
         <div className="vacancies-nav-right">
-          <div className="vacancies-nav-search">
+          <button
+            type="button"
+            className="vacancies-nav-search-toggle"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Open search"
+          >
+            <IconSearch />
+          </button>
+          <div className={`vacancies-nav-search ${searchOpen ? 'vacancies-nav-search--open' : ''}`}>
             <IconSearch />
             <input
               type="text"
@@ -137,7 +173,16 @@ const ClubVacancies = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search roles or clubs"
+              ref={searchInputRef}
             />
+            <button
+              type="button"
+              className="vacancies-nav-search-close"
+              onClick={() => setSearchOpen(false)}
+              aria-label="Close search"
+            >
+              ×
+            </button>
           </div>
           <button
             type="button"
@@ -210,6 +255,25 @@ const ClubVacancies = () => {
               </button>
               {filterOpen && (
                 <div className="vacancies-filter-dropdown">
+                  <p className="vacancies-filter-label">Show</p>
+                  <label className="vacancies-filter-option">
+                    <input
+                      type="radio"
+                      name="savedFilter"
+                      checked={!savedOnlyFilter}
+                      onChange={() => { setSavedOnlyFilter(false); setFilterOpen(false) }}
+                    />
+                    <span>All vacancies</span>
+                    </label>
+                  <label className="vacancies-filter-option">
+                    <input
+                      type="radio"
+                      name="savedFilter"
+                      checked={savedOnlyFilter}
+                      onChange={() => { setSavedOnlyFilter(true); setFilterOpen(false) }}
+                    />
+                    <span>Saved only</span>
+                  </label>
                   <p className="vacancies-filter-label">Category</p>
                   {categories.map((cat) => (
                     <label key={cat} className="vacancies-filter-option">
@@ -222,8 +286,8 @@ const ClubVacancies = () => {
                       <span>{cat}</span>
                     </label>
                   ))}
-                  {categoryFilter && (
-                    <button type="button" className="vacancies-filter-clear" onClick={() => setCategoryFilter('')}>
+                  {(categoryFilter || savedOnlyFilter) && (
+                    <button type="button" className="vacancies-filter-clear" onClick={() => { setCategoryFilter(''); setSavedOnlyFilter(false) }}>
                       Clear
                     </button>
                   )}
@@ -261,6 +325,15 @@ const ClubVacancies = () => {
                     <IconClock />
                     Posted {vacancy.postedAt || 'recently'}
                   </span>
+                  <button
+                    type="button"
+                    className={`vacancy-card-save ${savedIds.has(vacancy.id) ? 'vacancy-card-save--saved' : ''}`}
+                    onClick={(e) => toggleSave(e, vacancy.id)}
+                    aria-label={savedIds.has(vacancy.id) ? 'Unsave vacancy' : 'Save vacancy'}
+                  >
+                    <IconBookmark />
+                    {savedIds.has(vacancy.id) ? 'Unsave' : 'Save'}
+                  </button>
                   <span className="vacancy-card-arrow"><IconChevron /></span>
                 </div>
               </article>

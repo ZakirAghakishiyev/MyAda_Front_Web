@@ -215,6 +215,40 @@
 }
 
 /* Category tabs */
+.ce-filter-row {
+  margin-bottom: 16px;
+}
+
+.ce-club-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ce-club-filter-btn {
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 8px;
+  font-family: inherit;
+}
+
+.ce-club-filter-btn:hover {
+  background: #f8fafc;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.ce-club-filter-btn--active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
 .ce-tabs-row {
   display: flex;
   align-items: center;

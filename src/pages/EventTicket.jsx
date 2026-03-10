@@ -1,6 +1,8 @@
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getEventById } from '../data/clubEventsData'
+import adaLogo from '../assets/ada-logo.png'
+import './ClubVacancies.css'
 import './EventTicket.css'
 
 const IconCalendar = () => (
@@ -31,6 +33,11 @@ const IconDownload = () => (
 const IconCheck = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+)
+const IconBell = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
 )
 
@@ -98,20 +105,46 @@ const EventTicket = () => {
 
   return (
     <div className="et-page">
-      <header className="et-header">
-        <button type="button" className="et-back" onClick={() => navigate(`/clubs/events/${id}`)} aria-label="Back">
-          ‹
-        </button>
-        <span className="et-logo">CampusEvents</span>
-        <nav className="et-nav">
-          <button type="button" onClick={() => navigate('/clubs/events')}>Discover</button>
-          <button type="button" onClick={() => navigate('/clubs')}>My Clubs</button>
-          <button type="button" className="et-nav-active" onClick={() => navigate('/clubs/events/my-registrations')}>My Registrations</button>
-          <span>Calendar</span>
-        </nav>
-        <div className="et-profile">Profile</div>
+      <header className="vacancies-nav">
+        <div className="vacancies-nav-left">
+          <div
+            className="vacancies-nav-logo"
+            onClick={() => navigate('/')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+          >
+            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
+          </div>
+          <nav className="vacancies-nav-links">
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
+            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Events</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs')}>Clubs</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
+          </nav>
+        </div>
+        <div className="vacancies-nav-right">
+          <button
+            type="button"
+            className="vacancies-nav-icon"
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+          </button>
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="My memberships"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
+          </button>
+        </div>
       </header>
 
+      <div className="et-page-content">
       <div className="et-breadcrumb">
         Home &gt; {event.clubName} &gt; {event.title}
       </div>
@@ -164,6 +197,7 @@ const EventTicket = () => {
           <span>Contact</span>
         </nav>
       </footer>
+      </div>
     </div>
   )
 }

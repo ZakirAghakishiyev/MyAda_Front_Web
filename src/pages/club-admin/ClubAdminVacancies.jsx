@@ -385,6 +385,7 @@ const ClubAdminVacancies = () => {
             </div>
           </div>
 
+          <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
@@ -451,6 +452,7 @@ const ClubAdminVacancies = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </>

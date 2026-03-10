@@ -458,8 +458,7 @@ const ClubAdminSuggestEvent = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '20px 24px 32px' }}>
-          <button type="button" className="club-admin-btn-secondary" onClick={() => setStep((s) => Math.max(1, s - 1))}>← Previous Step</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '20px 24px 32px' }} className="club-admin-suggest-event-actions">
           <button type="button" className="club-admin-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
           <button type="button" className="club-admin-btn-primary" onClick={handleSubmit}>Submit for Approval →</button>
         </div>

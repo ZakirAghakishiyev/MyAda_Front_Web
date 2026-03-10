@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { getClubById } from '../data/clubsData'
 import { getEventsByClubId } from '../data/clubEventsData'
+import adaLogo from '../assets/ada-logo.png'
+import './ClubVacancies.css'
 import './ClubDetail.css'
 
 const IconBack = () => (
@@ -107,29 +109,42 @@ const ClubDetail = () => {
 
   return (
     <div className="club-detail-page">
-      {/* Top nav */}
-      <header className="club-detail-nav">
-        <div className="club-detail-nav-inner">
-          <button type="button" className="club-detail-nav-back" onClick={() => navigate('/clubs')} aria-label="Back to clubs">
-            <IconBack />
-          </button>
-          <Link to="/" className="club-detail-nav-logo">CampusConnect</Link>
-          <div className="club-detail-nav-search">
-            <span className="club-detail-nav-search-icon"><IconSearch /></span>
-            <input type="text" placeholder="Search clubs, events..." className="club-detail-nav-search-input" aria-label="Search" readOnly />
+      <header className="vacancies-nav">
+        <div className="vacancies-nav-left">
+          <div
+            className="vacancies-nav-logo"
+            onClick={() => navigate('/')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+          >
+            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
           </div>
-          <nav className="club-detail-nav-links">
-            <Link to="/clubs">Discover</Link>
-            <Link to="/clubs/my-memberships">My Clubs</Link>
-            <Link to="/clubs/events">Events</Link>
-            <Link to="/clubs/vacancies">Resources</Link>
+          <nav className="vacancies-nav-links">
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
+            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Clubs</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
           </nav>
-          <div className="club-detail-nav-actions">
-            <button type="button" className="club-detail-nav-icon" aria-label="Notifications">
-              <IconBell />
-            </button>
-            <button type="button" className="club-detail-nav-avatar" aria-label="Profile" />
-          </div>
+        </div>
+        <div className="vacancies-nav-right">
+          <button
+            type="button"
+            className="vacancies-nav-icon"
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+          </button>
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="My memberships"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
+          </button>
         </div>
       </header>
 

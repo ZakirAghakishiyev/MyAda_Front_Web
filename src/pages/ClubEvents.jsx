@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { mockClubEvents } from '../data/clubEventsData'
+import { mockMemberships } from '../data/clubsData'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubEvents.css'
 
@@ -84,9 +85,18 @@ const ClubEvents = () => {
   const [viewMode, setViewMode] = useState('grid')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All Events')
+  const [clubFilter, setClubFilter] = useState('all') // 'all' | 'myClubs'
+
+  const myClubIds = useMemo(
+    () => new Set(mockMemberships.filter((m) => m.status === 'Active').map((m) => m.clubId)),
+    []
+  )
 
   const filteredEvents = useMemo(() => {
     let list = mockClubEvents
+    if (clubFilter === 'myClubs') {
+      list = list.filter((e) => myClubIds.has(e.clubId))
+    }
     if (category !== 'All Events') {
       list = list.filter((e) => e.category.toLowerCase() === category.toLowerCase())
     }
@@ -100,7 +110,7 @@ const ClubEvents = () => {
       )
     }
     return list
-  }, [search, category])
+  }, [search, category, clubFilter, myClubIds])
 
   const handleEventClick = (eventId) => {
     navigate(`/clubs/events/${eventId}`)
@@ -197,6 +207,24 @@ const ClubEvents = () => {
           </div>
         </header>
 
+        <div className="ce-filter-row">
+          <div className="ce-club-filter">
+            <button
+              type="button"
+              className={`ce-club-filter-btn ${clubFilter === 'all' ? 'ce-club-filter-btn--active' : ''}`}
+              onClick={() => setClubFilter('all')}
+            >
+              All events
+            </button>
+            <button
+              type="button"
+              className={`ce-club-filter-btn ${clubFilter === 'myClubs' ? 'ce-club-filter-btn--active' : ''}`}
+              onClick={() => setClubFilter('myClubs')}
+            >
+              My clubs only
+            </button>
+          </div>
+        </div>
         <div className="ce-tabs-row">
         <div className="ce-tabs">
           {CATEGORIES.map((cat) => (

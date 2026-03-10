@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { mockClubMembers as initialMembers, mockClubEmployees as initialEmployees, MEMBER_POSITIONS as MEMBER_POSITIONS_LIST, EMPLOYEE_POSITIONS as EMPLOYEE_POSITIONS_LIST } from '../data/clubAdminData'
+import adaLogo from '../assets/ada-logo.png'
 import './StudentServices.css'
 import './club-admin/ClubAdmin.css'
 
@@ -36,13 +37,6 @@ const clearDraftCookie = (key) => {
   if (typeof document === 'undefined') return
   document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
 }
-
-const IconHome = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-)
 
 const IconOverview = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -544,7 +538,7 @@ const StudentServices = () => {
     }
   }, [location.state?.section])
   const [clubProposals, setClubProposals] = useState(INITIAL_CLUB_PROPOSALS)
-  const [selectedProposalId, setSelectedProposalId] = useState('1')
+  const [selectedProposalId, setSelectedProposalId] = useState('')
   const [proposalSearch, setProposalSearch] = useState('')
   const [rejectModal, setRejectModal] = useState({ open: false, reason: '' })
   const [revisionModal, setRevisionModal] = useState({ open: false, changes: '' })
@@ -561,7 +555,7 @@ const StudentServices = () => {
   const [editingRequirementIndex, setEditingRequirementIndex] = useState(null)
   const [editingRequirementDraft, setEditingRequirementDraft] = useState('')
   const [eventProposals, setEventProposals] = useState(INITIAL_EVENT_PROPOSALS)
-  const [selectedEventId, setSelectedEventId] = useState('1')
+  const [selectedEventId, setSelectedEventId] = useState('')
   const [eventSearch, setEventSearch] = useState('')
   const [eventRejectModal, setEventRejectModal] = useState({ open: false, reason: '' })
   const [eventRevisionModal, setEventRevisionModal] = useState({ open: false, changes: '' })
@@ -592,6 +586,7 @@ const StudentServices = () => {
   const [editingApprovedEvent, setEditingApprovedEvent] = useState(null)
   const [editEventTitle, setEditEventTitle] = useState('')
   const [editEventDate, setEditEventDate] = useState('')
+  const [editEventTime, setEditEventTime] = useState('')
   const [editEventVenue, setEditEventVenue] = useState('')
   const [editEventBuilding, setEditEventBuilding] = useState('')
   const [editEventRoom, setEditEventRoom] = useState('')
@@ -686,6 +681,7 @@ const StudentServices = () => {
     setEditingApprovedEvent(ev)
     setEditEventTitle(ev.title || '')
     setEditEventDate(ev.date || '')
+    setEditEventTime(ev.time || '')
     setEditEventVenue(ev.venue || '')
     setEditEventImage(ev.image || '')
     // Try to infer building/room from existing venue
@@ -721,6 +717,7 @@ const StudentServices = () => {
     setEditingApprovedEvent(null)
     setEditEventTitle('')
     setEditEventDate('')
+    setEditEventTime('')
     setEditEventVenue('')
     setEditEventBuilding('')
     setEditEventRoom('')
@@ -782,6 +779,7 @@ const StudentServices = () => {
               ...ev,
               title: editEventTitle || ev.title,
               date: editEventDate || ev.date,
+              time: editEventTime || ev.time,
               venue:
                 (editEventBuilding && editEventRoom && `${editEventBuilding} – ${editEventRoom}`) ||
                 editEventVenue ||
@@ -1018,6 +1016,8 @@ const StudentServices = () => {
     if (!selectedDirectoryClub) return null
     const MEMBER_POSITIONS = Array.isArray(MEMBER_POSITIONS_LIST) ? MEMBER_POSITIONS_LIST : ['Member']
     const EMPLOYEE_POSITIONS = Array.isArray(EMPLOYEE_POSITIONS_LIST) ? EMPLOYEE_POSITIONS_LIST : ['President', 'Vice President', 'Secretary', 'Treasurer']
+    const posKey = (p) => (typeof p === 'object' && p != null ? p.id : p)
+    const posLabel = (p) => (typeof p === 'object' && p != null ? p.title : p)
 
     return (
       <>
@@ -1170,7 +1170,7 @@ const StudentServices = () => {
                               >
                                 <option value="">—</option>
                                 {EMPLOYEE_POSITIONS.map((pos) => (
-                                  <option key={pos} value={pos}>{pos}</option>
+                                  <option key={posKey(pos)} value={posLabel(pos)}>{posLabel(pos)}</option>
                                 ))}
                               </select>
                             </td>
@@ -1225,7 +1225,7 @@ const StudentServices = () => {
                         <select value={addEmployeePosition} onChange={(e) => setAddEmployeePosition(e.target.value)}>
                           <option value="">Select position</option>
                           {EMPLOYEE_POSITIONS.map((pos) => (
-                            <option key={pos} value={pos}>{pos}</option>
+                            <option key={posKey(pos)} value={posLabel(pos)}>{posLabel(pos)}</option>
                           ))}
                         </select>
                       </div>
@@ -1550,7 +1550,7 @@ const StudentServices = () => {
 
   const renderClubProposals = () => (
     <>
-      <div className="ss-cp-wrap">
+      <div className={`ss-cp-wrap ${selectedProposalId ? 'ss-cp-wrap--detail-open' : ''}`}>
         <aside className="ss-cp-sidebar">
           <div className="ss-cp-search-wrap">
             <span className="ss-cp-search-icon"><IconSearch /></span>
@@ -1612,6 +1612,10 @@ const StudentServices = () => {
             <>
               <header className="ss-cp-detail-header">
                 <div className="ss-cp-detail-header-left">
+                  <button type="button" className="ss-cp-back-to-list" onClick={() => setSelectedProposalId('')} aria-label="Back to list">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                    <span>Back</span>
+                  </button>
                   <span className="ss-cp-detail-icon"><IconLeaf /></span>
                   <div>
                     <h1 className="ss-cp-detail-title">{selectedProposal.clubName}</h1>
@@ -1683,7 +1687,6 @@ const StudentServices = () => {
                       <tr>
                         <th>STUDENT ID</th>
                         <th>PROPOSED POSITION</th>
-                        <th>STATUS</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1691,11 +1694,6 @@ const StudentServices = () => {
                         <tr key={i}>
                           <td>{m.studentId}</td>
                           <td>{m.position}</td>
-                          <td>
-                            <span className={`ss-cp-pill ss-cp-pill--${m.status === 'Verified' ? 'success' : 'warning'}`}>
-                              {m.status}
-                            </span>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1923,7 +1921,7 @@ const StudentServices = () => {
 
   const renderEventApprovals = () => (
     <>
-      <div className="ss-eap-wrap">
+      <div className={`ss-eap-wrap ${selectedEventId ? 'ss-eap-wrap--detail-open' : ''}`}>
         <aside className="ss-eap-sidebar">
           <div className="ss-eap-sidebar-top">
             <h2 className="ss-eap-pending-title">Pending Proposals</h2>
@@ -1966,6 +1964,10 @@ const StudentServices = () => {
           {selectedEvent ? (
             <>
               <header className="ss-eap-detail-header">
+                <button type="button" className="ss-eap-back-to-list" onClick={() => setSelectedEventId('')} aria-label="Back to list">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                  <span>Back</span>
+                </button>
                 <p className="ss-eap-proposal-meta">PROPOSAL #{selectedEvent.proposalId} Submitted on {selectedEvent.submittedOn} by {selectedEvent.submittedBy}</p>
                 <h1 className="ss-eap-detail-title">{selectedEvent.eventTitle}</h1>
                 <div className="ss-eap-detail-actions">
@@ -2272,6 +2274,14 @@ const StudentServices = () => {
                     type="date"
                     value={editEventDate}
                     onChange={(ev) => setEditEventDate(ev.target.value)}
+                  />
+                </div>
+                <div className="club-admin-field">
+                  <label>Start time</label>
+                  <input
+                    type="time"
+                    value={editEventTime}
+                    onChange={(ev) => setEditEventTime(ev.target.value)}
                   />
                 </div>
                 <div className="club-admin-field">
@@ -3009,8 +3019,8 @@ const StudentServices = () => {
         <button type="button" className="ss-sidebar-toggle" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
           <IconChevronLeft />
         </button>
-        <button type="button" className="ss-sidebar-home" onClick={() => navigate('/')} aria-label="Back to home">
-          <IconHome /> Back to Home
+        <button type="button" className="ss-sidebar-home ss-sidebar-ada-logo-wrap" onClick={() => navigate('/')} aria-label="Back to home">
+          <img src={adaLogo} alt="ADA University" className="ss-sidebar-ada-logo" />
         </button>
         <div className="ss-sidebar-title">Student Services</div>
 

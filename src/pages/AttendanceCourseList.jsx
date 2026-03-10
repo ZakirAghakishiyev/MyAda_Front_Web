@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import adaLogo from '../assets/ada-logo.png'
 import './AttendanceCourseList.css'
 
 // Static list of CRNs for the instructor. Replace with backend data later.
@@ -21,6 +22,16 @@ const AttendanceCourseList = () => {
 
   return (
     <div className="attendance-course-list">
+      <header className="acl-topbar">
+        <button
+          type="button"
+          className="acl-logo-btn"
+          onClick={() => navigate('/')}
+          aria-label="Go to home"
+        >
+          <img src={adaLogo} alt="ADA University" className="acl-logo-img" />
+        </button>
+      </header>
       <div className="acl-header">
         <h1 className="acl-title">QR Lesson Attendance</h1>
         <p className="acl-subtitle">Select a course (CRN) to open the attendance portal.</p>

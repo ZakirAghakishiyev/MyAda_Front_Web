@@ -91,6 +91,7 @@ const ClubAdminDashboard = () => {
             <h2 className="club-admin-card-title">Recent Activity Feed</h2>
             <Link to="/club-admin/applications" className="club-admin-card-link">View all reports</Link>
           </div>
+          <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
@@ -122,6 +123,7 @@ const ClubAdminDashboard = () => {
               ))}
             </tbody>
           </table>
+          </div>
           <button type="button" className="club-admin-btn-secondary" style={{ marginTop: 12 }}>Show More Activity</button>
         </div>
 

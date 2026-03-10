@@ -41,6 +41,20 @@
   color: #334155;
 }
 
+.ss-sidebar-ada-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 14px;
+}
+
+.ss-sidebar-ada-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
 .ss-sidebar-title {
   padding: 0 20px 20px;
   font-size: 16px;
@@ -1511,6 +1525,12 @@
   color: #6b7280;
 }
 
+/* Back to list buttons: visible only on mobile when detail is open */
+.ss-cp-back-to-list,
+.ss-eap-back-to-list {
+  display: none;
+}
+
 /* ========== Club Proposals (student services) – layout matching design ========== */
 .ss-cp-wrap {
   display: flex;
@@ -2702,13 +2722,6 @@
     flex-direction: column;
   }
 
-  .ss-sidebar {
-    width: 100%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
   .ss-main {
     padding: 16px;
   }
@@ -2719,6 +2732,449 @@
 
   .ss-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .ss-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 1001;
+    flex-shrink: 0;
+    padding: 20px 0;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+  }
+
+  .ss-layout--sidebar-closed .ss-sidebar {
+    width: 280px;
+    min-width: 280px;
+    padding: 20px 0;
+    overflow: visible;
+    transform: translateX(-100%);
+  }
+
+  .ss-layout--sidebar-closed .ss-main {
+    padding-left: 16px;
+  }
+
+  .ss-sidebar-open-btn {
+    top: 16px;
+    left: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .ss-cp-modal-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .ss-cp-modal,
+  .ss-cp-modal--requirements {
+    max-width: 100%;
+    max-height: calc(100vh - 24px);
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .ss-cp-modal--requirements {
+    padding: 0;
+  }
+
+  .ss-cp-req-header {
+    padding: 16px 16px 0;
+  }
+
+  .ss-cp-modal-title {
+    font-size: 16px;
+  }
+
+  .ss-cp-modal-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* Club proposals: on mobile hide list when detail is open, show back button */
+@media (max-width: 768px) {
+  .ss-cp-wrap--detail-open .ss-cp-sidebar {
+    display: none;
+  }
+
+  .ss-cp-wrap--detail-open .ss-cp-main {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ss-cp-back-to-list {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border: none;
+    background: #f1f5f9;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .ss-cp-wrap--detail-open .ss-cp-back-to-list {
+    display: inline-flex;
+  }
+
+  .ss-cp-back-to-list:hover {
+    background: #e2e8f0;
+  }
+
+  .ss-cp-sidebar {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ss-cp-main {
+    min-width: 0;
+  }
+
+  .ss-cp-detail-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ss-cp-detail-actions {
+    flex-wrap: wrap;
+  }
+
+  .ss-cp-detail-actions .ss-cp-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+}
+
+/* Event proposals: on mobile hide list when detail is open, show back button */
+@media (max-width: 768px) {
+  .ss-eap-wrap--detail-open .ss-eap-sidebar {
+    display: none;
+  }
+
+  .ss-eap-wrap--detail-open .ss-eap-main {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ss-eap-back-to-list {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border: none;
+    background: #f1f5f9;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .ss-eap-wrap--detail-open .ss-eap-back-to-list {
+    display: inline-flex;
+  }
+
+  .ss-eap-back-to-list:hover {
+    background: #e2e8f0;
+  }
+
+  .ss-eap-sidebar {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ss-eap-main {
+    min-width: 0;
+  }
+
+  .ss-eap-detail-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ss-eap-detail-actions {
+    flex-wrap: wrap;
+  }
+
+  .ss-eap-detail-actions .ss-eap-btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+  }
+}
+
+/* Student Services: all pages mobile fit */
+@media (max-width: 768px) {
+  .ss-main {
+    padding: 12px 16px;
+  }
+
+  .ss-main-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ss-main-header h1 {
+    font-size: 20px;
+  }
+
+  .ss-main-header p {
+    font-size: 13px;
+  }
+
+  .ss-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .ss-kpi-value {
+    font-size: 22px;
+  }
+
+  .ss-kpi-label {
+    font-size: 12px;
+  }
+
+  .ss-main-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .ss-card {
+    padding: 16px;
+  }
+
+  .ss-card h2 {
+    font-size: 16px;
+  }
+
+  .ss-cc-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  .ss-cc-table {
+    min-width: 520px;
+    font-size: 13px;
+  }
+
+  .ss-cc-table th,
+  .ss-cc-table td {
+    padding: 10px 8px;
+  }
+
+  .ss-cp-detail-card,
+  .ss-cp-section {
+    padding: 14px;
+  }
+
+  .ss-cp-section-title {
+    font-size: 13px;
+  }
+
+  .ss-cp-table {
+    font-size: 12px;
+  }
+
+  .ss-eap-detail-card,
+  .ss-eap-section {
+    padding: 14px;
+  }
+
+  .ss-eap-section-title {
+    font-size: 13px;
+  }
+
+  .ss-eap-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ss-eap-table {
+    font-size: 12px;
+  }
+
+  .ss-eap-assign-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .ss-eap-select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ss-cc-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .ss-cc-register-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ss-cc-tabs-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ss-cc-tabs {
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .ss-cc-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ss-cc-pagination {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .ss-cc-club-detail {
+    padding: 12px;
+  }
+
+  .ss-cc-club-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ss-cc-club-tabs {
+    flex-wrap: wrap;
+  }
+
+  .ss-cc-settings-form {
+    max-width: 100%;
+  }
+
+  .ss-cc-activity-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .ss-main-header {
+    flex-wrap: wrap;
+  }
+
+  .ss-main-header-actions {
+    width: 100%;
+  }
+
+  .ss-search {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ss-search input {
+    font-size: 16px;
+  }
+
+  /* Events page */
+  .ss-card:has(.ss-events-list) {
+    padding: 14px;
+  }
+
+  .ss-card:has(.ss-events-list) > div:first-child {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .ss-card:has(.ss-events-list) > div:first-child > div:last-child {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ss-card:has(.ss-events-list) .club-admin-btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ss-card:has(.ss-events-list) .club-admin-header-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .ss-card:has(.ss-events-list) .club-admin-header-search input {
+    font-size: 16px;
+  }
+
+  .ss-events-list-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .ss-events-list-item-main {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ss-events-list-item-title {
+    font-size: 15px;
+  }
+
+  .ss-events-list-item-meta {
+    font-size: 12px;
+  }
+
+  .ss-events-list-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ss-events-list-item-actions .club-admin-btn-secondary {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  /* Events: Add event modal */
+  .ss-modal-overlay {
+    padding: 12px !important;
+    align-items: flex-start !important;
+  }
+
+  .ss-modal.ss-card {
+    max-width: 100% !important;
+    padding: 16px !important;
+  }
+
+  .ss-modal form > div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .ss-modal .club-admin-form-row {
+    grid-template-columns: 1fr;
   }
 }
 

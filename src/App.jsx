@@ -66,7 +66,7 @@ const AppContent = () => {
   const isDispatcherTicketRoute = location.pathname.match(/^\/support-dispatcher\/T-\d+$/)
   const isClubAdminRoute = location.pathname.startsWith('/club-admin')
   const isStaffPortalRoute = location.pathname.startsWith('/staff-portal')
-  const isAttendanceLessonRoute = location.pathname.startsWith('/attendance/lesson/')
+  const isAttendanceRoute = location.pathname.startsWith('/attendance')
   const hideHeaderOnRoutes = [
     '/scheduling',
     '/lost-and-found',
@@ -120,7 +120,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceLessonRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
 
   return (
     <div className="app">

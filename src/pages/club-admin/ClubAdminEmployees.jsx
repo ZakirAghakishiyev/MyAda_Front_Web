@@ -95,6 +95,7 @@ const ClubAdminEmployees = () => {
         </p>
 
         <div className="club-admin-card" style={{ margin: '0 24px 24px' }}>
+          <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
@@ -145,6 +146,7 @@ const ClubAdminEmployees = () => {
               ))}
             </tbody>
           </table>
+          </div>
           {filtered.length === 0 && (
             <p className="club-admin-table-empty">No employees found.</p>
           )}

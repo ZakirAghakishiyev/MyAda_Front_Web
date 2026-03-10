@@ -111,7 +111,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const [issueCategory, setIssueCategory] = useState('')
   const [locationType, setLocationType] = useState('')
   const [building, setBuilding] = useState('')
+  const [isRoomOrNonRoom, setIsRoomOrNonRoom] = useState('') // '' | 'room' | 'nonRoom' – only after building chosen
   const [room, setRoom] = useState('')
+  const [nonRoomLocation, setNonRoomLocation] = useState('')
   const [campusLocation, setCampusLocation] = useState('')
   const [description, setDescription] = useState('')
   const [urgency, setUrgency] = useState('standard')
@@ -126,7 +128,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     setIssueCategory(draft.issueCategory || '')
     setLocationType(draft.locationType || '')
     setBuilding(draft.building || '')
+    setIsRoomOrNonRoom(draft.isRoomOrNonRoom || '')
     setRoom(draft.room || '')
+    setNonRoomLocation(draft.nonRoomLocation || '')
     setCampusLocation(draft.campusLocation || '')
     setDescription(draft.description || '')
     setUrgency(draft.urgency === 'critical' ? 'critical' : 'standard')
@@ -150,7 +154,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
       issueCategory,
       locationType,
       building,
+      isRoomOrNonRoom,
       room,
+      nonRoomLocation,
       campusLocation,
       description,
       urgency,
@@ -163,7 +169,7 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const handleSubmit = (e) => {
     e.preventDefault()
     const hasLocation =
-      (locationType === 'building' && building && room) ||
+      (locationType === 'building' && building && ((isRoomOrNonRoom === 'room' && room) || (isRoomOrNonRoom === 'nonRoom' && nonRoomLocation.trim()))) ||
       (locationType === 'campus' && campusLocation.trim())
     if (!issueCategory.trim() || !hasLocation || !description.trim()) {
       setShowError(true)
@@ -262,7 +268,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                       onChange={(e) => {
                         setLocationType(e.target.value)
                         setBuilding('')
+                        setIsRoomOrNonRoom('')
                         setRoom('')
+                        setNonRoomLocation('')
                         setCampusLocation('')
                       }}
                       required
@@ -278,7 +286,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                       onChange={(e) => {
                         setLocationType(e.target.value)
                         setBuilding('')
+                        setIsRoomOrNonRoom('')
                         setRoom('')
+                        setNonRoomLocation('')
                       }}
                       required
                     />{' '}
@@ -299,7 +309,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                           value={building}
                           onChange={(e) => {
                             setBuilding(e.target.value)
+                            setIsRoomOrNonRoom('')
                             setRoom('')
+                            setNonRoomLocation('')
                           }}
                           required
                         >
@@ -312,29 +324,76 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                         </select>
                       </div>
                     </div>
-                    <div className="it-support-field-group">
-                      <label className="it-support-label">Room / Lab</label>
-                      <div className="it-support-input-wrap it-support-input-wrap--icon">
-                        <span className="it-support-input-icon">
-                          <IconLocation />
-                        </span>
-                        <select
-                          className="it-support-input"
-                          value={room}
-                          onChange={(e) => setRoom(e.target.value)}
-                          required
-                          disabled={!building}
-                        >
-                          <option value="">{building ? 'Select room...' : 'Select building first'}</option>
-                          {building &&
-                            (ROOMS_BY_BUILDING[building] || []).map((r) => (
-                              <option key={r} value={r}>
-                                {r}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
+                    {building && (
+                      <>
+                        <div className="it-support-field-group" style={{ gridColumn: '1 / -1' }}>
+                          <label className="it-support-label">Is the location a room?</label>
+                          <div className="it-support-location-type" style={{ marginTop: 6 }}>
+                            <label>
+                              <input
+                                type="radio"
+                                name="isRoomOrNonRoom"
+                                value="room"
+                                checked={isRoomOrNonRoom === 'room'}
+                                onChange={() => { setIsRoomOrNonRoom('room'); setRoom(''); setNonRoomLocation('') }}
+                              />
+                              {' '}Room
+                            </label>
+                            <label>
+                              <input
+                                type="radio"
+                                name="isRoomOrNonRoom"
+                                value="nonRoom"
+                                checked={isRoomOrNonRoom === 'nonRoom'}
+                                onChange={() => { setIsRoomOrNonRoom('nonRoom'); setRoom(''); setNonRoomLocation('') }}
+                              />
+                              {' '}Non-room (e.g. corridor, lobby)
+                            </label>
+                          </div>
+                        </div>
+                        {isRoomOrNonRoom === 'room' && (
+                          <div className="it-support-field-group">
+                            <label className="it-support-label">Room / Lab</label>
+                            <div className="it-support-input-wrap it-support-input-wrap--icon">
+                              <span className="it-support-input-icon">
+                                <IconLocation />
+                              </span>
+                              <select
+                                className="it-support-input"
+                                value={room}
+                                onChange={(e) => setRoom(e.target.value)}
+                                required
+                              >
+                                <option value="">Select room...</option>
+                                {(ROOMS_BY_BUILDING[building] || []).map((r) => (
+                                  <option key={r} value={r}>
+                                    {r}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                        {isRoomOrNonRoom === 'nonRoom' && (
+                          <div className="it-support-field-group">
+                            <label className="it-support-label">Specify location</label>
+                            <div className="it-support-input-wrap it-support-input-wrap--icon">
+                              <span className="it-support-input-icon">
+                                <IconLocation />
+                              </span>
+                              <input
+                                type="text"
+                                className="it-support-input"
+                                value={nonRoomLocation}
+                                onChange={(e) => setNonRoomLocation(e.target.value)}
+                                placeholder="e.g. main corridor, 2nd floor lobby, entrance"
+                                required
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
 

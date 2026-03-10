@@ -82,6 +82,20 @@
   background: transparent;
 }
 
+.club-admin-sidebar-ada-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 12px;
+}
+
+.club-admin-sidebar-ada-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
 .club-admin-sidebar-nav {
   flex: 1;
   display: flex;
@@ -132,6 +146,58 @@
 
 .club-admin-sidebar-cta:hover {
   background: #1d4ed8;
+}
+
+.club-admin-sidebar-menu-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  align-items: center;
+  justify-content: center;
+}
+
+.club-admin-sidebar-menu-btn:hover {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.club-admin-sidebar-close {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.club-admin-sidebar-close:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.club-admin-sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 999;
 }
 
 .club-admin-main {
@@ -424,6 +490,12 @@
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.club-admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .club-admin-table-empty {
@@ -995,10 +1067,416 @@
   color: #94a3b8;
 }
 
+@media (max-width: 768px) {
+  .club-admin-sidebar-menu-btn {
+    display: flex;
+  }
+
+  .club-admin-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 1001;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    padding-top: 56px;
+  }
+
+  .club-admin-layout:not(.club-admin-layout--sidebar-open) .club-admin-sidebar {
+    transform: translateX(-100%);
+  }
+
+  .club-admin-layout--sidebar-open .club-admin-sidebar-overlay {
+    display: block;
+  }
+
+  .club-admin-sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 640px) {
   .club-admin-detail-applicant { flex-direction: column; }
   .club-admin-detail-files { grid-template-columns: 1fr; }
   .club-admin-detail-buttons { flex-direction: column; }
+}
+
+@media (max-width: 768px) {
+  /* Global: all club admin pages */
+  .club-admin-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .club-admin-kpi {
+    padding: 14px;
+  }
+
+  .club-admin-kpi-value {
+    font-size: 20px;
+  }
+
+  .club-admin-kpi-label {
+    font-size: 12px;
+  }
+
+  .club-admin-content nav[style*="paddingLeft"] {
+    padding-left: 12px !important;
+    padding-right: 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+
+  .club-admin-content > div[style*="paddingLeft"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .club-admin-content .club-admin-card[style*="grid"],
+  .club-admin-content .club-admin-card[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+    padding: 16px !important;
+  }
+
+  .club-admin-card-head {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .club-admin-card-title {
+    font-size: 15px;
+  }
+
+  .club-admin-content .club-admin-table-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .club-admin-content .club-admin-card .club-admin-table {
+    min-width: 480px;
+    font-size: 13px;
+  }
+
+  .club-admin-content .club-admin-card .club-admin-table th,
+  .club-admin-content .club-admin-card .club-admin-table td {
+    padding: 10px 8px;
+  }
+
+  .club-admin-tip-card,
+  .club-admin-status-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 14px 16px !important;
+  }
+
+  .club-admin-page .club-admin-content {
+    padding: 0 12px 20px;
+  }
+
+  .club-admin-page .club-admin-content > p {
+    margin: 0 12px 16px !important;
+  }
+
+  .club-admin-page .club-admin-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 16px;
+  }
+
+  .club-admin-page .club-admin-card .club-admin-table-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  .club-admin-header .club-admin-header-search input {
+    font-size: 16px;
+  }
+
+  .club-admin-header > div[style*="flex"] {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .club-admin-header > div[style*="flex"] .club-admin-btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .club-admin-suggest-event-actions {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px !important;
+  }
+
+  .club-admin-suggest-event-actions .club-admin-btn-primary,
+  .club-admin-suggest-event-actions .club-admin-btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .club-admin-content .club-admin-card[style*="paddingLeft"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .club-admin-content form.club-admin-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 16px;
+  }
+
+  .club-admin-content .club-admin-card[style*="marginLeft"] {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .club-admin-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .club-admin-field input,
+  .club-admin-field select,
+  .club-admin-field textarea {
+    font-size: 16px;
+  }
+
+  /* Applications list page */
+  .club-admin-header {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .club-admin-header-title {
+    font-size: 18px;
+  }
+
+  .club-admin-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .club-admin-header-actions .club-admin-btn-primary,
+  .club-admin-header-actions .club-admin-btn-secondary {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .club-admin-content {
+    padding: 0 12px 20px;
+  }
+
+  .club-admin-content > p {
+    margin: 0 12px 16px !important;
+    font-size: 13px;
+  }
+
+  .club-admin-content .club-admin-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 16px;
+  }
+
+  .club-admin-content .club-admin-sidebar-nav {
+    flex-direction: row;
+    padding: 0 !important;
+    margin-bottom: 16px !important;
+    gap: 0 !important;
+  }
+
+  .club-admin-content .club-admin-nav-item {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+
+  .club-admin-content .club-admin-nav-item .club-admin-pill {
+    margin-left: 6px !important;
+  }
+
+  .club-admin-content .club-admin-header-search {
+    flex: 1 1 100% !important;
+    max-width: none !important;
+  }
+
+  .club-admin-content .club-admin-header-search input {
+    font-size: 16px;
+  }
+
+  .club-admin-content .club-admin-card > div[style*="flex"] select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .club-admin-content .club-admin-bulk-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .club-admin-content .club-admin-bulk-bar > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .club-admin-table-wrap {
+    margin: 0 -16px 0;
+    padding: 0 16px;
+  }
+
+  .club-admin-table {
+    min-width: 520px;
+    font-size: 13px;
+  }
+
+  .club-admin-table th,
+  .club-admin-table td {
+    padding: 10px 8px;
+  }
+
+  .club-admin-table th:nth-child(4),
+  .club-admin-table th:nth-child(5),
+  .club-admin-table td:nth-child(4),
+  .club-admin-table td:nth-child(5) {
+    display: none;
+  }
+
+  .club-admin-table td > div[style*="display: flex"] {
+    flex-wrap: wrap;
+  }
+
+  .club-admin-pagination {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .club-admin-pagination > div {
+    justify-content: center;
+  }
+
+  /* Application detail popup */
+  .club-admin-popup-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .club-admin-popup,
+  .club-admin-popup--sm,
+  .club-admin-detail-popup {
+    max-width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 12px;
+  }
+
+  .club-admin-popup-header,
+  .club-admin-popup-body {
+    padding: 16px;
+  }
+
+  .club-admin-popup-header h2 {
+    font-size: 16px;
+    padding-right: 40px;
+    line-height: 1.3;
+  }
+
+  .club-admin-popup-footer {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
+  .club-admin-popup-footer .club-admin-btn-secondary,
+  .club-admin-popup-footer .club-admin-btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .club-admin-detail-label {
+    flex: 0 0 100%;
+  }
+
+  .club-admin-detail-card {
+    padding: 16px;
+  }
+
+  .club-admin-detail-card-title {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .club-admin-detail-applicant {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .club-admin-detail-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .club-admin-detail-applicant-fields {
+    gap: 8px;
+  }
+
+  .club-admin-detail-row {
+    gap: 8px;
+  }
+
+  .club-admin-detail-value {
+    font-size: 13px;
+  }
+
+  .club-admin-answer-block-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .club-admin-answer-block-label {
+    font-size: 12px;
+  }
+
+  .club-admin-answer-block-text {
+    font-size: 13px;
+  }
+
+  .club-admin-detail-files {
+    grid-template-columns: 1fr;
+  }
+
+  .club-admin-detail-note-section .club-admin-detail-note-input {
+    min-height: 80px;
+    font-size: 16px;
+  }
+
+  .club-admin-detail-note-section .club-admin-btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .club-admin-detail-buttons {
+    flex-direction: column;
+  }
+
+  .club-admin-detail-buttons .club-admin-btn-primary,
+  .club-admin-detail-buttons .club-admin-btn-secondary,
+  .club-admin-detail-buttons .club-admin-btn-danger {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .club-admin-popup-header {

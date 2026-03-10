@@ -191,9 +191,6 @@ const ClubNotifications = () => {
                   <IconCheck />
                   Launch Club Dashboard
                 </button>
-                <button type="button" className="cn-btn cn-btn--ghost">
-                  Download Approval PDF
-                </button>
               </div>
             </article>
             )}

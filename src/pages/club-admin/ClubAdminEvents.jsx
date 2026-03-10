@@ -90,7 +90,6 @@ const ClubAdminEvents = () => {
   const [category, setCategory] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
-  const [endTime, setEndTime] = useState('')
   const [duration, setDuration] = useState('')
   const [capacity, setCapacity] = useState('')
   const [locationField, setLocationField] = useState('')
@@ -132,7 +131,6 @@ const ClubAdminEvents = () => {
     setCategory(event.category || '')
     setDate(event.date || '')
     setTime(event.time || '')
-    setEndTime(event.endTime || '')
     setDuration('')
     setCapacity('')
     setLocationField(event.location || '')
@@ -153,7 +151,6 @@ const ClubAdminEvents = () => {
     setCategory('')
     setDate('')
     setTime('')
-    setEndTime('')
     setDuration('')
     setCapacity('')
     setLocationField('')
@@ -210,7 +207,6 @@ const ClubAdminEvents = () => {
       category: category || editingEvent.category,
       date: date || editingEvent.date,
       time: time || editingEvent.time,
-      endTime: endTime || editingEvent.endTime,
       duration,
       capacity,
       location: locationField || editingEvent.location,
@@ -241,7 +237,6 @@ const ClubAdminEvents = () => {
               category: payload.category,
               date: payload.date,
               time: payload.time,
-              endTime: payload.endTime,
               location: payload.location,
               description: payload.description
             }
@@ -316,14 +311,6 @@ const ClubAdminEvents = () => {
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                />
-              </div>
-              <div className="club-admin-field">
-                <label>End time</label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
                 />
               </div>
               <div className="club-admin-field">
@@ -618,6 +605,7 @@ const ClubAdminEvents = () => {
             </div>
           </div>
 
+          <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
@@ -666,6 +654,7 @@ const ClubAdminEvents = () => {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </>

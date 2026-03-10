@@ -71,7 +71,6 @@ const RequestDetailDispatcher = () => {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [dispatcherAssignee, setDispatcherAssignee] = useState('')
-  const [dispatcherPriority, setDispatcherPriority] = useState('Medium')
   const [dispatcherNotes, setDispatcherNotes] = useState('')
 
   const request = baseRequest
@@ -278,22 +277,6 @@ const RequestDetailDispatcher = () => {
                       <option value="Alex Rodriguez">Alex Rodriguez</option>
                       <option value="Maintenance Team">Maintenance Team</option>
                     </select>
-                  </div>
-
-                  <div className="rd-dispatcher-field">
-                    <label className="rd-dispatcher-label">Set Priority</label>
-                    <div className="rd-dispatcher-priority">
-                      {['Low', 'Medium', 'High'].map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          className={`rd-priority-chip ${dispatcherPriority === p ? 'rd-priority-chip--active' : ''}`}
-                          onClick={() => setDispatcherPriority(p)}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="rd-dispatcher-field">

@@ -1,12 +1,18 @@
 /* Event Ticket – Registration confirmed, QR + Download only */
 .et-page {
   width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px 32px 48px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.et-page-content {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+  flex: 1;
 }
 
 .et-header {

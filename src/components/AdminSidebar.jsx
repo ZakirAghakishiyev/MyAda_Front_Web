@@ -1,5 +1,6 @@
 import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import adaLogo from '../assets/ada-logo.png'
 
 const IconDashboard = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -28,10 +29,15 @@ export default function AdminSidebar({ searchKeyword, setSearchKeyword, category
 
   return (
     <aside className="lf-admin-sidebar">
-      <div className="lf-admin-sidebar-logo">
-        <div className="lf-admin-logo-icon" />
+      <button
+        type="button"
+        className="lf-admin-sidebar-logo lf-admin-sidebar-logo-btn"
+        onClick={() => navigate('/')}
+        aria-label="Go to home"
+      >
+        <img src={adaLogo} alt="ADA University" className="lf-admin-ada-logo" />
         <span>Admin Hub</span>
-      </div>
+      </button>
       <nav className="lf-admin-nav">
         <button
           type="button"

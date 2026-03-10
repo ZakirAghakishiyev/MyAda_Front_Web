@@ -93,7 +93,7 @@ const StudentServicesEventDetail = () => {
       <div className="ed-info-cards">
         <div className="ed-info-card">
           <IconCalendar />
-          <span>{formatDate(event.date)}</span>
+          <span>{formatDate(event.date)}{event.time ? ` · ${formatTime(event.time)}` : ''}</span>
         </div>
         <div className="ed-info-card">
           <IconClock />

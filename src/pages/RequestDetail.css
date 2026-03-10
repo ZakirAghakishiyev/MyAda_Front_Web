@@ -639,3 +639,29 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+@media (max-width: 768px) {
+  .rd-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .rd-popup {
+    max-width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 12px;
+  }
+
+  .rd-contact-overlay {
+    padding: 12px;
+  }
+
+  .rd-contact-modal {
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .rd-contact-btns {
+    flex-direction: column;
+  }
+}

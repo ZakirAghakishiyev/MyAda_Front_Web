@@ -373,3 +373,43 @@
   cursor: pointer;
   font-family: inherit;
 }
+
+@media (max-width: 768px) {
+  .apply-vacancy-overlay {
+    padding: 12px 0;
+  }
+
+  .apply-vacancy-page,
+  .apply-vacancy-page--narrow {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .apply-vacancy-breadcrumb,
+  .apply-vacancy-content {
+    padding: 16px;
+  }
+
+  .apply-vacancy-title {
+    font-size: 22px;
+  }
+
+  .apply-vacancy-card {
+    padding: 20px 16px;
+  }
+
+  .apply-vacancy-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .apply-vacancy-actions .apply-vacancy-btn-submit,
+  .apply-vacancy-actions .apply-vacancy-back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .apply-vacancy-footer {
+    padding: 16px;
+  }
+}

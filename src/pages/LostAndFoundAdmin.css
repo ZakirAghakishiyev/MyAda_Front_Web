@@ -27,6 +27,27 @@
   color: #1e293b;
 }
 
+.lf-admin-sidebar-logo-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+}
+
+.lf-admin-sidebar-logo-btn:hover {
+  color: #2563eb;
+}
+
+.lf-admin-ada-logo {
+  height: 32px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
 .lf-admin-logo-icon {
   width: 36px;
   height: 36px;
@@ -290,6 +311,20 @@
   .lf-admin-kpis {
     grid-template-columns: 1fr;
   }
+
+  .lf-admin-table-section {
+    padding: 16px;
+  }
+
+  .lf-admin-table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .lf-admin-table-tabs {
+    width: 100%;
+  }
 }
 
 .lf-admin-kpi {
@@ -387,6 +422,21 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 4px 0;
+}
+
+.lf-admin-table-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.lf-admin-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .lf-admin-tab {
@@ -413,10 +463,13 @@
 
 .lf-admin-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
 }
 
 .lf-admin-table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -726,8 +779,41 @@
 }
 
 @media (max-width: 768px) {
+  .lf-admin-modal-overlay {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .lf-admin-modal,
+  .lf-admin-modal--wide {
+    max-width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 12px;
+  }
+
+  .lf-admin-modal-header {
+    padding: 16px;
+  }
+
+  .lf-admin-modal-header h2 {
+    font-size: 18px;
+    padding-right: 36px;
+  }
+
+  .lf-admin-modal-close {
+    top: 12px;
+    right: 12px;
+  }
+
   .lf-admin-verify-grid {
     grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .lf-admin-modal-footer {
+    padding: 16px;
+    flex-wrap: wrap;
   }
 }
 

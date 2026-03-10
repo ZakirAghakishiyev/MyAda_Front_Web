@@ -48,6 +48,21 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 4px 0;
+  min-width: 0;
+}
+
+.ap-nav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.ap-nav-link {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .ap-nav-link {
@@ -610,6 +625,22 @@
 
 /* Header responsive */
 @media (max-width: 768px) {
+  .ap-navbar {
+    padding: 10px 16px;
+    gap: 12px;
+    flex-wrap: nowrap;
+  }
+
+  .ap-nav-left {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .ap-nav-link {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
   .ap-header {
     padding-right: 0;
   }
