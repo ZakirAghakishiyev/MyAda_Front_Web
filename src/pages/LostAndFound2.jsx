@@ -1,10 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { mockItems } from '../data/lostAndFoundItems'
+import { mockItems, CURRENT_USER_ID } from '../data/lostAndFoundItems'
 import './LostAndFound2.css'
 
 const STEPS = ['Info'] /* single step: all fields on one screen, submit directly */
 const CATEGORIES = ['All Items', 'Electronics', 'Documents', 'Personal Items', 'Accessories']
+const ANNOUNCEMENT_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'lost', label: 'Lost items' },
+  { value: 'found', label: 'Found items' },
+  { value: 'my', label: 'My announcements' }
+]
 const ITEMS_PER_PAGE = 8
 const MAX_DESCRIPTION_LENGTH = 500
 
@@ -117,6 +123,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     else if (openReport === 'found') setView('report-found')
   }, [initialReport, location.state?.openReport])
   const [searchQuery, setSearchQuery] = useState('')
+  const [announcementFilter, setAnnouncementFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('All Items')
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -165,8 +172,16 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const filteredItems = useMemo(() => {
     let items = mockItems.map(item => ({
       ...item,
-      displayCategory: categoryMap[item.category] || item.category
+      displayCategory: categoryMap[item.category] || item.category,
+      type: item.type || 'found'
     }))
+    if (announcementFilter === 'lost') {
+      items = items.filter(item => item.type === 'lost')
+    } else if (announcementFilter === 'found') {
+      items = items.filter(item => item.type === 'found')
+    } else if (announcementFilter === 'my') {
+      items = items.filter(item => item.postedBy === CURRENT_USER_ID)
+    }
     if (categoryFilter !== 'All Items') {
       items = items.filter(item => item.displayCategory === categoryFilter)
     }
@@ -181,7 +196,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       )
     }
     return items
-  }, [searchQuery, categoryFilter])
+  }, [searchQuery, categoryFilter, announcementFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE))
   const paginatedItems = useMemo(() => {
@@ -650,6 +665,22 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         />
       </div>
 
+      <div className="lf2-announcement-filters">
+        {ANNOUNCEMENT_FILTERS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className={`lf2-cat-pill ${announcementFilter === value ? 'lf2-cat-pill--active' : ''}`}
+            onClick={() => {
+              setAnnouncementFilter(value)
+              setCurrentPage(1)
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="lf2-categories">
         {CATEGORIES.map(cat => (
           <button
@@ -686,11 +717,16 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                 <h2 className="lf2-card-title">{item.title}</h2>
                 <span className="lf2-card-time">{item.daysAgo} {item.daysAgo === 1 ? 'day' : 'days'} ago</span>
               </div>
+            <div className="lf2-card-location">
+              <span>{item.type === 'lost' ? 'Lost item' : 'Found item'}</span>
+            </div>
               <div className="lf2-card-location">
                 <IconPin />
                 <span>{item.location}</span>
               </div>
-              <span className="lf2-card-category">{item.displayCategory || item.category}</span>
+            <span className="lf2-card-category">
+              {item.displayCategory || item.category}
+            </span>
               <p className="lf2-card-desc">{item.description}</p>
             </div>
           </article>

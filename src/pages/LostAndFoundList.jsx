@@ -137,6 +137,13 @@ const LostAndFoundList = () => {
                 </div>
                 <div className="lf-card-meta">
                   <div className="lf-meta-row">
+                    <span className="lf-meta-text">
+                      {item.type === 'lost' ? 'Lost item' : 'Found item'}
+                    </span>
+                  </div>
+                </div>
+                <div className="lf-card-meta">
+                  <div className="lf-meta-row">
                     <span className="lf-meta-icon lf-meta-icon--svg"><IconPin /></span>
                     <span className="lf-meta-text">{item.location}</span>
                   </div>

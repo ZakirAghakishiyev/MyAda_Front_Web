@@ -201,6 +201,13 @@
 }
 
 /* Category pills */
+.lf2-announcement-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
 .lf2-categories {
   display: flex;
   flex-wrap: wrap;
@@ -917,6 +924,11 @@
   .lf2-search-input {
     font-size: 16px;
     min-width: 0;
+  }
+
+  .lf2-announcement-filters {
+    gap: 8px;
+    margin-bottom: 12px;
   }
 
   .lf2-categories {

@@ -93,7 +93,9 @@ const LostAndFoundItemDetail = () => {
               <div className="lf-detail-image lf-detail-image-placeholder" />
             )}
           </div>
-          <span className="lf-detail-category">{item.category.toUpperCase()}</span>
+          <span className="lf-detail-category">
+            {item.category.toUpperCase()} · {item.type === 'lost' ? 'LOST ITEM' : 'FOUND ITEM'}
+          </span>
           <h1 id="lf-detail-title" className="lf-detail-title">{item.title}</h1>
           <div className="lf-detail-meta">
             <span className="lf-detail-meta-row">
@@ -117,6 +119,10 @@ const LostAndFoundItemDetail = () => {
               <div className="lf-detail-dl-row">
                 <dt>Category</dt>
                 <dd>{item.category}</dd>
+              </div>
+              <div className="lf-detail-dl-row">
+                <dt>Type</dt>
+                <dd>{item.type === 'lost' ? 'Lost item' : 'Found item'}</dd>
               </div>
               <div className="lf-detail-dl-row">
                 <dt>Status</dt>

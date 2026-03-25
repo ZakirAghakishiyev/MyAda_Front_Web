@@ -1,7 +1,12 @@
+// type: 'lost' | 'found'; postedBy: for "my announcements" filter
 // adminStatus: 'Pending' | 'Received' | 'Delivered' (for admin dashboard)
+export const CURRENT_USER_ID = 'user-1'
+
 export const mockItems = [
   {
     id: 1,
+    type: 'found',
+    postedBy: 'user-1',
     title: 'Student ID Card',
     location: 'Cafeteria - Near Entrance',
     category: 'Documents',
@@ -15,6 +20,8 @@ export const mockItems = [
   },
   {
     id: 2,
+    type: 'found',
+    postedBy: 'user-2',
     title: 'Navy Blue Jacket',
     location: 'Sports Complex - Locker Room',
     category: 'Clothing',
@@ -28,6 +35,8 @@ export const mockItems = [
   },
   {
     id: 3,
+    type: 'found',
+    postedBy: 'user-1',
     title: 'Black Leather Wallet',
     location: 'Library - Study Area',
     category: 'Other',
@@ -41,6 +50,8 @@ export const mockItems = [
   },
   {
     id: 4,
+    type: 'lost',
+    postedBy: 'user-2',
     title: 'iPhone 14 Pro',
     location: 'Main Building - Room A120',
     category: 'Electronics',
@@ -54,6 +65,8 @@ export const mockItems = [
   },
   {
     id: 5,
+    type: 'lost',
+    postedBy: 'user-1',
     title: 'Wireless Earbuds',
     location: 'Cafeteria',
     category: 'Electronics',
