@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { mockClubEvents } from '../data/clubEventsData'
 import { mockMemberships } from '../data/clubsData'
 import adaLogo from '../assets/ada-logo.png'
@@ -50,22 +50,6 @@ const IconPerson = () => (
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
   </svg>
 )
-const IconPlus = () => (
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-)
-
-const CATEGORIES = ['All Events', 'Technology', 'Social', 'Academic', 'Sports', 'Arts']
-const CATEGORY_COLORS = {
-  Technology: 'ce-tag--tech',
-  Social: 'ce-tag--social',
-  Academic: 'ce-tag--academic',
-  Sports: 'ce-tag--sports',
-  Arts: 'ce-tag--arts',
-  Business: 'ce-tag--tech'
-}
-
 const formatDate = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -82,10 +66,12 @@ const formatTime = (timeStr) => {
 const ClubEvents = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState('grid')
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('All Events')
   const [clubFilter, setClubFilter] = useState('all') // 'all' | 'myClubs'
+  const selectedClubId = Number.parseInt(searchParams.get('club') || '', 10)
+  const hasSelectedClub = Number.isInteger(selectedClubId)
 
   const myClubIds = useMemo(
     () => new Set(mockMemberships.filter((m) => m.status === 'Active').map((m) => m.clubId)),
@@ -94,11 +80,11 @@ const ClubEvents = () => {
 
   const filteredEvents = useMemo(() => {
     let list = mockClubEvents
+    if (hasSelectedClub) {
+      list = list.filter((e) => e.clubId === selectedClubId)
+    }
     if (clubFilter === 'myClubs') {
       list = list.filter((e) => myClubIds.has(e.clubId))
-    }
-    if (category !== 'All Events') {
-      list = list.filter((e) => e.category.toLowerCase() === category.toLowerCase())
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -110,7 +96,7 @@ const ClubEvents = () => {
       )
     }
     return list
-  }, [search, category, clubFilter, myClubIds])
+  }, [search, clubFilter, myClubIds, hasSelectedClub, selectedClubId])
 
   const handleEventClick = (eventId) => {
     navigate(`/clubs/events/${eventId}`)
@@ -226,18 +212,6 @@ const ClubEvents = () => {
           </div>
         </div>
         <div className="ce-tabs-row">
-        <div className="ce-tabs">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              className={`ce-tab ${category === cat ? 'ce-tab--active' : ''}`}
-              onClick={() => setCategory(cat)}
-            >
-              {cat.toUpperCase()}
-            </button>
-          ))}
-        </div>
         <div className="ce-view-toggle">
           <button
             type="button"
@@ -271,11 +245,7 @@ const ClubEvents = () => {
             <div
               className="ce-card-media"
               style={event.image ? { backgroundImage: `url(${event.image})` } : undefined}
-            >
-              <span className={`ce-card-tag ${CATEGORY_COLORS[event.category] || 'ce-tag--tech'}`}>
-                {event.category.toUpperCase()}
-              </span>
-            </div>
+            />
             <div className="ce-card-body">
               <h2 className="ce-card-title">{event.title}</h2>
               <span className="ce-card-club">{event.clubName}</span>
@@ -287,19 +257,6 @@ const ClubEvents = () => {
             <span className="ce-card-arrow"><IconChevron /></span>
           </article>
         ))}
-        <article
-          className="ce-card ce-card--host"
-          onClick={() => navigate('/club-admin/events/propose')}
-          onKeyDown={(e) => e.key === 'Enter' && navigate('/club-admin/events/propose')}
-          role="button"
-          tabIndex={0}
-        >
-          <div className="ce-card-host-inner">
-            <IconPlus />
-            <strong>Host an Event</strong>
-            <span>Register your club activity</span>
-          </div>
-        </article>
         </div>
 
         {filteredEvents.length > 0 && (

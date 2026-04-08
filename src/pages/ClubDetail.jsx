@@ -1,21 +1,12 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { getClubById } from '../data/clubsData'
+import { getClubById, mockMemberships } from '../data/clubsData'
 import { getEventsByClubId } from '../data/clubEventsData'
 import adaLogo from '../assets/ada-logo.png'
+import inClassTaskPdf from '../assets/In-Class Task.pdf'
 import './ClubVacancies.css'
 import './ClubDetail.css'
 
-const IconBack = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
-const IconSearch = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-)
 const IconPerson = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
@@ -27,19 +18,33 @@ const IconMail = () => (
     <polyline points="22,6 12,13 2,6" />
   </svg>
 )
-const IconGlobe = () => (
+const IconYouTube = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    <path d="M22 12s0-3.25-.42-4.81a2.5 2.5 0 0 0-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42a2.5 2.5 0 0 0-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81a2.5 2.5 0 0 0 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42a2.5 2.5 0 0 0 1.77-1.77C22 15.25 22 12 22 12z" />
+    <polygon points="10 9 15 12 10 15 10 9" fill="currentColor" stroke="none" />
+  </svg>
+)
+const IconInstagram = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+    <path d="M16 11.37a4 4 0 1 1-3.37-3.37 4 4 0 0 1 3.37 3.37z" />
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+  </svg>
+)
+const IconX = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 4l16 16M20 4L4 20" />
+  </svg>
+)
+const IconTikTok = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 3v10.5a3.5 3.5 0 1 1-3.5-3.5" />
+    <path d="M14 3c1.2 2 2.8 3 5 3" />
   </svg>
 )
 const IconPlus = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-)
-const IconStar = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
   </svg>
 )
 const IconBell = () => (
@@ -58,20 +63,10 @@ const IconCode = () => (
     <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
   </svg>
 )
-const IconQuote = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z" opacity="0.3" />
-  </svg>
-)
-const IconShare = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-  </svg>
-)
 
 const TABS = [
   { id: 'about', label: 'About Us' },
-  { id: 'activities', label: 'Activities' },
+  { id: 'announcements', label: 'Announcements' },
   { id: 'members', label: 'Members' },
   { id: 'resources', label: 'Resources' }
 ]
@@ -105,7 +100,21 @@ const ClubDetail = () => {
   }
 
   const focusAreas = club.focusAreas || []
-  const testimonials = club.testimonials || []
+  const members = (club.memberProfiles && club.memberProfiles.length > 0)
+    ? club.memberProfiles
+    : [
+      ...club.officers.map((officer) => ({
+        name: officer.name,
+        role: officer.role,
+        department: club.category
+      })),
+      { name: 'Student Member', role: 'Active Member', department: `${club.category} Club` },
+      { name: 'Community Volunteer', role: 'Volunteer', department: `${club.category} Club` }
+    ]
+  const isClubMember = mockMemberships.some(
+    (membership) => membership.clubId === club.id && membership.status === 'Active'
+  )
+  const announcements = club.announcements || []
 
   return (
     <div className="club-detail-page">
@@ -169,9 +178,6 @@ const ClubDetail = () => {
             <button type="button" className="club-detail-btn-primary" onClick={() => navigate(`/clubs/${id}/join`)}>
               <IconPlus /> Join Club
             </button>
-            <button type="button" className="club-detail-btn-secondary">
-              <IconStar /> Follow
-            </button>
           </div>
         </div>
       </section>
@@ -234,41 +240,71 @@ const ClubDetail = () => {
                 </div>
               </section>
 
-              {testimonials.length > 0 && (
-                <section className="club-detail-section">
-                  <h2 className="club-detail-section-title">Member Testimonials</h2>
-                  <div className="club-detail-testimonial">
-                    <span className="club-detail-testimonial-quote-icon"><IconQuote /></span>
-                    <p className="club-detail-testimonial-text">"{testimonials[0].quote}"</p>
-                    <div className="club-detail-testimonial-author">
-                      <span className="club-detail-testimonial-avatar" />
-                      <div>
-                        <strong>{testimonials[0].authorName}</strong>
-                        <span>{testimonials[0].authorRole}</span>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'activities' && (
-            <div className="club-detail-content">
-              <p className="club-detail-placeholder">Activities and events for this club.</p>
-              <Link to={`/clubs/events?club=${club.id}`} className="club-detail-btn-primary">View events</Link>
             </div>
           )}
 
           {activeTab === 'members' && (
             <div className="club-detail-content">
-              <p className="club-detail-placeholder">Member list and roles.</p>
+              <section className="club-detail-section">
+                <h2 className="club-detail-section-title">Club Members</h2>
+                <ul className="club-detail-members-list">
+                  {members.map((member, index) => (
+                    <li key={`${member.name}-${index}`} className="club-detail-member-item">
+                      <span className="club-detail-member-avatar" />
+                      <div>
+                        <span className="club-detail-member-name">{member.name}</span>
+                        <span className="club-detail-member-meta">
+                          {member.role}{member.department ? ` · ${member.department}` : ''}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'announcements' && (
+            <div className="club-detail-content">
+              {isClubMember ? (
+                <section className="club-detail-section">
+                  <h2 className="club-detail-section-title">Club Announcements</h2>
+                  {announcements.length > 0 ? (
+                    <ul className="club-detail-announcements-list">
+                      {announcements.map((announcement, index) => (
+                        <li key={`${announcement.title}-${index}`} className="club-detail-announcement-item">
+                          <span className="club-detail-announcement-date">{announcement.date}</span>
+                          <h3 className="club-detail-announcement-title">{announcement.title}</h3>
+                          <p className="club-detail-announcement-text">{announcement.message}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="club-detail-placeholder">No announcements yet.</p>
+                  )}
+                </section>
+              ) : (
+                <section className="club-detail-section">
+                  <h2 className="club-detail-section-title">Club Announcements</h2>
+                  <p className="club-detail-placeholder">Announcements are visible only to club members.</p>
+                </section>
+              )}
             </div>
           )}
 
           {activeTab === 'resources' && (
             <div className="club-detail-content">
-              <p className="club-detail-placeholder">Resources and documents.</p>
+              <section className="club-detail-section">
+                <h2 className="club-detail-section-title">Resources and documents</h2>
+                <a
+                  href={inClassTaskPdf}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="club-detail-resource-link"
+                >
+                  In-Class Task.pdf
+                </a>
+              </section>
             </div>
           )}
         </main>
@@ -308,7 +344,7 @@ const ClubDetail = () => {
                 )
               })}
             </ul>
-            <Link to={`/clubs/events?club=${club.id}`} className="club-detail-btn-outline">View Full Calendar</Link>
+            <Link to={`/clubs/events?club=${club.id}`} className="club-detail-btn-outline">View Upcoming Events</Link>
           </section>
 
           <section className="club-detail-sidebar-block">
@@ -319,14 +355,19 @@ const ClubDetail = () => {
               </a>
               {club.website && (
                 <a href={club.website} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
-                  <IconGlobe /> {club.website.replace(/^https?:\/\//, '')}
+                  <IconYouTube /> {club.website.replace(/^https?:\/\//, '')}
                 </a>
               )}
+              <a href={club.instagram || 'https://instagram.com'} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
+                <IconInstagram /> Instagram
+              </a>
+              <a href={club.x || 'https://x.com'} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
+                <IconX /> X (Twitter)
+              </a>
+              <a href={club.tiktok || 'https://tiktok.com'} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
+                <IconTikTok /> TikTok
+              </a>
             </div>
-            <div className="club-detail-share">
-              <button type="button" className="club-detail-nav-icon" aria-label="Share"><IconShare /></button>
-            </div>
-            <button type="button" className="club-detail-btn-primary club-detail-btn-full">Message Admin</button>
           </section>
         </aside>
       </div>

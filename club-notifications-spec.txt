@@ -1,0 +1,544 @@
+CLUB NOTIFICATIONS SPEC (BACKEND READY)
+======================================
+
+Source scope:
+- Club notification center page
+- Club proposal flow
+- Membership flow
+- Vacancy flow
+- Events flow
+- Club admin pages
+
+
+1) NOTIFICATIONS EXPLICITLY SHOWN IN CLUB NOTIFICATION PAGE
+-----------------------------------------------------------
+
+1. Club proposal approved
+- Sender: Student Life Office / Clubs Admin
+- Receiver: Club proposal owner (student who submitted proposal)
+- Trigger: Proposal status changed to Approved
+- Required details:
+  - proposalId
+  - clubName
+  - decision: approved
+  - reviewedBy (admin/office id)
+  - reviewedAt
+  - nextActionUrl: /club-admin
+  - optional notes
+
+2. Club proposal revision required
+- Sender: Student Life Office / Clubs Admin
+- Receiver: Club proposal owner
+- Trigger: Proposal status changed to Revision Required
+- Required details:
+  - proposalId
+  - clubName
+  - decision: revision_required
+  - reviewComments[] (list)
+  - reviewedBy
+  - reviewedAt
+  - resubmitUrl: /clubs/propose
+
+3. Membership application approved
+- Sender: Club executive team / club admin
+- Receiver: Student applicant
+- Trigger: Membership application status changed to Approved
+- Required details:
+  - membershipApplicationId
+  - clubId
+  - clubName
+  - decision: approved
+  - roleAssigned (optional)
+  - effectiveFrom
+  - approvedBy
+  - approvedAt
+  - clubUrl: /clubs/my-memberships
+
+4. Vacancy interview invitation
+- Sender: Club recruiter / club admin
+- Receiver: Vacancy applicant
+- Trigger: Vacancy application moved to interview stage
+- Required details:
+  - vacancyApplicationId
+  - vacancyId
+  - clubId
+  - clubName
+  - positionTitle
+  - interviewSlots[] or proposedSlot
+  - respondBy
+  - meetingMode
+  - meetingLink/location
+  - actionUrl: /clubs/vacancies/my-applications
+
+5. Event reminder
+- Sender: Event system (or club event organizer)
+- Receiver: Registered attendee
+- Trigger: Reminder schedule hit (example: 2h before event)
+- Required details:
+  - eventId
+  - eventTitle
+  - clubId
+  - clubName
+  - startAt
+  - location
+  - ticketId (optional)
+  - reminderOffset (example: 2h_before)
+  - registrationsUrl: /clubs/events/my-registrations
+
+
+2) OTHER NOTIFICATIONS NEEDED FOR COMPLETE CLUB FLOWS
+------------------------------------------------------
+
+6. Club proposal submitted
+- Sender: System
+- Receiver: Student Life reviewers + proposal owner (acknowledgment)
+- Trigger: Submit on /clubs/propose
+- Required details:
+  - proposalId
+  - submittedBy
+  - submittedAt
+  - clubNameDraft
+  - status: submitted
+
+7. Membership application submitted
+- Sender: System
+- Receiver: Club admins/executives + applicant
+- Trigger: Submit on /clubs/{id}/join
+- Required details:
+  - membershipApplicationId
+  - clubId
+  - applicantId
+  - submittedAt
+  - status: pending
+
+8. Membership application rejected
+- Sender: Club admin/executive
+- Receiver: Applicant
+- Trigger: Membership application status changed to Rejected
+- Required details:
+  - membershipApplicationId
+  - clubId
+  - decision: rejected
+  - reason
+  - reviewedAt
+  - reviewedBy
+
+9. Membership application under review
+- Sender: System or club admin
+- Receiver: Applicant
+- Trigger: Membership application status changed to Reviewing
+- Required details:
+  - membershipApplicationId
+  - status: reviewing
+  - updatedAt
+  - updatedBy
+
+10. Vacancy application submitted
+- Sender: System
+- Receiver: Club vacancy managers + applicant
+- Trigger: Submit on /clubs/vacancies/{id}/apply
+- Required details:
+  - vacancyApplicationId
+  - vacancyId
+  - clubId
+  - positionTitle
+  - submittedAt
+  - status: submitted
+
+11. Vacancy application approved/accepted
+- Sender: Club admin/recruiter
+- Receiver: Applicant
+- Trigger: Vacancy application status changed to Approved/Accepted
+- Required details:
+  - vacancyApplicationId
+  - vacancyId
+  - decision: approved
+  - roleOffer
+  - effectiveDate
+  - reviewedBy
+  - reviewedAt
+
+12. Vacancy application rejected
+- Sender: Club admin/recruiter
+- Receiver: Applicant
+- Trigger: Vacancy application status changed to Rejected
+- Required details:
+  - vacancyApplicationId
+  - vacancyId
+  - decision: rejected
+  - reason
+  - reviewedBy
+  - reviewedAt
+
+13. Request changes on application
+- Sender: Club admin/reviewer
+- Receiver: Applicant
+- Trigger: Reviewer selects Request Changes in application review
+- Required details:
+  - applicationId
+  - applicationType: membership|job
+  - requestedChanges[]
+  - dueDate
+  - reviewedBy
+
+14. Admin note added
+- Sender: Club admin
+- Receiver: Internal club-admin audience (or applicant if visibility allows)
+- Trigger: Add note in application detail
+- Required details:
+  - applicationId
+  - noteId
+  - noteText
+  - visibility: internal|applicant_visible
+  - addedBy
+  - addedAt
+
+15. Event registration confirmed
+- Sender: System
+- Receiver: Student registrant
+- Trigger: Register in event detail flow
+- Required details:
+  - eventId
+  - ticketId
+  - attendeeId
+  - registeredAt
+  - eventStartAt
+  - location
+  - ticketUrl
+
+16. Event registration cancelled
+- Sender: System
+- Receiver: Student + event organizers
+- Trigger: Cancellation from my registrations page
+- Required details:
+  - eventId
+  - ticketId
+  - cancelledBy
+  - cancelledAt
+  - seatReleased: true
+
+17. Event proposal submitted for approval
+- Sender: Club admin user
+- Receiver: Student Services / approvers
+- Trigger: Submit in /club-admin/events/propose
+- Required details:
+  - eventProposalId
+  - clubId
+  - title
+  - dateTime
+  - logistics
+  - submittedBy
+  - submittedAt
+  - status: pending_approval
+
+18. Event edit request submitted
+- Sender: Club admin
+- Receiver: Student Services / event approvers
+- Trigger: Send request in club-admin event edit page
+- Required details:
+  - eventId
+  - clubId
+  - changes (diff/new values)
+  - submittedBy
+  - submittedAt
+  - status: pending_approval
+
+19. Event request approved/rejected
+- Sender: Student Services
+- Receiver: Club admin requester
+- Trigger: Decision on event proposal/edit request
+- Required details:
+  - requestId
+  - eventId
+  - decision
+  - reason/comments
+  - reviewedBy
+  - reviewedAt
+
+20. New club announcement broadcast
+- Sender: Club admin
+- Receiver: Club members/followers/targeted student audience
+- Trigger: Send announcement as notification
+- Required details:
+  - announcementId
+  - clubId
+  - title
+  - message
+  - audienceType
+  - sentBy
+  - sentAt
+  - deepLink
+
+21. New vacancy published
+- Sender: Club admin
+- Receiver: Target student audience
+- Trigger: Publish vacancy in club-admin
+- Required details:
+  - vacancyId
+  - clubId
+  - position
+  - category
+  - deadline
+  - publishedBy
+  - publishedAt
+  - vacancyUrl
+
+22. Vacancy status changed (active/inactive)
+- Sender: Club admin
+- Receiver: Interested applicants/watchers + internal admins
+- Trigger: Vacancy status update in club-admin
+- Required details:
+  - vacancyId
+  - oldStatus
+  - newStatus
+  - changedBy
+  - changedAt
+
+23. Member removed from club
+- Sender: Club admin
+- Receiver: Removed member
+- Trigger: Remove member action in club-admin members page
+- Required details:
+  - clubId
+  - memberId
+  - action: removed
+  - reason
+  - effectiveAt
+  - removedBy
+
+24. Member role/position updated
+- Sender: Club admin
+- Receiver: Updated member (optional copy to other admins)
+- Trigger: Confirm role/position changes in club-admin members page
+- Required details:
+  - clubId
+  - memberId
+  - oldRole
+  - newRole
+  - changedBy
+  - changedAt
+
+
+3) RECOMMENDED COMMON NOTIFICATION OBJECT
+-----------------------------------------
+
+Use one common schema for all club notification types:
+
+- id
+- type (examples: club.proposal.approved, vacancy.application.rejected)
+- sender:
+  - actorType
+  - actorId
+  - actorName
+- receiver:
+  - userId
+  OR receivers[] for broadcast notifications
+- title
+- body
+- entity:
+  - entityType
+  - entityId
+- data (type-specific payload)
+- channels[] (in_app, email, optional push)
+- priority (low|normal|high)
+- status (unread|read|archived)
+- createdAt
+- readAt
+- actionUrl
+
+
+4) RABBITMQ QUEUE NAME ALTERNATIVES
+-----------------------------------
+
+Goal:
+- Keep naming consistent, environment-aware, and easy to route/monitor.
+
+General recommendations:
+- Use lowercase with dots: domain.feature.action
+- Add environment prefix for shared brokers: dev., stg., prod.
+- Separate command vs event queues if needed
+- Keep dead-letter queues explicit with .dlq suffix
+
+Alternative A: One consolidated club notifications queue
+- Queue:
+  - notifications.club
+- Environment variants:
+  - dev.notifications.club
+  - stg.notifications.club
+  - prod.notifications.club
+- DLQ:
+  - notifications.club.dlq
+
+Alternative B: By channel (in-app / email / push)
+- Queues:
+  - notifications.club.inapp
+  - notifications.club.email
+  - notifications.club.push
+- Environment variants:
+  - dev.notifications.club.inapp
+  - dev.notifications.club.email
+  - dev.notifications.club.push
+- DLQs:
+  - notifications.club.inapp.dlq
+  - notifications.club.email.dlq
+  - notifications.club.push.dlq
+
+Alternative C: By business domain in clubs module
+- Queues:
+  - notifications.club.proposals
+  - notifications.club.membership
+  - notifications.club.vacancies
+  - notifications.club.events
+  - notifications.club.announcements
+- Example env variants:
+  - prod.notifications.club.proposals
+  - prod.notifications.club.membership
+  - prod.notifications.club.vacancies
+  - prod.notifications.club.events
+  - prod.notifications.club.announcements
+- DLQ pattern:
+  - {queue}.dlq
+
+Alternative D: By priority/SLA
+- Queues:
+  - notifications.club.high
+  - notifications.club.normal
+  - notifications.club.low
+- Good for:
+  - high: interview invites, approval/rejection decisions
+  - normal: confirmations, submissions
+  - low: reminders, informational updates
+- DLQs:
+  - notifications.club.high.dlq
+  - notifications.club.normal.dlq
+  - notifications.club.low.dlq
+
+Alternative E: Event-driven naming (topic style)
+- Queues (consumer-specific):
+  - notifications.club.proposal-events
+  - notifications.club.membership-events
+  - notifications.club.vacancy-events
+  - notifications.club.event-events
+- Typical routing keys:
+  - club.proposal.approved
+  - club.proposal.revision_required
+  - club.membership.approved
+  - club.membership.rejected
+  - club.vacancy.application.submitted
+  - club.vacancy.interview.invited
+  - club.event.reminder
+  - club.announcement.created
+
+Suggested practical default (balanced):
+- Exchange:
+  - notifications.club.topic
+- Main queues:
+  - notifications.club.inapp
+  - notifications.club.email
+- Optional:
+  - notifications.club.push
+- DLQs:
+  - notifications.club.inapp.dlq
+  - notifications.club.email.dlq
+  - notifications.club.push.dlq
+- Retry queues (optional):
+  - notifications.club.inapp.retry
+  - notifications.club.email.retry
+  - notifications.club.push.retry
+
+Mapping examples (type -> routing key):
+- club.proposal.approved -> club.proposal.approved
+- club.proposal.revision_required -> club.proposal.revision_required
+- club.membership.approved -> club.membership.approved
+- club.membership.rejected -> club.membership.rejected
+- club.vacancy.application.submitted -> club.vacancy.application.submitted
+- club.vacancy.application.approved -> club.vacancy.application.approved
+- club.vacancy.application.rejected -> club.vacancy.application.rejected
+- club.vacancy.interview.invited -> club.vacancy.interview.invited
+- club.event.registration.confirmed -> club.event.registration.confirmed
+- club.event.reminder -> club.event.reminder
+- club.announcement.created -> club.announcement.created
+
+
+5) FINAL SELECTED CONVENTION (IMPLEMENTATION READY)
+----------------------------------------------------
+
+Use this convention as the default in backend implementation.
+
+Environment:
+- Prefix all broker artifacts with environment:
+  - dev
+  - stg
+  - prod
+
+Exchange:
+- {env}.notifications.club.topic
+- Type: topic
+- Durable: true
+
+Primary queues:
+- {env}.notifications.club.inapp
+- {env}.notifications.club.email
+- {env}.notifications.club.push (optional if push channel is enabled)
+
+Dead-letter queues:
+- {env}.notifications.club.inapp.dlq
+- {env}.notifications.club.email.dlq
+- {env}.notifications.club.push.dlq
+
+Retry queues (delayed re-processing):
+- {env}.notifications.club.inapp.retry
+- {env}.notifications.club.email.retry
+- {env}.notifications.club.push.retry
+
+Routing key convention:
+- club.<domain>.<action>[.<subaction>]
+- Examples:
+  - club.proposal.approved
+  - club.proposal.revision_required
+  - club.membership.submitted
+  - club.membership.approved
+  - club.membership.rejected
+  - club.vacancy.application.submitted
+  - club.vacancy.application.approved
+  - club.vacancy.application.rejected
+  - club.vacancy.interview.invited
+  - club.event.registration.confirmed
+  - club.event.registration.cancelled
+  - club.event.reminder
+  - club.announcement.created
+
+Queue bindings (recommended):
+- {env}.notifications.club.inapp binds:
+  - club.#
+- {env}.notifications.club.email binds:
+  - club.proposal.#
+  - club.membership.#
+  - club.vacancy.#
+  - club.event.registration.#
+  - club.event.reminder
+  - club.announcement.created
+- {env}.notifications.club.push binds (optional):
+  - club.proposal.approved
+  - club.membership.approved
+  - club.vacancy.interview.invited
+  - club.event.reminder
+
+Message headers (recommended):
+- x-notification-id
+- x-notification-type
+- x-channel (in_app|email|push)
+- x-priority (high|normal|low)
+- x-correlation-id
+- x-user-id (single receiver) OR x-audience-id (broadcast segment)
+
+Operational defaults:
+- Delivery mode: persistent
+- Queue durability: true
+- Ack mode: manual ack
+- Retry policy:
+  - 1st retry: 30s
+  - 2nd retry: 5m
+  - 3rd retry: 30m
+  - then route to DLQ
+

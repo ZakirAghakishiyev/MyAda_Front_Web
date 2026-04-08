@@ -36,18 +36,14 @@ const IconChevron = () => (
 )
 
 const CATEGORIES = ['All', 'Technology', 'Arts', 'Business', 'Academic', 'Sports']
-const STATUSES = ['All Status', 'Open', 'Closed', 'Paused', 'Disabled', 'By Invitation']
-
 const ClubsList = () => {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
-  const [statusFilter, setStatusFilter] = useState('All Status')
 
   const filteredClubs = useMemo(() => {
     let list = mockClubs
     if (category !== 'All') list = list.filter((c) => c.category === category)
-    if (statusFilter !== 'All Status') list = list.filter((c) => c.status === statusFilter)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(
@@ -58,7 +54,7 @@ const ClubsList = () => {
       )
     }
     return list
-  }, [search, category, statusFilter])
+  }, [search, category])
 
   return (
     <div className="clubs-page">
@@ -75,7 +71,7 @@ const ClubsList = () => {
           </div>
           <nav className="vacancies-nav-links">
             <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
+            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/my-memberships')}>My Clubs</button>
             <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
             <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Clubs</button>
             <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
@@ -126,16 +122,6 @@ const ClubsList = () => {
             aria-label="Category"
           >
             {CATEGORIES.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-          <select
-            className="clubs-filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="Status"
-          >
-            {STATUSES.map((opt) => (
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>

@@ -29,21 +29,6 @@ const IconInfo = () => (
     <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
   </svg>
 )
-const IconShare = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-  </svg>
-)
-const IconBell = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13 21a1 1 0 0 1-2 0" />
-  </svg>
-)
-const IconBookmark = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-  </svg>
-)
 
 const formatDate = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00')
@@ -117,7 +102,6 @@ const EventDetail = () => {
         className="ed-hero"
         style={event.image ? { backgroundImage: `url(${event.image})` } : undefined}
       >
-        <span className="ed-hero-category">{event.category.toUpperCase()}</span>
         <h1 id="event-detail-title" className="ed-hero-title">{event.title}</h1>
       </div>
 
@@ -181,8 +165,11 @@ const EventDetail = () => {
 
         <aside className="ed-sidebar">
           <div className="ed-sidebar-card">
-            <span className="ed-sidebar-label">Entry Fee</span>
-            <p className="ed-sidebar-fee">Free <small>for students</small></p>
+            <span className="ed-sidebar-label">Remaining Slots</span>
+            <p className="ed-sidebar-slots">{remainingSlots} / {totalSlots}</p>
+            <div className="ed-progress">
+              <div className="ed-progress-fill" style={{ width: `${((totalSlots - remainingSlots) / totalSlots) * 100}%` }} />
+            </div>
             {registered ? (
               <button
                 type="button"
@@ -205,14 +192,6 @@ const EventDetail = () => {
           </div>
 
           <div className="ed-sidebar-card">
-            <span className="ed-sidebar-label">Remaining Slots</span>
-            <p className="ed-sidebar-slots">{remainingSlots} / {totalSlots}</p>
-            <div className="ed-progress">
-              <div className="ed-progress-fill" style={{ width: `${((totalSlots - remainingSlots) / totalSlots) * 100}%` }} />
-            </div>
-          </div>
-
-          <div className="ed-sidebar-card">
             <span className="ed-sidebar-label">Hosted by</span>
             <div className="ed-host">
               <div className="ed-host-avatar">{event.clubName.charAt(0)}</div>
@@ -224,14 +203,6 @@ const EventDetail = () => {
             </div>
           </div>
 
-          <div className="ed-sidebar-card">
-            <span className="ed-sidebar-label">Stay Updated</span>
-            <div className="ed-stay-btns">
-              <button type="button" className="ed-stay-btn" aria-label="Share"><IconShare /></button>
-              <button type="button" className="ed-stay-btn" aria-label="Notify"><IconBell /></button>
-              <button type="button" className="ed-stay-btn" aria-label="Save"><IconBookmark /></button>
-            </div>
-          </div>
         </aside>
       </div>
 

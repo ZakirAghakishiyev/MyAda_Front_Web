@@ -225,7 +225,6 @@ const ProposeClub = () => {
             <li>Minimum of 10 currently enrolled student members required.</li>
             <li>Founding members must maintain a minimum 2.5 cumulative GPA.</li>
             <li>Club constitution must align with university anti-discrimination policies.</li>
-            <li>A full-time faculty or staff advisor is mandatory.</li>
           </ul>
           <a href="#handbook" className="propose-sidebar-link">VIEW FULL HANDBOOK</a>
         </div>
@@ -237,13 +236,6 @@ const ProposeClub = () => {
           <p>For Fall Semester recognition, all applications must be submitted by:</p>
           <p className="propose-sidebar-deadline">Friday, October 27th, 2023</p>
           <p className="propose-sidebar-note">Applications submitted after this date will be considered for the Spring Semester cycle.</p>
-        </div>
-      </div>
-      <div className="propose-sidebar-panel propose-sidebar-panel--blue">
-        <div>
-          <strong>Need Help?</strong>
-          <p>Our student engagement team is here to assist you with the registration process.</p>
-          <button type="button" className="propose-sidebar-btn">Chat with an Advisor</button>
         </div>
       </div>
     </aside>

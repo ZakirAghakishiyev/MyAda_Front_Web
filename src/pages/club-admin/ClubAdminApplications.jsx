@@ -10,9 +10,6 @@ import './ClubAdmin.css'
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
 )
-const IconDownload = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-)
 const IconPlus = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
 )
@@ -50,9 +47,9 @@ const ClubAdminApplications = () => {
       app.studentId.includes(search) ||
       app.email.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'All' || app.status === statusFilter
-    const matchRole = roleFilter === 'All' || app.roleType === roleFilter
+    const matchRole = appType !== 'job' || roleFilter === 'All' || app.roleType === roleFilter
     return matchSearch && matchStatus && matchRole
-  }), [list, search, statusFilter, roleFilter])
+  }), [list, search, statusFilter, roleFilter, appType])
 
   const filteredIds = useMemo(() => new Set(filteredList.map((a) => a.id)), [filteredList])
   const allSelected = filteredList.length > 0 && filteredList.every((a) => selectedIds.has(a.id))
@@ -60,6 +57,7 @@ const ClubAdminApplications = () => {
 
   const toggleTab = (tab) => {
     setActiveTab(tab)
+    setRoleFilter('All')
     setSelectedIds(new Set())
     setDetailApplication(null)
   }
@@ -122,11 +120,11 @@ const ClubAdminApplications = () => {
       <header className="club-admin-header">
         <h1 className="club-admin-header-title">Application Management</h1>
         <div className="club-admin-header-actions" style={{ marginLeft: 'auto' }}>
-          <button type="button" className="club-admin-btn-secondary">
-            <IconDownload /> Export CSV
+          <button type="button" className="club-admin-btn-secondary" onClick={() => navigate('/club-admin/interview-times')}>
+            Interview Times
           </button>
           <button type="button" className="club-admin-btn-primary" onClick={() => navigate('/club-admin/vacancies/new')}>
-            <IconPlus /> New Opening
+            <IconPlus /> New Vacancy
           </button>
         </div>
       </header>
@@ -176,13 +174,14 @@ const ClubAdminApplications = () => {
               <option value="Approved">Approved</option>
               <option value="Rejected">Rejected</option>
             </select>
-            <select style={{ width: 160, padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, background: '#fff' }} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-              <option value="All">Role: All</option>
-              {[...new Set(list.map((a) => a.roleType))].map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <button type="button" className="club-admin-btn-secondary">More Filters</button>
+            {activeTab === 'job' && (
+              <select style={{ width: 160, padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, background: '#fff' }} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                <option value="All">Role: All</option>
+                {[...new Set(list.map((a) => a.roleType))].map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {someSelected && (
@@ -209,9 +208,9 @@ const ClubAdminApplications = () => {
                 </th>
                 <th>Applicant</th>
                 <th>Student ID</th>
-                <th>Role / Type</th>
+                {activeTab === 'job' && <th>Role / Type</th>}
                 <th>Applied On</th>
-                <th>Status</th>
+                {activeTab === 'job' && <th>Status</th>}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -236,9 +235,9 @@ const ClubAdminApplications = () => {
                     </div>
                   </td>
                   <td>{app.studentId}</td>
-                  <td>{app.roleType}</td>
+                  {activeTab === 'job' && <td>{app.roleType}</td>}
                   <td>{app.appliedOn}</td>
-                  <td><span className={`club-admin-pill ${pillClass(app.status)}`}>{app.status}</span></td>
+                  {activeTab === 'job' && <td><span className={`club-admin-pill ${pillClass(app.status)}`}>{app.status}</span></td>}
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button type="button" className="club-admin-btn-icon" aria-label="View details" onClick={() => setDetailApplication({ app, type: appType })}><IconEye /></button>

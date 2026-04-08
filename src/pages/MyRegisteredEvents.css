@@ -1,8 +1,7 @@
 /* My Registered Events – CampusEvents style */
 .mre-page {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
+  box-sizing: border-box;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

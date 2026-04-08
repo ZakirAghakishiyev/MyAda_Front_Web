@@ -69,6 +69,39 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const getEventCapacity = (event) => {
+  const parsed = Number.parseInt(event?.capacity ?? '', 10)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 100
+}
+
+const seedFromEvent = (event) => {
+  const txt = `${event.id}-${event.title || ''}-${event.clubName || ''}`
+  let acc = 0
+  for (let i = 0; i < txt.length; i += 1) acc += txt.charCodeAt(i)
+  return acc
+}
+
+const generateMockAttendees = (event) => {
+  const capacity = getEventCapacity(event)
+  const seed = seedFromEvent(event)
+  const minRegistered = Math.max(8, Math.floor(capacity * 0.2))
+  const maxRegistered = Math.max(minRegistered, Math.floor(capacity * 0.85))
+  const registered = Math.min(capacity, minRegistered + (seed % (maxRegistered - minRegistered + 1)))
+  const entered = Math.floor(registered * (0.25 + ((seed % 30) / 100)))
+  const list = []
+
+  for (let i = 0; i < registered; i += 1) {
+    list.push({
+      id: `${event.id}-att-${i + 1}`,
+      fullName: `Attendee ${i + 1}`,
+      studentId: `SID-${String(event.id).padStart(2, '0')}${String(i + 1).padStart(4, '0')}`,
+      entered: i < entered,
+    })
+  }
+  return list
+}
+
 const ClubAdminEvents = () => {
   const location = useLocation()
   const searchParams = new URLSearchParams(location.search)
@@ -87,7 +120,6 @@ const ClubAdminEvents = () => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [editingEvent, setEditingEvent] = useState(null)
   const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [duration, setDuration] = useState('')
@@ -104,6 +136,14 @@ const ClubAdminEvents = () => {
   const [posterFile, setPosterFile] = useState(null)
   const posterInputRef = useRef(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [attendeesByEvent, setAttendeesByEvent] = useState(() => {
+    const map = {}
+    initialEvents.forEach((ev) => {
+      map[ev.id] = generateMockAttendees(ev)
+    })
+    return map
+  })
+  const [attendeesEventId, setAttendeesEventId] = useState(null)
 
   const filteredEvents = useMemo(() => {
     const today = todayIso()
@@ -128,7 +168,6 @@ const ClubAdminEvents = () => {
   const startEdit = (event) => {
     setEditingEvent(event)
     setTitle(event.title || '')
-    setCategory(event.category || '')
     setDate(event.date || '')
     setTime(event.time || '')
     setDuration('')
@@ -148,7 +187,6 @@ const ClubAdminEvents = () => {
   const cancelEdit = () => {
     setEditingEvent(null)
     setTitle('')
-    setCategory('')
     setDate('')
     setTime('')
     setDuration('')
@@ -204,7 +242,6 @@ const ClubAdminEvents = () => {
       clubId: editingEvent.clubId,
       clubName: editingEvent.clubName,
       title: title || editingEvent.title,
-      category: category || editingEvent.category,
       date: date || editingEvent.date,
       time: time || editingEvent.time,
       duration,
@@ -234,7 +271,6 @@ const ClubAdminEvents = () => {
           ? {
               ...ev,
               title: payload.title,
-              category: payload.category,
               date: payload.date,
               time: payload.time,
               location: payload.location,
@@ -244,6 +280,30 @@ const ClubAdminEvents = () => {
       )
     )
     cancelEdit()
+  }
+
+  const attendeesEvent = attendeesEventId != null
+    ? events.find((ev) => String(ev.id) === String(attendeesEventId))
+    : null
+
+  const attendeesForSelectedEvent = attendeesEvent ? (attendeesByEvent[attendeesEvent.id] || []) : []
+
+  const toggleAttendeeEntered = (eventId, attendeeId) => {
+    setAttendeesByEvent((prev) => ({
+      ...prev,
+      [eventId]: (prev[eventId] || []).map((a) =>
+        a.id === attendeeId ? { ...a, entered: !a.entered } : a
+      ),
+    }))
+  }
+
+  const removeAttendee = (eventId, attendeeId) => {
+    const ok = window.confirm('Remove this attendee from the event?')
+    if (!ok) return
+    setAttendeesByEvent((prev) => ({
+      ...prev,
+      [eventId]: (prev[eventId] || []).filter((a) => a.id !== attendeeId),
+    }))
   }
 
   if (editingEvent) {
@@ -283,15 +343,6 @@ const ClubAdminEvents = () => {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Event title"
-                />
-              </div>
-              <div className="club-admin-field">
-                <label>Category</label>
-                <input
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="e.g. Technology"
                 />
               </div>
             </div>
@@ -514,6 +565,107 @@ const ClubAdminEvents = () => {
     )
   }
 
+  if (attendeesEvent) {
+    const enteredCount = attendeesForSelectedEvent.filter((a) => a.entered).length
+    const eventCapacity = getEventCapacity(attendeesEvent)
+    return (
+      <>
+        <header className="club-admin-header">
+          <h1 className="club-admin-header-title">Event Attendees</h1>
+        </header>
+
+        <div className="club-admin-content">
+          <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
+            <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+            <span style={{ margin: '0 8px' }}>&gt;</span>
+            <button
+              type="button"
+              style={{ color: '#64748b', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+              onClick={() => setAttendeesEventId(null)}
+            >
+              Events
+            </button>
+            <span style={{ margin: '0 8px' }}>&gt;</span>
+            <span style={{ color: '#0f172a', fontWeight: 600 }}>Attendees</span>
+          </nav>
+
+          <div className="club-admin-card" style={{ marginLeft: 24, marginRight: 24 }}>
+            <div className="club-admin-card-head">
+              <h2 className="club-admin-card-title">{attendeesEvent.title}</h2>
+              <button type="button" className="club-admin-btn-secondary" onClick={() => setAttendeesEventId(null)}>
+                Back to events
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Max Capacity</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{eventCapacity}</div>
+              </div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Registered</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{attendeesForSelectedEvent.length}</div>
+              </div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Entered</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{enteredCount}</div>
+              </div>
+            </div>
+            <div className="club-admin-table-wrap">
+              <table className="club-admin-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Student ID</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendeesForSelectedEvent.map((a) => (
+                    <tr key={a.id}>
+                      <td>{a.fullName}</td>
+                      <td>{a.studentId}</td>
+                      <td>
+                        <span className="club-admin-pill" style={a.entered ? { background: '#dcfce7', color: '#166534' } : { background: '#fee2e2', color: '#b91c1c' }}>
+                          {a.entered ? 'Entered' : 'Not entered'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            type="button"
+                            className="club-admin-btn-secondary"
+                            onClick={() => toggleAttendeeEntered(attendeesEvent.id, a.id)}
+                          >
+                            {a.entered ? 'Mark not entered' : 'Mark entered'}
+                          </button>
+                          <button
+                            type="button"
+                            className="club-admin-btn-danger"
+                            onClick={() => removeAttendee(attendeesEvent.id, a.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {attendeesForSelectedEvent.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="club-admin-table-empty">
+                        No attendees registered.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   const today = todayIso()
 
   return (
@@ -536,7 +688,7 @@ const ClubAdminEvents = () => {
             className="club-admin-btn-primary"
             style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
           >
-            <IconMegaphone /> Suggest event
+            <IconMegaphone /> Create Event
           </Link>
         </div>
       </header>
@@ -604,34 +756,42 @@ const ClubAdminEvents = () => {
               </span>
             </div>
           </div>
-
           <div className="club-admin-table-wrap">
           <table className="club-admin-table">
             <thead>
               <tr>
                 <th style={{ width: '26%' }}>Title</th>
                 <th style={{ width: '22%' }}>Club</th>
-                <th style={{ width: '12%' }}>Category</th>
                 <th style={{ width: '14%' }}>Date</th>
                 <th style={{ width: '14%' }}>Time</th>
-                <th style={{ width: '12%' }}>Status</th>
+                <th style={{ width: '10%' }}>Status</th>
+                <th style={{ width: '8%' }}>Attendees</th>
                 <th style={{ width: '10%' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredEvents.map((e) => {
                 const isUpcoming = !e.date || e.date >= today
+                const eventAttendees = attendeesByEvent[e.id] || []
                 return (
                   <tr key={e.id}>
                     <td>{e.title}</td>
                     <td>{e.clubName}</td>
-                    <td>{e.category || '—'}</td>
                     <td>{formatDate(e.date)}</td>
                     <td>{e.time || '—'}</td>
                     <td>
                       <span className="club-admin-pill" style={isUpcoming ? { background: '#dcfce7', color: '#166534' } : { background: '#fee2e2', color: '#b91c1c' }}>
                         {isUpcoming ? 'Upcoming' : 'Past'}
                       </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="club-admin-btn-secondary"
+                        onClick={() => setAttendeesEventId(e.id)}
+                      >
+                        {eventAttendees.length}
+                      </button>
                     </td>
                     <td>
                       <button

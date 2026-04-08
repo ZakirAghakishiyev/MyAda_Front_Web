@@ -152,6 +152,15 @@
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
+.mva-card--clickable {
+  cursor: pointer;
+}
+
+.mva-card--clickable:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+}
+
 .mva-card-icon {
   width: 44px;
   height: 44px;
@@ -236,6 +245,16 @@
   color: #1d4ed8;
 }
 
+.mva-status-pill--interview {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.mva-status-pill--interview-scheduled {
+  background: #dcfce7;
+  color: #15803d;
+}
+
 .mva-status-pill--other {
   background: #fef2f2;
   color: #b91c1c;
@@ -245,6 +264,130 @@
   font-size: 14px;
   color: #6b7280;
   margin-top: 16px;
+}
+
+.mva-card-link {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.mva-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.mva-modal {
+  width: 100%;
+  max-width: 640px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
+  padding: 18px;
+}
+
+.mva-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mva-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.mva-modal-close {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mva-modal-subtitle {
+  margin: 8px 0 16px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.mva-date-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mva-date-pill {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mva-date-pill--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.mva-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mva-slot-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.mva-slot-item:not(.mva-slot-item--taken) {
+  cursor: pointer;
+}
+
+.mva-slot-item--selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.mva-slot-item--taken {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.mva-slot-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.mva-slot-state--selected {
+  color: #15803d;
+}
+
+.mva-modal-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .mva-footer {

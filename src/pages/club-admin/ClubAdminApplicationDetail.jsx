@@ -85,12 +85,10 @@ const ClubAdminApplicationDetail = ({
   const name = app.name ?? app.applicantName?.split(' ')[0] ?? ''
   const surname = app.surname ?? app.applicantName?.split(' ').slice(1).join(' ') ?? ''
   const fullName = [name, surname].filter(Boolean).join(' ') || app.applicantName || 'Applicant'
-  const club = app.club ?? '—'
   const positionApplied = app.positionApplied ?? app.roleType ?? '—'
   const dateApplied = app.dateApplied ?? app.appliedOn ?? '—'
   const answers = app.answers ?? {}
   const files = Array.isArray(app.files) ? app.files : []
-  const adminNotes = Array.isArray(app.adminNotes) ? app.adminNotes : []
   const canAct = app.status === 'Pending' || app.status === 'Reviewing'
   const handleRequestChanges = () => onRequestChanges?.(app.id, type)
 
@@ -157,10 +155,6 @@ const ClubAdminApplicationDetail = ({
                   <span className="club-admin-detail-value">{app.graduationYear ?? app.year ?? '—'}</span>
                 </div>
                 <div className="club-admin-detail-row">
-                  <span className="club-admin-detail-label">Club Name</span>
-                  <span className="club-admin-detail-value">{club}</span>
-                </div>
-                <div className="club-admin-detail-row">
                   <span className="club-admin-detail-label">Position Applied</span>
                   <span className="club-admin-detail-value">{positionApplied}</span>
                 </div>
@@ -222,37 +216,39 @@ const ClubAdminApplicationDetail = ({
           </section>
 
           {/* Uploaded Files */}
-          <section className="club-admin-detail-card">
-            <h3 className="club-admin-detail-card-title">Uploaded Files</h3>
-            {files.length === 0 ? (
-              <p className="club-admin-detail-muted">No files uploaded.</p>
-            ) : (
-              <div className="club-admin-detail-files">
-                {files.map((file) => (
-                  <div key={file.id ?? file.name} className="club-admin-detail-file">
-                    <div className="club-admin-detail-file-preview">
-                      {file.type?.startsWith('image/') ? (
-                        <img src={file.url || '#'} alt="" className="club-admin-detail-file-img" onError={(e) => { e.target.style.display = 'none' }} />
-                      ) : file.type === 'application/pdf' ? (
-                        <iframe title={file.name} src={file.url} className="club-admin-detail-file-iframe" />
-                      ) : (
-                        <div className="club-admin-detail-file-placeholder"><IconFile /></div>
-                      )}
+          {isJob && (
+            <section className="club-admin-detail-card">
+              <h3 className="club-admin-detail-card-title">Uploaded Files</h3>
+              {files.length === 0 ? (
+                <p className="club-admin-detail-muted">No files uploaded.</p>
+              ) : (
+                <div className="club-admin-detail-files">
+                  {files.map((file) => (
+                    <div key={file.id ?? file.name} className="club-admin-detail-file">
+                      <div className="club-admin-detail-file-preview">
+                        {file.type?.startsWith('image/') ? (
+                          <img src={file.url || '#'} alt="" className="club-admin-detail-file-img" onError={(e) => { e.target.style.display = 'none' }} />
+                        ) : file.type === 'application/pdf' ? (
+                          <iframe title={file.name} src={file.url} className="club-admin-detail-file-iframe" />
+                        ) : (
+                          <div className="club-admin-detail-file-placeholder"><IconFile /></div>
+                        )}
+                      </div>
+                      <div className="club-admin-detail-file-info">
+                        <span className="club-admin-detail-file-name">{file.name}</span>
+                        <span className="club-admin-detail-file-meta">
+                          {file.type ?? 'File'} · {formatFileSize(file.size ?? 0)} · {file.uploadedAt ?? '—'}
+                        </span>
+                        <a href={file.url} download={file.name} className="club-admin-btn-text club-admin-detail-file-download">
+                          <IconDownload /> Download
+                        </a>
+                      </div>
                     </div>
-                    <div className="club-admin-detail-file-info">
-                      <span className="club-admin-detail-file-name">{file.name}</span>
-                      <span className="club-admin-detail-file-meta">
-                        {file.type ?? 'File'} · {formatFileSize(file.size ?? 0)} · {file.uploadedAt ?? '—'}
-                      </span>
-                      <a href={file.url} download={file.name} className="club-admin-btn-text club-admin-detail-file-download">
-                        <IconDownload /> Download
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Admin Actions */}
           <section className="club-admin-detail-card club-admin-detail-actions-card">
@@ -285,21 +281,6 @@ const ClubAdminApplicationDetail = ({
               >
                 {savingNote ? 'Saving…' : 'Save Note'}
               </button>
-            </div>
-            <div className="club-admin-detail-notes-history">
-              <h4 className="club-admin-detail-notes-history-title">Previous Admin Notes</h4>
-              {adminNotes.length > 0 ? (
-                <ul className="club-admin-detail-notes-list">
-                  {adminNotes.map((note) => (
-                    <li key={note.id ?? note.addedAt + note.text?.slice(0, 20)} className="club-admin-detail-note-item">
-                      <p className="club-admin-detail-note-text">{note.text}</p>
-                      <span className="club-admin-detail-note-meta">{note.addedAt} {note.addedBy ? `· ${note.addedBy}` : ''}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="club-admin-detail-muted" style={{ margin: 0 }}>No admin notes yet.</p>
-              )}
             </div>
           </section>
         </div>

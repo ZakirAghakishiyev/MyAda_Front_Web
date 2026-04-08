@@ -1,4 +1,5 @@
 // Mock data for Club Admin dashboard, applications, and activity feed
+import sampleResumePdf from '../assets/Zakir Aghakishiyev Resume.pdf'
 
 export const mockClubAdminStats = {
   activeMembers: 124,
@@ -19,14 +20,116 @@ export const mockClubAdminActivity = [
 ]
 
 export const mockMembershipApplications = [
-  { id: 1, applicantName: 'Jane Cooper', email: 'jane.c@university.edu', studentId: '20230045', roleType: 'Full Membership', appliedOn: 'Oct 24, 2023', status: 'Pending', avatar: null, phone: '+994 50 111 22 33', department: 'Computer Science', year: 'Junior', gpa: '3.6', message: 'I am very interested in joining the club to contribute to events and meet like-minded students.' },
-  { id: 2, applicantName: 'John Doe', email: 'john.d@university.edu', studentId: '20230112', roleType: 'Associate Member', appliedOn: 'Oct 23, 2023', status: 'Reviewing', avatar: null, phone: '+994 50 222 33 44', department: 'Business Administration', year: 'Sophomore', gpa: '3.4', message: 'Would love to be an associate member and participate in workshops.' },
-  { id: 3, applicantName: 'Emily Brown', email: 'emily.b@university.edu', studentId: '20229876', roleType: 'Full Membership', appliedOn: 'Oct 22, 2023', status: 'Pending', avatar: null, phone: '+994 50 333 44 55', department: 'Visual Arts', year: 'Senior', gpa: '3.8', message: 'I have been following the club activities and would like to become a full member.' }
+  {
+    id: 1,
+    applicantName: 'Jane Cooper',
+    email: 'jane.c@university.edu',
+    studentId: '20230045',
+    roleType: 'Full Membership',
+    appliedOn: 'Oct 24, 2023',
+    status: 'Pending',
+    avatar: null,
+    phone: '+994 50 111 22 33',
+    department: 'Computer Science',
+    year: '2026',
+    gpa: '3.6',
+    answers: {
+      letterOfPurpose: 'I want to join the club to contribute to event planning and collaborate with peers who are passionate about design and technology. I can support social media content, workshop logistics, and outreach activities.',
+      previousExperience: 'https://www.behance.net/janecooper',
+      portfolioDescription: 'Managed design deliverables for two student projects and created promotional visuals for departmental events.'
+    },
+    files: []
+  },
+  {
+    id: 2,
+    applicantName: 'John Doe',
+    email: 'john.d@university.edu',
+    studentId: '20230112',
+    roleType: 'Associate Member',
+    appliedOn: 'Oct 23, 2023',
+    status: 'Reviewing',
+    avatar: null,
+    phone: '+994 50 222 33 44',
+    department: 'Business Administration',
+    year: '2027',
+    gpa: '3.4',
+    answers: {
+      letterOfPurpose: 'I am applying to gain hands-on experience in club operations and support workshop execution. I am interested in membership engagement and helping organize internal communication.',
+      previousExperience: '',
+      portfolioDescription: ''
+    },
+    files: []
+  },
+  {
+    id: 3,
+    applicantName: 'Emily Brown',
+    email: 'emily.b@university.edu',
+    studentId: '20229876',
+    roleType: 'Full Membership',
+    appliedOn: 'Oct 22, 2023',
+    status: 'Pending',
+    avatar: null,
+    phone: '+994 50 333 44 55',
+    department: 'Visual Arts',
+    year: '2025',
+    gpa: '3.8',
+    answers: {
+      letterOfPurpose: 'I have been following the club activities and want to participate as an active member to support creative production and event branding. I am especially motivated to contribute to campaign concepts and visual storytelling.',
+      previousExperience: 'https://dribbble.com/emilybrown',
+      portfolioDescription: 'Built posters and digital assets for faculty showcases and volunteer-led student initiatives.'
+    },
+    files: []
+  }
 ]
 
 export const mockJobVacancyApplications = [
-  { id: 4, applicantName: 'Mike Wilson', email: 'mike.w@university.edu', studentId: '20230456', roleType: 'Marketing Coordinator', appliedOn: 'Oct 24, 2023', status: 'Pending', avatar: null, phone: '+994 50 444 55 66', department: 'Marketing', year: 'Junior', gpa: '3.5', message: 'I have experience managing social media for student projects and would like to bring that to the club.', experience: '1 year social media management', portfolioUrl: 'https://portfolio.example.com/mike' },
-  { id: 5, applicantName: 'Lisa Park', email: 'lisa.p@university.edu', studentId: '20230234', roleType: 'Event Coordinator', appliedOn: 'Oct 23, 2023', status: 'Reviewing', avatar: null, phone: '+994 50 555 66 77', department: 'International Relations', year: 'Senior', gpa: '3.7', message: 'I have organized several campus events and am excited to apply for the Event Coordinator role.', experience: '2 years event planning', portfolioUrl: null }
+  {
+    id: 4,
+    applicantName: 'Mike Wilson',
+    email: 'mike.w@university.edu',
+    studentId: '20230456',
+    roleType: 'Marketing Coordinator',
+    appliedOn: 'Oct 24, 2023',
+    status: 'Pending',
+    avatar: null,
+    phone: '+994 50 444 55 66',
+    department: 'Marketing',
+    year: '2026',
+    gpa: '3.5',
+    answers: {
+      purposeOfApplication: 'I am interested in this role because I have practical experience planning social content calendars, producing campaign visuals, and tracking engagement metrics for student-led initiatives. I would like to help the club improve consistency of posting, audience targeting, and event promotion across platforms.',
+      additionalAnswers: []
+    },
+    files: [
+      {
+        id: 'resume-sample-1',
+        name: 'Zakir Aghakishiyev Resume.pdf',
+        type: 'application/pdf',
+        size: 224000,
+        uploadedAt: 'Apr 8, 2026',
+        url: sampleResumePdf
+      }
+    ]
+  },
+  {
+    id: 5,
+    applicantName: 'Lisa Park',
+    email: 'lisa.p@university.edu',
+    studentId: '20230234',
+    roleType: 'Event Coordinator',
+    appliedOn: 'Oct 23, 2023',
+    status: 'Reviewing',
+    avatar: null,
+    phone: '+994 50 555 66 77',
+    department: 'International Relations',
+    year: '2025',
+    gpa: '3.7',
+    answers: {
+      purposeOfApplication: 'I am applying for Event Coordinator because I have led logistics for orientation and department events, including vendor communication, schedules, and volunteer coordination. I can help the club run well-structured events and improve attendee experience through better planning and follow-up.',
+      additionalAnswers: []
+    },
+    files: []
+  }
 ]
 
 export const VACANCY_CATEGORIES = ['Marketing', 'Technology', 'Events', 'Finance', 'Outreach', 'Content', 'Other']

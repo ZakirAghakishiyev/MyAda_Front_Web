@@ -469,8 +469,8 @@ const INITIAL_EVENT_PROPOSALS = [
 /* Master Directory – command center mock data */
 const DIRECTORY_CLUBS = [
   { id: '1', name: 'ACM Tech Chapter', established: 'Sept 2021', president: 'Alex Rodriguez', presidentId: '8848291', members: 450, category: 'Academic', status: 'Active', iconColor: 'blue' },
-  { id: '2', name: 'Modern Arts Society', established: 'Jan 2019', president: 'Elena Fisher', presidentId: '1029384', members: 125, category: 'Creative', status: 'Active', iconColor: 'orange' },
-  { id: '3', name: 'University Football FC', established: 'Aug 2015', president: 'Marcus Wright', presidentId: '5549021', members: 62, category: 'Sports', status: 'On Probation', iconColor: 'purple' },
+  { id: '2', name: 'Modern Arts Society', established: 'Jan 2019', president: 'Elena Fisher', presidentId: '1029384', members: 125, category: 'Creative', status: 'Active', iconColor: 'orange', proposedProfileImageUrl: '/clubs/photo.png' },
+  { id: '3', name: 'University Football FC', established: 'Aug 2015', president: 'Marcus Wright', presidentId: '5549021', members: 62, category: 'Sports', status: 'Inactive', iconColor: 'purple' },
   { id: '4', name: 'Debate Union', established: 'May 2010', president: 'Sarah Jenkins', presidentId: '3321109', members: 188, category: 'Public Speaking', status: 'Active', iconColor: 'purple' },
 ]
 const DIRECTORY_ACTIVITY = [
@@ -495,7 +495,7 @@ const APPROVED_EVENTS = [
   {
     id: 'u2',
     title: 'Jazz Night',
-    date: '2025-11-02',
+    date: '2026-05-02',
     club: 'Modern Jazz Collective',
     venue: 'Student Union Hall',
     capacity: 180,
@@ -513,6 +513,18 @@ const APPROVED_EVENTS = [
     capacity: 120,
     durationHours: 4,
     description: 'Pitch competition and networking event for early–stage student startups.',
+    subEvents: [],
+    image: null,
+  },
+  {
+    id: 'u4',
+    title: 'Community Volunteer Day',
+    date: '2026-06-12',
+    club: 'Campus Volunteers',
+    venue: 'Student Center',
+    capacity: 200,
+    durationHours: 3,
+    description: 'Campus-wide volunteer projects and team sign-ups for the community.',
     subEvents: [],
     image: null,
   },
@@ -982,6 +994,25 @@ const StudentServices = () => {
     }
   }
 
+  const handleApproveProposedClubImage = () => {
+    if (!selectedDirectoryClub || !selectedDirectoryClub.proposedProfileImageUrl) return
+    const ok = window.confirm('Approve this proposed club logo?')
+    if (!ok) return
+
+    setDirectoryClubs((prev) =>
+      prev.map((c) =>
+        c.id === selectedDirectoryClub.id
+          ? {
+              ...c,
+              profileImageUrl: selectedDirectoryClub.proposedProfileImageUrl,
+              proposedProfileImageUrl: null,
+            }
+          : c
+      )
+    )
+    alert('Proposed logo approved.')
+  }
+
   const handleAddEmployee = () => {
     const id = addEmployeeId.trim()
     const position = addEmployeePosition && addEmployeePosition !== 'Select position' ? addEmployeePosition : null
@@ -1252,14 +1283,29 @@ const StudentServices = () => {
                   <label>Status</label>
                   <select value={clubEditStatus} onChange={(e) => setClubEditStatus(e.target.value)}>
                     <option value="Active">Active</option>
-                    <option value="On Probation">On Probation</option>
+                    <option value="Inactive">Inactive</option>
                   </select>
                 </div>
                 <div className="club-admin-field">
-                  <label>Profile image</label>
+                  <label>Club logo</label>
                   <input type="file" accept="image/*" onChange={(e) => setClubEditImage(e.target.files?.[0] ?? null)} />
                   {clubEditImage && <span className="ss-cc-settings-filename">{clubEditImage.name}</span>}
                 </div>
+                {selectedDirectoryClub.proposedProfileImageUrl && (
+                  <div className="club-admin-field">
+                    <label>Proposed profile image</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <img
+                        src={selectedDirectoryClub.proposedProfileImageUrl}
+                        alt="Proposed club logo"
+                        style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0' }}
+                      />
+                      <button type="button" className="club-admin-btn-primary" onClick={handleApproveProposedClubImage}>
+                        Approve Proposed Image
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="ss-cc-settings-actions">
                   <button type="button" className="club-admin-btn-secondary" onClick={() => setDirectorySelectedClubId(null)}>Cancel</button>
                   <button type="button" className="club-admin-btn-primary" onClick={handleSaveClubSettings}>Save changes</button>
@@ -1276,6 +1322,10 @@ const StudentServices = () => {
     if (directorySelectedClubId && selectedDirectoryClub) {
       return renderCommandClubDetail()
     }
+    const upcomingApprovedEvents = APPROVED_EVENTS
+      .filter((ev) => !ev.date || ev.date >= todayIso)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 4)
     return (
     <>
       <header className="ss-cc-header">
@@ -1321,16 +1371,6 @@ const StudentServices = () => {
           <button type="button" className={`ss-cc-tab ${commandTab === 'clubs' ? 'ss-cc-tab--active' : ''}`} onClick={() => setCommandTab('clubs')}>
             <IconPeople /> Active Clubs <span className="ss-cc-tab-count">142</span>
           </button>
-          <button type="button" className={`ss-cc-tab ${commandTab === 'events' ? 'ss-cc-tab--active' : ''}`} onClick={() => setCommandTab('events')}>
-            <IconCalendar /> Upcoming Events <span className="ss-cc-tab-count">28</span>
-          </button>
-        </div>
-        <div className="ss-cc-toolbar">
-          <span className="ss-cc-showing">Showing 1-10 of 142 clubs</span>
-          <div className="ss-cc-toolbar-btns">
-            <button type="button" className="ss-cc-filter-btn"><IconFilter /> Filter</button>
-            <button type="button" className="ss-cc-filter-btn"><IconSort /> Sort</button>
-          </div>
         </div>
       </div>
 
@@ -1397,37 +1437,48 @@ const StudentServices = () => {
             ))}
           </tbody>
         </table>
-        <div className="ss-cc-pagination">
-          <button type="button" className="ss-cc-page-btn">Previous</button>
-          <div className="ss-cc-page-nums">
-            <button type="button" className="ss-cc-page-num ss-cc-page-num--active">1</button>
-            <button type="button" className="ss-cc-page-num">2</button>
-            <button type="button" className="ss-cc-page-num">3</button>
-            <span className="ss-cc-page-ellipsis">...</span>
-            <button type="button" className="ss-cc-page-num">15</button>
-          </div>
-          <button type="button" className="ss-cc-page-btn">Next</button>
-        </div>
       </div>
 
-      <section className="ss-cc-activity">
-        <h2 className="ss-cc-activity-title">REAL-TIME ACTIVITY HUB</h2>
-        <div className="ss-cc-activity-cards">
-          {DIRECTORY_ACTIVITY.map((a) => (
-            <div key={a.id} className="ss-cc-activity-card">
-              <span className={`ss-cc-activity-icon ss-cc-activity-icon--${a.iconColor}`}>
-                {a.icon === 'check' && <IconActivityCheck />}
-                {a.icon === 'calendar' && <IconCalendar />}
-                {a.icon === 'alert' && <IconActivityAlert />}
-              </span>
-              <div>
-                <div className="ss-cc-activity-card-title">{a.title}</div>
-                <div className="ss-cc-activity-card-detail">{a.detail}</div>
-              </div>
-            </div>
-          ))}
+      <div className="ss-cc-tabs-wrap">
+        <div className="ss-cc-tabs">
+          <div className="ss-cc-tab ss-cc-tab--active" style={{ cursor: 'default' }}>
+            <IconCalendar /> Upcoming Events <span className="ss-cc-tab-count">{upcomingApprovedEvents.length}</span>
+          </div>
         </div>
-      </section>
+      </div>
+      <div className="ss-cc-card ss-cc-table-wrap" aria-label="Upcoming Events">
+        <table className="ss-cc-table">
+          <thead>
+            <tr>
+              <th>EVENT</th>
+              <th>CLUB</th>
+              <th>DATE</th>
+              <th>VENUE</th>
+              <th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {upcomingApprovedEvents.map((ev) => (
+              <tr key={ev.id}>
+                <td>{ev.title}</td>
+                <td>{ev.club}</td>
+                <td>{ev.date}</td>
+                <td>{ev.venue}</td>
+                <td>
+                  <span className="ss-cc-pill">Upcoming</span>
+                </td>
+              </tr>
+            ))}
+            {upcomingApprovedEvents.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ color: '#64748b', padding: '14px 16px' }}>
+                  No upcoming events.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </>
   )
   }
@@ -1464,6 +1515,8 @@ const StudentServices = () => {
   }
 
   const handleApprove = () => {
+    if (!selectedProposalId) return
+    if (!window.confirm('Are you sure you want to approve this club proposal?')) return
     const remaining = clubProposals.filter((p) => p.id !== selectedProposalId)
     setClubProposals(remaining)
     setSelectedProposalId(remaining[0]?.id ?? '')
@@ -1500,6 +1553,8 @@ const StudentServices = () => {
   }
 
   const handleEventApprove = () => {
+    if (!selectedEventId) return
+    if (!window.confirm('Are you sure you want to approve this event proposal?')) return
     const remaining = eventProposals.filter((e) => e.id !== selectedEventId)
     setEventProposals(remaining)
     setSelectedEventId(remaining[0]?.id ?? '')
@@ -1632,8 +1687,6 @@ const StudentServices = () => {
                   <button type="button" className="ss-cp-btn ss-cp-btn--approve" onClick={handleApprove}>
                     Approve Proposal
                   </button>
-                  <button type="button" className="ss-cp-btn ss-cp-btn--icon" aria-label="Notifications"><IconBell /></button>
-                  <div className="ss-cp-avatar" aria-label="Profile" />
                 </div>
               </header>
 
@@ -1980,8 +2033,6 @@ const StudentServices = () => {
                   <button type="button" className="ss-eap-btn ss-eap-btn--approve" onClick={handleEventApprove}>
                     Approve Proposal
                   </button>
-                  <button type="button" className="ss-eap-btn ss-eap-btn--icon" aria-label="Notifications"><IconBell /></button>
-                  <div className="ss-eap-avatar" aria-label="Profile" />
                 </div>
               </header>
 
@@ -3048,8 +3099,12 @@ const StudentServices = () => {
         </nav>
 
         <div className="ss-sidebar-footer">
-          <button className="ss-help-link" type="button">
-            Help &amp; Support
+          <button
+            className="ss-help-link"
+            type="button"
+            onClick={() => navigate('/it-support', { state: { from: 'student-services' } })}
+          >
+            Support
           </button>
           <button className="ss-logout" type="button">
             Logout

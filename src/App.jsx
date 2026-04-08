@@ -56,6 +56,8 @@ import ClubAdminNewPosition from './pages/club-admin/ClubAdminNewPosition'
 import ClubAdminSuggestEvent from './pages/club-admin/ClubAdminSuggestEvent'
 import ClubAdminMembers from './pages/club-admin/ClubAdminMembers'
 import ClubAdminEmployees from './pages/club-admin/ClubAdminEmployees'
+import ClubAdminProfile from './pages/club-admin/ClubAdminProfile'
+import ClubAdminInterviewTimes from './pages/club-admin/ClubAdminInterviewTimes'
 import StudentServices from './pages/StudentServices'
 import StudentServicesEventDetail from './pages/StudentServicesEventDetail'
 import './App.css'
@@ -169,9 +171,11 @@ const AppContent = () => {
           <Route path="/club-admin" element={<ClubAdminLayout />}>
             <Route index element={<ClubAdminDashboard />} />
             <Route path="applications" element={<ClubAdminApplications />} />
+            <Route path="interview-times" element={<ClubAdminInterviewTimes />} />
             <Route path="vacancies" element={<ClubAdminVacancies />} />
             <Route path="members" element={<ClubAdminMembers />} />
             <Route path="employees" element={<ClubAdminEmployees />} />
+            <Route path="profile" element={<ClubAdminProfile />} />
             <Route path="vacancies/new" element={<ClubAdminNewVacancy />} />
              <Route path="events" element={<ClubAdminEvents />} />
             <Route path="positions" element={<ClubAdminPositions />} />
