@@ -15,8 +15,9 @@ const statusLabel = (status) => {
 }
 
 export default function AttendanceStudents() {
-  const { lessonId } = useParams()
+  const { instructorId, lessonId } = useParams()
   const navigate = useNavigate()
+  const lessonBase = `/attendance/${encodeURIComponent(instructorId || 'demo')}/lesson/${encodeURIComponent(lessonId || 'demo')}`
   const students = getStudentAttendanceForCrn(lessonId)
   const [selectedStudentId, setSelectedStudentId] = useState(null)
 
@@ -30,10 +31,10 @@ export default function AttendanceStudents() {
             <img src={adaLogo} alt="ADA University" className="ap-logo-img" />
           </button>
           <nav className="ap-nav-links">
-            <button type="button" className="ap-nav-link" onClick={() => navigate(`/attendance/lesson/${lessonId || 'demo'}`)}>
+            <button type="button" className="ap-nav-link" onClick={() => navigate(lessonBase)}>
               Dashboard
             </button>
-            <button type="button" className="ap-nav-link" onClick={() => navigate(`/attendance/lesson/${lessonId || 'demo'}/history`)}>
+            <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/history`)}>
               History
             </button>
             <span className="ap-nav-link ap-nav-link--active">Students</span>

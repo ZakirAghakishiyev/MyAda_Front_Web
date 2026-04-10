@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendanceCourseList.css'
 
@@ -12,12 +12,13 @@ const INSTRUCTOR_CRNS = [
 ]
 
 const AttendanceCourseList = () => {
+  const { instructorId } = useParams()
   const navigate = useNavigate()
   const [selectedCrn, setSelectedCrn] = useState(null)
 
   const handleEnter = () => {
-    if (!selectedCrn) return
-    navigate(`/attendance/lesson/${selectedCrn}`)
+    if (!selectedCrn || !instructorId) return
+    navigate(`/attendance/${encodeURIComponent(instructorId)}/lesson/${encodeURIComponent(selectedCrn)}`)
   }
 
   return (
@@ -34,7 +35,10 @@ const AttendanceCourseList = () => {
       </header>
       <div className="acl-header">
         <h1 className="acl-title">QR Lesson Attendance</h1>
-        <p className="acl-subtitle">Select a course (CRN) to open the attendance portal.</p>
+        <p className="acl-subtitle">
+          Instructor <span className="acl-instructor-id">{instructorId || '—'}</span>
+          {' · '}Select a course (CRN) to open the attendance portal.
+        </p>
       </div>
 
       <div className="acl-card">

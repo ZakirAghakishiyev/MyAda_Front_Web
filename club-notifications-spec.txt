@@ -17,6 +17,7 @@ Source scope:
 - Sender: Student Life Office / Clubs Admin
 - Receiver: Club proposal owner (student who submitted proposal)
 - Trigger: Proposal status changed to Approved
+- For Student Services review flow, exact title/body copy and broadcast variant: see §2 items 21–22.
 - Required details:
   - proposalId
   - clubName
@@ -30,6 +31,7 @@ Source scope:
 - Sender: Student Life Office / Clubs Admin
 - Receiver: Club proposal owner
 - Trigger: Proposal status changed to Revision Required
+- For Student Services “request revision” notification copy: see §2 item 24.
 - Required details:
   - proposalId
   - clubName
@@ -255,7 +257,78 @@ Source scope:
   - reviewedBy
   - reviewedAt
 
-20. New club announcement broadcast
+--- Club proposals (Student Services review) — same notification structure as event proposals (17–19) ---
+
+These map to `POST /api/student-services/club-proposals/:proposalId/approve`, `.../reject`, and `.../request-revision` (see club-student-services-endpoints.md). Use the common notification object in §3 (title, body, receiver, data, actionUrl, etc.).
+
+21. Club proposal approved — to proposer
+- Sender: Student Services / Student Life Office
+- Receiver: Proposer (student who submitted the proposal)
+- Trigger: Club proposal approved via Student Services
+- Notification display (in-app / email):
+  - title: "Your Club Proposal is approved"
+  - body: "Click to launch club Dashboard"
+- Required details (payload):
+  - proposalId
+  - clubId (when provisioned)
+  - clubName
+  - decision: approved
+  - reviewedBy
+  - reviewedAt
+  - actionUrl: /club-admin (club dashboard launch)
+- Suggested type / routing key: student_services.club_proposal.approved.proposer (or club.proposal.approved.proposer under §5)
+
+22. Club proposal approved — broadcast to all users
+- Sender: Student Services / System
+- Receiver: All users (broadcast segment; not a single userId)
+- Trigger: Same approval event as (21); emitted in addition to the proposer notification
+- Notification display:
+  - title: "New Club Alert"
+  - body: {clubName} (the approved club name as plain text)
+- Required details:
+  - proposalId
+  - clubId
+  - clubName
+  - announcedAt
+  - audience: all_users (or segment id used by product)
+  - deepLink: optional /clubs/{clubId} or equivalent
+- Suggested type / routing key: student_services.club_proposal.approved.broadcast
+
+23. Club proposal disapproved — to proposer
+- Sender: Student Services / Student Life Office
+- Receiver: Proposer
+- Trigger: Club proposal rejected via Student Services (`POST .../reject` with reason)
+- Notification display:
+  - title: "Your Club Proposal is Disapproved"
+  - body: {adminNote} (same text as rejection reason / admin note to the proposer)
+- Required details:
+  - proposalId
+  - clubName (draft name from proposal)
+  - decision: rejected
+  - adminNote (maps to API `reason` field)
+  - reviewedBy
+  - reviewedAt
+  - optional resubmitUrl: /clubs/propose
+- Suggested type / routing key: student_services.club_proposal.rejected
+
+24. Club proposal — request revision (Request revision pressed)
+- Sender: Student Services / Student Life Office
+- Receiver: Proposer
+- Trigger: `POST .../club-proposals/:proposalId/request-revision` (comments to proposer)
+- Notification display:
+  - title: "There is a need for Changes in your Club Proposal"
+  - body: "Go to Announcements on Web to see comments and modify"
+- Required details:
+  - proposalId
+  - clubName
+  - decision: revision_required
+  - changes / reviewComments (from API `changes` or threaded comments)
+  - reviewedBy
+  - reviewedAt
+  - announcementsUrl or deepLink to Student Services / web announcements surface where comments appear
+- Suggested type / routing key: student_services.club_proposal.revision_requested
+
+25. New club announcement broadcast
 - Sender: Club admin
 - Receiver: Club members/followers/targeted student audience
 - Trigger: Send announcement as notification
@@ -269,7 +342,7 @@ Source scope:
   - sentAt
   - deepLink
 
-21. New vacancy published
+26. New vacancy published
 - Sender: Club admin
 - Receiver: Target student audience
 - Trigger: Publish vacancy in club-admin
@@ -283,7 +356,7 @@ Source scope:
   - publishedAt
   - vacancyUrl
 
-22. Vacancy status changed (active/inactive)
+27. Vacancy status changed (active/inactive)
 - Sender: Club admin
 - Receiver: Interested applicants/watchers + internal admins
 - Trigger: Vacancy status update in club-admin
@@ -294,7 +367,7 @@ Source scope:
   - changedBy
   - changedAt
 
-23. Member removed from club
+28. Member removed from club
 - Sender: Club admin
 - Receiver: Removed member
 - Trigger: Remove member action in club-admin members page
@@ -306,7 +379,7 @@ Source scope:
   - effectiveAt
   - removedBy
 
-24. Member role/position updated
+29. Member role/position updated
 - Sender: Club admin
 - Receiver: Updated member (optional copy to other admins)
 - Trigger: Confirm role/position changes in club-admin members page

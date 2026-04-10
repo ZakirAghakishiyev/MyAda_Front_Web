@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { FilterProvider } from './contexts/FilterContext'
 import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
 import { RegisteredEventsProvider } from './contexts/RegisteredEventsContext'
@@ -272,10 +272,11 @@ const AppContent = () => {
             <Route path="history" element={<StaffPortalHistory />} />
             <Route path="ticket/:id" element={<StaffTicketDetail />} />
           </Route>
-          <Route path="/attendance" element={<AttendanceCourseList />} />
-          <Route path="/attendance/lesson/:lessonId/students" element={<AttendanceStudents />} />
-          <Route path="/attendance/lesson/:lessonId/history" element={<AttendanceHistory />} />
-          <Route path="/attendance/lesson/:lessonId" element={<AttendancePortal />} />
+          <Route path="/attendance" element={<Navigate to="/attendance/demo" replace />} />
+          <Route path="/attendance/:instructorId" element={<AttendanceCourseList />} />
+          <Route path="/attendance/:instructorId/lesson/:lessonId/students" element={<AttendanceStudents />} />
+          <Route path="/attendance/:instructorId/lesson/:lessonId/history" element={<AttendanceHistory />} />
+          <Route path="/attendance/:instructorId/lesson/:lessonId" element={<AttendancePortal />} />
           <Route
             path="/support-dispatcher/assign-task"
             element={

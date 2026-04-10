@@ -9,12 +9,6 @@ const IconBack = () => (
     <path d="M19 12H5M12 19l-7-7 7-7" />
   </svg>
 )
-const IconShare = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-    <path d="M8.59 13.51l6.82 3.98M15.41 6.51l-6.82 3.98" />
-  </svg>
-)
 const IconPin = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
@@ -56,12 +50,6 @@ const IconX = () => (
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 )
-const IconStar = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-)
-
 const RequestDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -117,14 +105,6 @@ const RequestDetail = () => {
             <button type="button" className="rd-back" onClick={() => navigate('/my-requests')} aria-label="Back">
               <IconBack />
             </button>
-            <div className="rd-header-right">
-              <button type="button" className="rd-header-btn">
-                Print
-              </button>
-              <button type="button" className="rd-header-btn">
-                <IconShare /> Share
-              </button>
-            </div>
           </header>
 
           <div className="rd-summary">
@@ -186,21 +166,6 @@ const RequestDetail = () => {
               </section>
             )}
 
-            {isCompleted && request.rating != null && (
-              <section className="rd-card rd-card--completed">
-                <span className="rd-completed-icon">✓</span>
-                <span className="rd-completed-label">Completed</span>
-                <p className="rd-rating-label">Your Rating:</p>
-                <div className="rd-stars">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <span key={i} className={`rd-star ${i <= request.rating ? 'rd-star--filled' : ''}`}>
-                      <IconStar />
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {isCancelledStatus && request.cancelReason && (
               <section className="rd-card rd-card--cancelled">
                 <h2 className="rd-card-title">
@@ -237,14 +202,6 @@ const RequestDetail = () => {
                 </button>
                 <button type="button" className="rd-btn rd-btn--cancel" onClick={() => setShowCancelModal(true)}>
                   <IconX /> Cancel Ticket
-                </button>
-              </div>
-            )}
-
-            {isCompleted && (
-              <div className="rd-actions">
-                <button type="button" className="rd-btn rd-btn--rate">
-                  <IconStar /> Rate This Ticket
                 </button>
               </div>
             )}

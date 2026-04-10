@@ -76,8 +76,9 @@ const defaultCourse = {
 }
 
 export default function AttendancePortal() {
-  const { lessonId } = useParams()
+  const { instructorId, lessonId } = useParams()
   const navigate = useNavigate()
+  const lessonBase = `/attendance/${encodeURIComponent(instructorId || 'demo')}/lesson/${encodeURIComponent(lessonId || 'demo')}`
   const [course, setCourse] = useState(defaultCourse)
   const [sessionState, setSessionState] = useState(null)
   const [sessionError, setSessionError] = useState(null)
@@ -153,7 +154,7 @@ export default function AttendancePortal() {
     } finally {
       setQrLoading(false)
     }
-  }, [attendanceActive, sessionClosed, ids.lessonId, ids.sessionId, ids.attendanceSessionId, addLog])
+  }, [attendanceActive, sessionClosed, ids.instructorId, ids.lessonId, ids.sessionId, ids.attendanceSessionId, addLog])
 
   useEffect(() => {
     if (!attendanceActive || sessionClosed) {
@@ -288,8 +289,8 @@ export default function AttendancePortal() {
           </button>
           <nav className="ap-nav-links">
             <span className="ap-nav-link ap-nav-link--active">Dashboard</span>
-            <button type="button" className="ap-nav-link" onClick={() => navigate(`/attendance/lesson/${lessonId || 'demo'}/history`)}>History</button>
-            <button type="button" className="ap-nav-link" onClick={() => navigate(`/attendance/lesson/${lessonId || 'demo'}/students`)}>Students</button>
+            <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/history`)}>History</button>
+            <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/students`)}>Students</button>
             <button type="button" className="ap-nav-link">Settings</button>
           </nav>
         </div>

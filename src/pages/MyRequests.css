@@ -350,40 +350,6 @@
   color: #9ca3af;
 }
 
-.mr-card--create {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-style: dashed;
-  border-color: #d1d5db;
-  background: #f9fafb;
-}
-
-.mr-card--create:hover {
-  background: #f3f4f6;
-}
-
-.mr-create-inner {
-  text-align: center;
-  color: #6b7280;
-}
-
-.mr-create-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: #e5e7eb;
-  margin-bottom: 8px;
-}
-
-.mr-create-text {
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .mr-empty {
   text-align: center;
   color: #6b7280;

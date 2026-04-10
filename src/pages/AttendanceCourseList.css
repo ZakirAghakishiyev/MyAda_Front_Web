@@ -50,6 +50,11 @@
   margin: 0;
 }
 
+.acl-instructor-id {
+  font-weight: 600;
+  color: #334155;
+}
+
 .acl-card {
   background: #fff;
   border-radius: 14px;

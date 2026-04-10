@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { mockClubs } from '../data/clubsData'
 import adaLogo from '../assets/ada-logo.png'
@@ -35,11 +35,31 @@ const IconChevron = () => (
   </svg>
 )
 
-const CATEGORIES = ['All', 'Technology', 'Arts', 'Business', 'Academic', 'Sports']
+const CLUB_CATEGORIES_URL =
+  import.meta.env.VITE_CLUB_CATEGORIES_URL ?? 'http://13.60.196.144:5000/club/api/v1/categories'
+
 const ClubsList = () => {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
+  const [apiCategories, setApiCategories] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(CLUB_CATEGORIES_URL)
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data)) {
+          setApiCategories(data.map((row) => ({ id: row.id, name: String(row.name ?? '') })).filter((c) => c.name))
+        }
+      } catch {
+        if (!cancelled) setApiCategories([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const filteredClubs = useMemo(() => {
     let list = mockClubs
@@ -121,8 +141,9 @@ const ClubsList = () => {
             onChange={(e) => setCategory(e.target.value)}
             aria-label="Category"
           >
-            {CATEGORIES.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+            <option value="All">All categories</option>
+            {apiCategories.map((opt) => (
+              <option key={opt.id} value={opt.name}>{opt.name}</option>
             ))}
           </select>
         </div>

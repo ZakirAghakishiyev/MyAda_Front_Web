@@ -123,7 +123,7 @@ const Home = () => {
   const qrAttendanceButtons = [
     {
       text: 'QR Attendance',
-      onClick: () => navigate('/attendance')
+      onClick: () => navigate('/attendance/demo')
     }
   ]
 

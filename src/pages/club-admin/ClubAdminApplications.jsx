@@ -93,6 +93,16 @@ const ClubAdminApplications = () => {
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n })
   }
 
+  const handleCallForInterview = (id, typeOverride) => {
+    const t = typeOverride ?? appType
+    setApplications((prev) => ({
+      ...prev,
+      [t]: prev[t].map((a) => (a.id === id ? { ...a, status: 'Reviewing' } : a))
+    }))
+    setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n })
+    setDetailApplication(null)
+  }
+
   const handleBulkApprove = () => {
     setApplications((prev) => ({
       ...prev,
@@ -268,6 +278,7 @@ const ClubAdminApplications = () => {
           onClose={() => setDetailApplication(null)}
           onApprove={handleApprove}
           onDisapprove={handleDisapprove}
+          onCallForInterview={handleCallForInterview}
         />
       )}
     </>
