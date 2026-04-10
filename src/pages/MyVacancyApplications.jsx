@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import adaLogo from '../assets/ada-logo.png'
 import './MyVacancyApplications.css'
 
@@ -151,6 +151,7 @@ const statusIcon = (status) => {
 }
 
 const MyVacancyApplications = () => {
+  const location = useLocation()
   const navigate = useNavigate()
   const [applications, setApplications] = useState(MOCK_APPLICATIONS)
   const [slots, setSlots] = useState(MOCK_INTERVIEW_SLOTS)
@@ -200,6 +201,19 @@ const MyVacancyApplications = () => {
     if (app.status !== 'Called for Interview' && app.status !== 'Interview Scheduled') return
     setSelectedAppId(app.id)
   }
+
+  useEffect(() => {
+    if (!location.state?.openInterviewPicker) return
+    if (selectedAppId) return
+
+    const target = applications.find((app) => app.status === 'Called for Interview') ||
+      applications.find((app) => app.status === 'Interview Scheduled')
+
+    if (target) {
+      setSelectedAppId(target.id)
+    }
+    navigate(location.pathname, { replace: true, state: null })
+  }, [applications, location.pathname, location.state, navigate, selectedAppId])
 
   const handleCloseInterviewPicker = () => {
     setSelectedAppId(null)

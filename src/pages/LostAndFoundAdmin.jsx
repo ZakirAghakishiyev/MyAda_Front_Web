@@ -187,7 +187,6 @@ export default function LostAndFoundAdmin() {
             <div className="lf-admin-kpi-content">
               <span className="lf-admin-kpi-value">{kpis.newlyReported}</span>
               <span className="lf-admin-kpi-label">Newly Reported</span>
-              <span className="lf-admin-kpi-meta">12% from yesterday</span>
             </div>
           </div>
           <div className="lf-admin-kpi">
@@ -195,7 +194,6 @@ export default function LostAndFoundAdmin() {
             <div className="lf-admin-kpi-content">
               <span className="lf-admin-kpi-value">{kpis.inOffice}</span>
               <span className="lf-admin-kpi-label">In Office (Received)</span>
-              <span className="lf-admin-kpi-meta">Inventory stable</span>
             </div>
           </div>
           <div className="lf-admin-kpi">
@@ -203,7 +201,6 @@ export default function LostAndFoundAdmin() {
             <div className="lf-admin-kpi-content">
               <span className="lf-admin-kpi-value">{kpis.awaitingPickup}</span>
               <span className="lf-admin-kpi-label">Awaiting Pickup</span>
-              <span className="lf-admin-kpi-meta">4 pending over 48h</span>
             </div>
           </div>
           <div className="lf-admin-kpi">
@@ -211,8 +208,7 @@ export default function LostAndFoundAdmin() {
             <div className="lf-admin-kpi-content">
               <span className="lf-admin-kpi-value">{kpis.claimedToday}</span>
               <span className="lf-admin-kpi-label">Claimed Today</span>
-              <span className="lf-admin-kpi-meta">Daily record hit</span>
-            </div>
+              </div>
           </div>
         </div>
 

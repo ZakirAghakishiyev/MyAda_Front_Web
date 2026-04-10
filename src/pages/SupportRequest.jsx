@@ -527,7 +527,6 @@ const SupportRequest = ({ initialArea = 'it' }) => {
               </p>
               <ul className="it-support-info-list">
                 <li>A support ticket is created and routed to the appropriate team.</li>
-                <li>You receive a confirmation email with your ticket ID.</li>
                 <li>Technician reviews the details and may contact you for clarification.</li>
                 <li>You&apos;ll be notified when the issue is resolved or an update is available.</li>
               </ul>

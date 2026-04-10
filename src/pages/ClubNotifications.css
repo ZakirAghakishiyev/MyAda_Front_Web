@@ -4,11 +4,11 @@
 }
 
 .cn-layout {
-  max-width: 1200px;
+  max-width: 1440px;
   margin: 24px auto 40px;
   padding: 0 20px;
   display: grid;
-  grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 

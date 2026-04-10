@@ -8,17 +8,6 @@ const IconBack = () => (
     <path d="M19 12H5M12 19l-7-7 7-7" />
   </svg>
 )
-const IconBookmark = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-  </svg>
-)
-const IconShare = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-    <path d="M8.59 13.51l6.82 3.98M15.41 6.51l-6.82 3.98" />
-  </svg>
-)
 const IconPin = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
@@ -32,11 +21,6 @@ const IconCalendar = () => (
 const IconCheck = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <polyline points="20 6 9 17 4 12" />
-  </svg>
-)
-const IconReport = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
   </svg>
 )
 
@@ -75,14 +59,6 @@ const LostAndFoundItemDetail = () => {
           <button type="button" className="lf-detail-icon-btn" onClick={() => navigate(-1)} aria-label="Back">
             <IconBack />
           </button>
-          <div className="lf-detail-header-actions">
-            <button type="button" className="lf-detail-icon-btn" aria-label="Bookmark">
-              <IconBookmark />
-            </button>
-            <button type="button" className="lf-detail-icon-btn" aria-label="Share">
-              <IconShare />
-            </button>
-          </div>
         </header>
 
         <div className="lf-detail-main">
@@ -158,19 +134,11 @@ const LostAndFoundItemDetail = () => {
           </section>
 
           <section className="lf-detail-actions">
-            <h2 className="lf-detail-actions-title">Actions</h2>
             <div className="lf-detail-actions-btns">
-              <button type="button" className="lf-detail-btn lf-detail-btn--contact">
-                Contact Office
-              </button>
               <button type="button" className="lf-detail-btn lf-detail-btn--mine">
-                This is Mine
+                {item.type === 'lost' ? 'Item Found' : 'This Is Mine'}
               </button>
             </div>
-            <button type="button" className="lf-detail-report">
-              <IconReport />
-              <span>Report Issue</span>
-            </button>
           </section>
         </div>
       </div>

@@ -94,6 +94,18 @@ const RequestDetailDispatcher = () => {
     setCancelReason('')
   }
 
+  const handleConfirmAssignment = () => {
+    if (!dispatcherAssignee) return
+    navigate('/support-dispatcher', {
+      state: {
+        newAssignment: {
+          id: request.id,
+          staffName: dispatcherAssignee
+        }
+      }
+    })
+  }
+
   if (!request) {
     return (
       <div className="rd-overlay" onClick={() => navigate('/support-dispatcher')} role="dialog">
@@ -291,11 +303,13 @@ const RequestDetailDispatcher = () => {
                   </div>
 
                   <div className="rd-dispatcher-actions">
-                    <button type="button" className="rd-dispatcher-btn rd-dispatcher-btn--primary">
+                    <button
+                      type="button"
+                      className="rd-dispatcher-btn rd-dispatcher-btn--primary"
+                      onClick={handleConfirmAssignment}
+                      disabled={!dispatcherAssignee}
+                    >
                       Confirm Assignment
-                    </button>
-                    <button type="button" className="rd-dispatcher-btn rd-dispatcher-btn--secondary">
-                      Request Clarification
                     </button>
                   </div>
                 </section>

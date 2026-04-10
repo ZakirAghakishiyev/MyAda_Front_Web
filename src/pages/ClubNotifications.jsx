@@ -261,7 +261,11 @@ const ClubNotifications = () => {
                 The Debate Society would like to schedule an interview with you for the Event Coordinator position. Please confirm your time slot or propose an alternative.
               </p>
               <div className="cn-card-actions">
-                <button type="button" className="cn-btn cn-btn--primary" onClick={() => navigate('/clubs/vacancies/my-applications')}>
+                <button
+                  type="button"
+                  className="cn-btn cn-btn--primary"
+                  onClick={() => navigate('/clubs/vacancies/my-applications', { state: { openInterviewPicker: true } })}
+                >
                   Confirm Interview Slot
                 </button>
                 <button type="button" className="cn-btn cn-btn--ghost">
@@ -298,49 +302,6 @@ const ClubNotifications = () => {
             </button>
           </div>
         </section>
-
-        <aside className="cn-sidebar">
-          <div className="cn-sidebar-card">
-            <h3 className="cn-sidebar-title">Activity Summary</h3>
-            <ul className="cn-summary-list">
-              <li>
-                <span>Active Proposals</span>
-                <span className="cn-summary-value">2</span>
-              </li>
-              <li>
-                <span>Applications Pending</span>
-                <span className="cn-summary-value">3</span>
-              </li>
-              <li>
-                <span>Events Registered</span>
-                <span className="cn-summary-value">5</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="cn-sidebar-card">
-            <h3 className="cn-sidebar-title">Upcoming Event</h3>
-            <p className="cn-sidebar-text">
-              <strong>Jazz Ensemble</strong> — Music Society
-            </p>
-            <p className="cn-sidebar-text cn-sidebar-muted">
-              Tonight at 6:00 PM · Campus Auditorium
-            </p>
-            <button type="button" className="cn-btn cn-btn--primary cn-sidebar-btn" onClick={() => navigate('/clubs/events/my-registrations')}>
-              View Ticket
-            </button>
-          </div>
-
-          {/* <div className="cn-sidebar-card">
-            <h3 className="cn-sidebar-title">Keep your profile up to date</h3>
-            <p className="cn-sidebar-text cn-sidebar-muted">
-              Clubs use your profile to match you with relevant roles and events tailored to your interests.
-            </p>
-            <button type="button" className="cn-btn cn-btn--outline cn-sidebar-btn">
-              Update Profile
-            </button>
-          </div> */}
-        </aside>
       </div>
     </div>
   )

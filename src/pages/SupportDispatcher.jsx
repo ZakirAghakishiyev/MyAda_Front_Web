@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { mockRequests } from '../data/myRequestsItems'
 import adaLogo from '../assets/ada-logo.png'
 import './SupportDispatcher.css'
@@ -45,6 +45,7 @@ const IconLocation = () => (
 
 const SupportDispatcher = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const [tab, setTab] = useState('all') // all | it | fm | high
   const [sortBy, setSortBy] = useState('newest')
   const [assignments, setAssignments] = useState({}) // id -> confirmed staff name
@@ -78,14 +79,6 @@ const SupportDispatcher = () => {
     []
   )
 
-  const stats = useMemo(() => {
-    const total = enhancedRequests.length
-    const unassigned = enhancedRequests.filter((r) => !r.assignedTo && r.status !== 'Completed' && r.status !== 'Cancelled').length
-    const inProgress = enhancedRequests.filter((r) => ['In Progress', 'Assigned'].includes(r.status)).length
-    const completedToday = enhancedRequests.filter((r) => r.status === 'Completed').length
-    return { total, unassigned, inProgress, completedToday }
-  }, [enhancedRequests])
-
   const filtered = useMemo(() => {
     let items = enhancedRequests
     if (tab === 'it') items = items.filter((r) => r.service === 'IT')
@@ -98,6 +91,25 @@ const SupportDispatcher = () => {
     }
     return items
   }, [enhancedRequests, tab, sortBy])
+
+  const stats = useMemo(() => {
+    const total = filtered.length
+    const unassigned = filtered.filter(
+      (r) => !r.assignedTo && !assignments[r.id] && r.status !== 'Completed' && r.status !== 'Cancelled'
+    ).length
+    const inProgress = filtered.filter((r) => ['In Progress', 'Assigned'].includes(r.status)).length
+    const completed = filtered.filter((r) => r.status === 'Completed').length
+    return { total, unassigned, inProgress, completed }
+  }, [assignments, filtered])
+
+  useEffect(() => {
+    const incoming = location.state?.newAssignment
+    if (!incoming?.id || !incoming?.staffName) return
+
+    setAssignments((prev) => ({ ...prev, [incoming.id]: incoming.staffName }))
+    setPendingAssignments((prev) => ({ ...prev, [incoming.id]: '' }))
+    navigate('/support-dispatcher', { replace: true, state: null })
+  }, [location.state, navigate])
 
   const handleRowClick = (id) => {
     setUnseenTickets((prev) => {
@@ -118,34 +130,16 @@ const SupportDispatcher = () => {
 
   return (
     <div className="sd-page">
-      <div className="ssd-topbar">
-        <button
-          type="button"
-          className="ssd-logo-btn"
-          onClick={() => navigate('/')}
-          aria-label="Go to home"
-        >
-          <img src={adaLogo} alt="ADA University" className="ssd-logo-img" />
-        </button>
-        <nav className="ssd-topnav">
-          <button
-            type="button"
-            className="ssd-topnav-link ssd-topnav-link--active"
-            onClick={() => navigate('/support-dispatcher')}
-          >
-            Tickets
-          </button>
-          <button
-            type="button"
-            className="ssd-topnav-link"
-            onClick={() => navigate('/support-dispatcher/staff')}
-          >
-            Workload
-          </button>
-        </nav>
-      </div>
       <header className="sd-header">
         <div>
+          <button
+            type="button"
+            className="ssd-logo-btn"
+            onClick={() => navigate('/')}
+            aria-label="Go to home"
+          >
+            <img src={adaLogo} alt="ADA University" className="ssd-logo-img" />
+          </button>
           <h1 className="sd-title">Request Dispatcher</h1>
           <p className="sd-subtitle">Central dashboard for IT and Facilities tickets across campus.</p>
         </div>
@@ -160,9 +154,9 @@ const SupportDispatcher = () => {
           <button
             type="button"
             className="sd-new-request-btn"
-            onClick={() => navigate('/it-support', { state: { from: 'dispatcher' } })}
+            onClick={() => navigate('/support-dispatcher/assign-task')}
           >
-            + New Support Request
+            Assign New Task 
           </button>
         </div>
       </header>
@@ -175,7 +169,7 @@ const SupportDispatcher = () => {
           <div className="sd-stat-body">
             <span className="sd-stat-label">Total Requests</span>
             <span className="sd-stat-value">{stats.total}</span>
-            <span className="sd-stat-meta">+12% vs last week</span>
+            <span className="sd-stat-meta">Shown in current view</span>
           </div>
         </div>
         <div className="sd-stat-card">
@@ -183,7 +177,7 @@ const SupportDispatcher = () => {
           <div className="sd-stat-body">
             <span className="sd-stat-label">Unassigned</span>
             <span className="sd-stat-value">{stats.unassigned}</span>
-            <span className="sd-stat-meta sd-stat-meta--alert">Critical attention needed</span>
+            <span className="sd-stat-meta sd-stat-meta--alert">Needs assignment</span>
           </div>
         </div>
         <div className="sd-stat-card">
@@ -193,15 +187,15 @@ const SupportDispatcher = () => {
           <div className="sd-stat-body">
             <span className="sd-stat-label">In Progress</span>
             <span className="sd-stat-value">{stats.inProgress}</span>
-            <span className="sd-stat-meta">Avg. TAT: 4.2h</span>
+            <span className="sd-stat-meta">Currently active</span>
           </div>
         </div>
         <div className="sd-stat-card">
           <div className="sd-stat-icon sd-stat-icon--green">✓</div>
           <div className="sd-stat-body">
             <span className="sd-stat-label">Completed</span>
-            <span className="sd-stat-value">{stats.completedToday}</span>
-            <span className="sd-stat-meta sd-stat-meta--success">82% resolution rate</span>
+            <span className="sd-stat-value">{stats.completed}</span>
+            <span className="sd-stat-meta sd-stat-meta--success">Resolved tickets</span>
           </div>
         </div>
       </section>
