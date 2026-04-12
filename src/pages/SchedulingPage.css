@@ -2,6 +2,47 @@
   padding: 40px 20px;
   max-width: 1200px;
   margin: 0 auto;
+  min-width: 0;
+}
+
+.scheduling-wide {
+  max-width: 1100px;
+}
+
+.scheduling-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.scheduling-subnav a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.scheduling-subnav a:hover {
+  text-decoration: underline;
+}
+
+.scheduling-subnav-active {
+  color: #1e40af !important;
+  text-decoration: underline !important;
+}
+
+.scheduling-muted {
+  color: #6b7280;
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.scheduling-actions {
+  margin-top: 8px;
 }
 
 .page-container {
@@ -9,6 +50,7 @@
   border-radius: 8px;
   padding: 40px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 0;
 }
 
 .page-container h1 {

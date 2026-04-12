@@ -10,27 +10,23 @@ const Home = () => {
 
   const schedulingButtons = [
     {
-      text: 'Go to Scheduling',
+      text: 'Courses',
+      onClick: () => navigate('/scheduling/courses')
+    },
+    {
+      text: 'Add preferences',
+      onClick: () => navigate('/scheduling/preferences')
+    },
+    {
+      text: 'Scheduling',
       onClick: () => navigate('/scheduling')
     }
   ]
 
   const lostAndFoundButtons = [
     {
-      text: 'Lost and Found 2',
+      text: 'Lost and Found',
       onClick: () => navigate('/lost-and-found-2')
-    },
-    {
-      text: 'Announce Lost Item',
-      onClick: () => navigate('/lost-and-found/announce-lost', { state: { from: 'home' } })
-    },
-    {
-      text: 'Announce Found Item',
-      onClick: () => navigate('/lost-and-found/announce-found', { state: { from: 'home' } })
-    },
-    {
-      text: 'View List',
-      onClick: () => navigate('/lost-and-found')
     },
     {
       text: 'Admin',
@@ -42,18 +38,6 @@ const Home = () => {
     {
       text: 'ADA Clubs',
       onClick: () => navigate('/clubs')
-    },
-    {
-      text: 'Club Vacancies',
-      onClick: () => navigate('/clubs/vacancies')
-    },
-    {
-      text: 'Club Events',
-      onClick: () => navigate('/clubs/events')
-    },
-    {
-      text: 'My Registered Events',
-      onClick: () => navigate('/clubs/events/my-registrations')
     },
     {
       text: 'Club Admin',

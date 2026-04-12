@@ -9,6 +9,9 @@ import LostAndFoundAdmin from './pages/LostAndFoundAdmin'
 import LostAndFoundAdminItemDetail from './pages/LostAndFoundAdminItemDetail'
 import Home from './pages/Home'
 import SchedulingPage from './pages/SchedulingPage'
+import CoursePage from './pages/scheduling/CoursePage'
+import CourseDetailPage from './pages/scheduling/CourseDetailPage'
+import SchedulingPreferencesPage from './pages/scheduling/SchedulingPreferencesPage'
 import LostAndFoundList from './pages/LostAndFoundList'
 import LostAndFoundItemDetail from './pages/LostAndFoundItemDetail'
 import AnnounceLostItem from './pages/AnnounceLostItem'
@@ -31,6 +34,9 @@ import AttendanceHistory from './pages/AttendanceHistory'
 import StaffPortalHistory from './pages/StaffPortalHistory'
 import StaffTicketDetail from './pages/StaffTicketDetail'
 import ComingSoonPage from './pages/ComingSoonPage'
+import Login from './pages/Login'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import ClubsList from './pages/ClubsList'
 import ClubNotifications from './pages/ClubNotifications'
 import MyMemberships from './pages/MyMemberships'
@@ -69,6 +75,7 @@ const AppContent = () => {
   const isClubAdminRoute = location.pathname.startsWith('/club-admin')
   const isStaffPortalRoute = location.pathname.startsWith('/staff-portal')
   const isAttendanceRoute = location.pathname.startsWith('/attendance')
+  const isSchedulingRoute = location.pathname.startsWith('/scheduling')
   const hideHeaderOnRoutes = [
     '/scheduling',
     '/lost-and-found',
@@ -80,6 +87,9 @@ const AppContent = () => {
     '/fm-support',
     '/my-requests',
     '/coming-soon',
+    '/login',
+    '/forgot-password',
+    '/reset-password',
     '/clubs',
     '/clubs/my-memberships',
     '/clubs/vacancies',
@@ -122,7 +132,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isSchedulingRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
 
   return (
     <div className="app">
@@ -131,7 +141,13 @@ const AppContent = () => {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/scheduling" element={<SchedulingPage />} />
+          <Route path="/scheduling/courses/:courseId" element={<CourseDetailPage />} />
+          <Route path="/scheduling/courses" element={<CoursePage />} />
+          <Route path="/scheduling/preferences" element={<SchedulingPreferencesPage />} />
           <Route path="/coming-soon" element={<ComingSoonPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/student-services" element={<StudentServices />} />
           <Route path="/student-services/events/:id" element={<StudentServicesEventDetail />} />
           <Route path="/clubs" element={<ClubsList />} />
