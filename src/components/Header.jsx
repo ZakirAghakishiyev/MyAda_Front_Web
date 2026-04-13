@@ -1,6 +1,7 @@
-import React from 'react'
-import { useLocation, Link } from 'react-router-dom'
+import React, { useEffect, useRef, useState } from 'react'
+import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { useFilter } from '../contexts/FilterContext'
+import { logout } from '../auth'
 import adaLogo from '../assets/ada-logo.png'
 import campusBanner from '../assets/campus-banner.png'
 import './Header.css'
@@ -8,6 +9,10 @@ import './Header.css'
 const Header = () => {
   const { activeFilter, setActiveFilter } = useFilter()
   const location = useLocation()
+  const navigate = useNavigate()
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const profileMenuRef = useRef(null)
+  const isHomePage = location.pathname === '/'
 
   const handleFilterClick = (filterName) => {
     setActiveFilter(filterName)
@@ -20,6 +25,23 @@ const Header = () => {
     { name: 'account', label: 'My Account' },
     { name: 'work', label: 'Work' }
   ]
+
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (!profileMenuRef.current) return
+      if (!profileMenuRef.current.contains(e.target)) {
+        setShowProfileMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [])
+
+  const handleLogout = async () => {
+    await logout()
+    setShowProfileMenu(false)
+    navigate('/login', { replace: true })
+  }
 
   return (
     <header className="header">
@@ -53,7 +75,25 @@ const Header = () => {
             </svg>
             <span className="notification-badge"></span>
           </button>
-          <div className="profile-icon">Z</div>
+          {isHomePage && (
+            <div className="profile-wrap" ref={profileMenuRef}>
+              <button
+                type="button"
+                className="profile-icon"
+                aria-label="Open profile menu"
+                onClick={() => setShowProfileMenu((prev) => !prev)}
+              >
+                Z
+              </button>
+              {showProfileMenu && (
+                <div className="profile-menu">
+                  <button type="button" className="profile-menu-item" onClick={handleLogout}>
+                    Log out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="banner-container">

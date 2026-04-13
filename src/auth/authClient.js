@@ -32,7 +32,7 @@ export async function refreshSession() {
       const refreshToken = getRefreshToken()
       if (!refreshToken) return null
 
-      const res = await fetch(`${AUTH_API_BASE}/auth/refresh`, {
+      const res = await fetch(`${AUTH_API_BASE}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -63,7 +63,7 @@ export async function refreshSession() {
 }
 
 export async function login(username, password) {
-  const res = await fetch(`${AUTH_API_BASE}/auth/login`, {
+  const res = await fetch(`${AUTH_API_BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -94,7 +94,7 @@ export async function logout() {
   const refreshToken = getRefreshToken()
   try {
     if (accessToken && refreshToken) {
-      await fetch(`${AUTH_API_BASE}/auth/logout`, {
+      await fetch(`${AUTH_API_BASE}/api/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +110,7 @@ export async function logout() {
 }
 
 export async function forgotPassword(email) {
-  const res = await fetch(`${AUTH_API_BASE}/auth/forgot-password`, {
+  const res = await fetch(`${AUTH_API_BASE}/api/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -125,7 +125,7 @@ export async function forgotPassword(email) {
 }
 
 export async function resetPassword(email, token, newPassword) {
-  const res = await fetch(`${AUTH_API_BASE}/auth/reset-password`, {
+  const res = await fetch(`${AUTH_API_BASE}/api/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, token, newPassword }),
@@ -143,7 +143,7 @@ export async function resetPassword(email, token, newPassword) {
 }
 
 export async function changePassword(email, oldPassword, newPassword) {
-  const res = await fetch(`${AUTH_API_BASE}/auth/change-password`, {
+  const res = await fetch(`${AUTH_API_BASE}/api/auth/change-password`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, oldPassword, newPassword }),
