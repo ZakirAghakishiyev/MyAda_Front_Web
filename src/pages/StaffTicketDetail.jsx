@@ -1,17 +1,11 @@
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getStaffTicketById } from '../data/staffTicketsItems'
 import './RequestDetail.css'
+import { getRequestDetail, getCurrentUserIds, getRequestTimeline, markRequestInProgress, markRequestCompleted } from '../api/supportApi'
 
 const IconBack = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
-const IconShare = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-    <path d="M8.59 13.51l6.82 3.98M15.41 6.51l-6.82 3.98" />
   </svg>
 )
 const IconPin = () => (
@@ -56,12 +50,56 @@ const IconStar = () => (
   </svg>
 )
 
+const REFRESH_INTERVAL_MS = 10000
+
 const StaffTicketDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const request = getStaffTicketById(id)
+  const [request, setRequest] = React.useState(null)
+  const [timeline, setTimeline] = React.useState([])
+  const [loading, setLoading] = React.useState(true)
+  const { staffId } = getCurrentUserIds()
+
+  const loadData = React.useCallback((showLoader = false) => {
+    if (showLoader) setLoading(true)
+    Promise.all([getRequestDetail(id), getRequestTimeline(id)])
+      .then(([detail, timelineItems]) => {
+        setRequest(detail)
+        setTimeline(timelineItems)
+      })
+      .catch(() => {
+        setRequest(null)
+        setTimeline([])
+      })
+      .finally(() => {
+        if (showLoader) setLoading(false)
+      })
+  }, [id])
+
+  React.useEffect(() => {
+    let isMounted = true
+    const safeLoad = (showLoader = false) => {
+      if (!isMounted) return
+      loadData(showLoader)
+    }
+    safeLoad(true)
+    const intervalId = window.setInterval(() => safeLoad(false), REFRESH_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') safeLoad(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadData])
 
   const goBack = () => navigate('/staff-portal')
+
+  if (loading) {
+    return <div className="rd-overlay"><div className="rd-popup">Loading ticket...</div></div>
+  }
 
   if (!request) {
     return (
@@ -74,10 +112,10 @@ const StaffTicketDetail = () => {
     )
   }
 
-  const isOpen = ['In Progress', 'Assigned'].includes(request.status)
+  const isOpen = ['New', 'Assigned', 'InProgress'].includes(request.status)
   const isCompleted = request.status === 'Completed'
   const isCancelledStatus = request.status === 'Cancelled'
-  const priorityLabel = request.priority || (request.urgency === 'Urgent' ? 'High' : 'Low')
+  const priorityLabel = request.priority || request.urgency || 'Standard'
 
   return (
     <div className="rd-overlay" onClick={(e) => e.target === e.currentTarget && goBack()} role="dialog" aria-modal="true">
@@ -86,10 +124,6 @@ const StaffTicketDetail = () => {
           <button type="button" className="rd-back" onClick={goBack} aria-label="Back">
             <IconBack />
           </button>
-          <div className="rd-header-right">
-            <button type="button" className="rd-header-btn">Print</button>
-            <button type="button" className="rd-header-btn"><IconShare /> Share</button>
-          </div>
         </header>
 
         <div className="rd-summary">
@@ -140,6 +174,19 @@ const StaffTicketDetail = () => {
             <p className="rd-description">{request.descriptionFull || request.description}</p>
           </section>
 
+          {Array.isArray(request.imageUrls) && request.imageUrls.length > 0 && (
+            <section className="rd-card">
+              <h2 className="rd-card-title">Images</h2>
+              <div className="rd-images-grid">
+                {request.imageUrls.map((url, idx) => (
+                  <a key={`${url}-${idx}`} href={url} target="_blank" rel="noreferrer" className="rd-image-link">
+                    <img src={url} alt={`Attachment ${idx + 1}`} className="rd-image" />
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+
           {request.assignedTo && (
             <section className="rd-card rd-card--assigned">
               <h2 className="rd-card-title"><IconPerson /> Assigned To</h2>
@@ -175,12 +222,13 @@ const StaffTicketDetail = () => {
           <section className="rd-card">
             <h2 className="rd-card-title"><IconTimeline /> Timeline</h2>
             <ul className="rd-timeline">
-              {request.timeline.map((item, i) => (
+              {timeline.map((item, i) => (
                 <li key={i} className={`rd-timeline-item ${item.done ? 'rd-timeline-item--done' : ''}`}>
                   <span className="rd-timeline-dot">{item.done ? <IconCheck /> : null}</span>
                   <div className="rd-timeline-content">
                     <span className="rd-timeline-step">{item.step}</span>
                     {item.detail && <span className="rd-timeline-detail">{item.detail}</span>}
+                    {item.created && <span className="rd-timeline-detail">{item.created}</span>}
                   </div>
                 </li>
               ))}
@@ -189,10 +237,10 @@ const StaffTicketDetail = () => {
 
           {isOpen && !isCancelledStatus && (
             <div className="rd-actions">
-              <button type="button" className="rd-btn rd-btn--contact" onClick={() => navigate('/staff-portal')}>
+              <button type="button" className="rd-btn rd-btn--contact" onClick={() => markRequestInProgress(id, staffId).then(goBack)}>
                 Mark as Started
               </button>
-              <button type="button" className="rd-btn rd-btn--rate" onClick={() => navigate('/staff-portal')}>
+              <button type="button" className="rd-btn rd-btn--rate" onClick={() => markRequestCompleted(id, staffId).then(goBack)}>
                 Complete
               </button>
             </div>

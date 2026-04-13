@@ -1,8 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { mockRequests } from '../data/myRequestsItems'
 import adaLogo from '../assets/ada-logo.png'
 import './SupportDispatcher.css'
+import {
+  assignRequest,
+  getAllRequests,
+  getCurrentUserIds,
+  getStaffOptionsByArea,
+  mapListItemToCard,
+} from '../api/supportApi'
 
 const IconArrowRight = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,46 +49,62 @@ const IconLocation = () => (
   </svg>
 )
 
+const REFRESH_INTERVAL_MS = 10000
+const isOpenStatus = (status) => {
+  const s = String(status || '').toLowerCase()
+  return s === 'new' || s === 'assigned' || s === 'inprogress'
+}
+const isClosedStatus = (status) => {
+  const s = String(status || '').toLowerCase()
+  return s.includes('completed') || s.includes('cancelled') || s.includes('canceled')
+}
+
 const SupportDispatcher = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [tab, setTab] = useState('all') // all | it | fm | high
+  const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
   const [assignments, setAssignments] = useState({}) // id -> confirmed staff name
   const [pendingAssignments, setPendingAssignments] = useState({}) // id -> selected but not confirmed
   const [unseenTickets, setUnseenTickets] = useState(() =>
-    mockRequests.reduce((acc, r) => {
+    requests.reduce((acc, r) => {
       if (r.unseen) acc[r.id] = true
       return acc
     }, {})
   )
+  const enhancedRequests = useMemo(() => requests, [requests])
 
-  const getServiceLabel = (request) => {
-    const itCategories = [
-      'Wi-Fi & Network',
-      'Email & Office 365',
-      'Password Reset',
-      'Projector/Display',
-      'Printer/Scanner',
-      'Software Installation',
-      'Computer Repair'
-    ]
-    return itCategories.includes(request.category) ? 'IT' : 'FM'
-  }
+  const loadRequests = useCallback((showLoader = false) => {
+    if (showLoader) setLoading(true)
+    getAllRequests({ sortBy })
+      .then((items) => setRequests(items.map(mapListItemToCard)))
+      .catch(() => setRequests([]))
+      .finally(() => {
+        if (showLoader) setLoading(false)
+      })
+  }, [sortBy])
 
-  const enhancedRequests = useMemo(
-    () =>
-      mockRequests.map((r) => ({
-        ...r,
-        service: getServiceLabel(r),
-      })),
-    []
-  )
+  useEffect(() => {
+    loadRequests(true)
+    const intervalId = window.setInterval(() => loadRequests(false), REFRESH_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadRequests(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadRequests])
 
   const filtered = useMemo(() => {
-    let items = enhancedRequests
-    if (tab === 'it') items = items.filter((r) => r.service === 'IT')
-    if (tab === 'fm') items = items.filter((r) => r.service === 'FM')
+    let items = enhancedRequests.filter((r) => isOpenStatus(r.status))
+    if (statusFilter !== 'all') items = items.filter((r) => r.status === statusFilter)
+    if (tab === 'it') items = items.filter((r) => String(r.service || '').toUpperCase() === 'IT')
+    if (tab === 'fm') items = items.filter((r) => String(r.service || '').toUpperCase() === 'FM')
     if (tab === 'high') items = items.filter((r) => (r.priority || '').toLowerCase() === 'high')
 
     if (sortBy === 'newest') {
@@ -90,17 +112,18 @@ const SupportDispatcher = () => {
       items = [...items].sort((a, b) => (a.id < b.id ? 1 : -1))
     }
     return items
-  }, [enhancedRequests, tab, sortBy])
+  }, [enhancedRequests, statusFilter, tab, sortBy])
 
   const stats = useMemo(() => {
+    const openRequests = enhancedRequests.filter((r) => isOpenStatus(r.status))
     const total = filtered.length
     const unassigned = filtered.filter(
-      (r) => !r.assignedTo && !assignments[r.id] && r.status !== 'Completed' && r.status !== 'Cancelled'
+      (r) => !r.assignedTo && !assignments[r.id]
     ).length
-    const inProgress = filtered.filter((r) => ['In Progress', 'Assigned'].includes(r.status)).length
-    const completed = filtered.filter((r) => r.status === 'Completed').length
-    return { total, unassigned, inProgress, completed }
-  }, [assignments, filtered])
+    const inProgress = openRequests.filter((r) => ['InProgress', 'Assigned'].includes(r.status)).length
+    const historyCount = enhancedRequests.filter((r) => isClosedStatus(r.status)).length
+    return { total, unassigned, inProgress, historyCount }
+  }, [assignments, enhancedRequests, filtered])
 
   useEffect(() => {
     const incoming = location.state?.newAssignment
@@ -122,10 +145,18 @@ const SupportDispatcher = () => {
   }
 
   const handleConfirmAssignment = (id) => {
-    const staffName = pendingAssignments[id]
-    if (!staffName) return
-    setAssignments(prev => ({ ...prev, [id]: staffName }))
-    setPendingAssignments(prev => ({ ...prev, [id]: '' }))
+    const rawStaffId = pendingAssignments[id]
+    if (!rawStaffId) return
+    const { dispatcherId } = getCurrentUserIds()
+    assignRequest(id, dispatcherId, Number(rawStaffId), '')
+      .then(() => {
+        const option = Object.values(getStaffOptionsByArea('IT').concat(getStaffOptionsByArea('FM')))
+          .find((x) => x.id === Number(rawStaffId))
+        setAssignments((prev) => ({ ...prev, [id]: option?.name || rawStaffId }))
+        setPendingAssignments((prev) => ({ ...prev, [id]: '' }))
+        loadRequests(false)
+      })
+      .catch((err) => alert(err.message || 'Assignment failed'))
   }
 
   return (
@@ -144,13 +175,13 @@ const SupportDispatcher = () => {
           <p className="sd-subtitle">Central dashboard for IT and Facilities tickets across campus.</p>
         </div>
         <div className="sd-header-actions">
-          {/* <button
+          <button
             type="button"
             className="sd-header-link"
-            onClick={() => navigate('/support-dispatcher/staff')}
+            onClick={() => navigate('/support-dispatcher/history')}
           >
-            Staff Directory
-          </button> */}
+            History
+          </button>
           <button
             type="button"
             className="sd-new-request-btn"
@@ -194,8 +225,8 @@ const SupportDispatcher = () => {
           <div className="sd-stat-icon sd-stat-icon--green">✓</div>
           <div className="sd-stat-body">
             <span className="sd-stat-label">Completed</span>
-            <span className="sd-stat-value">{stats.completed}</span>
-            <span className="sd-stat-meta sd-stat-meta--success">Resolved tickets</span>
+            <span className="sd-stat-value">{stats.historyCount}</span>
+            <span className="sd-stat-meta sd-stat-meta--success">Closed in history</span>
           </div>
         </div>
       </section>
@@ -234,6 +265,17 @@ const SupportDispatcher = () => {
           </div>
 
           <div className="sd-sort-wrap">
+            <span className="sd-sort-label">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="sd-sort-select"
+            >
+              <option value="all">All Open</option>
+              <option value="New">New</option>
+              <option value="Assigned">Assigned</option>
+              <option value="InProgress">In Progress</option>
+            </select>
             <span className="sd-sort-label">Sort by:</span>
             <select
               value={sortBy}
@@ -254,15 +296,16 @@ const SupportDispatcher = () => {
         </div>
 
         <div className="sd-table-body">
-          {filtered.map((r) => {
+          {loading ? <div className="sd-table-footer"><span className="sd-footer-text">Loading tickets...</span></div> : filtered.map((r) => {
             const isHigh = (r.priority || '').toLowerCase() === 'high'
             const isMedium = (r.priority || '').toLowerCase() === 'medium'
             const priorityClass = isHigh ? 'sd-priority-pill--high' : isMedium ? 'sd-priority-pill--medium' : 'sd-priority-pill--low'
 
             const isUnseen = !!unseenTickets[r.id]
 
-            const actionPlaceholder = r.service === 'IT' ? 'Select Technician' : 'Select Maintenance Staff'
-            const assignedStaff = assignments[r.id]
+            const area = String(r.service || '').toUpperCase() === 'FM' ? 'FM' : 'IT'
+            const actionPlaceholder = area === 'IT' ? 'Select Technician' : 'Select Maintenance Staff'
+            const assignedStaff = assignments[r.id] || r.assignedTo
             const pendingStaff = pendingAssignments[r.id] || ''
 
             return (
@@ -276,8 +319,8 @@ const SupportDispatcher = () => {
                 >
                 <div className="sd-cell sd-cell--details">
                   <div className="sd-request-meta">
-                    <span className={`sd-service-tag sd-service-tag--${r.service === 'IT' ? 'it' : 'fm'}`}>
-                      {r.service}
+                    <span className={`sd-service-tag sd-service-tag--${area === 'IT' ? 'it' : 'fm'}`}>
+                      {area}
                     </span>
                     <span className="sd-time-ago">{r.timeAgo}</span>
                     {isUnseen && <span className="sd-unseen-pill">New</span>}
@@ -327,9 +370,9 @@ const SupportDispatcher = () => {
                         }
                       >
                         <option value="">{actionPlaceholder}</option>
-                        <option value="Jamie Chen">Jamie Chen</option>
-                        <option value="Alex Rodriguez">Alex Rodriguez</option>
-                        <option value="Maintenance Team">Maintenance Team</option>
+                        {getStaffOptionsByArea(area).map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
                       </select>
                       <button
                         type="button"
@@ -352,7 +395,7 @@ const SupportDispatcher = () => {
 
           <div className="sd-table-footer">
             <span className="sd-footer-text">
-              Showing {filtered.length} of {enhancedRequests.length} tickets
+              Showing {filtered.length} of {enhancedRequests.filter((r) => isOpenStatus(r.status)).length} open tickets
             </span>
           </div>
         </div>

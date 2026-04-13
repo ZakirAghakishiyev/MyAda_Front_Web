@@ -126,10 +126,25 @@ export async function schedulingGetSessionOptions(scheduleRunId, sessionId) {
   return data?.options ?? []
 }
 
-export async function schedulingPublish(scheduleRunId) {
+/**
+ * POST /schedules/{schedule_run_id}/publish — requires X-User-Id.
+ * Body (snake_case): from_date, to_date (ISO dates); optional topic for Attendance session generation.
+ *
+ * @param {number|string} scheduleRunId
+ * @param {{ from_date: string, to_date: string, topic?: string | null }} body
+ */
+export async function schedulingPublish(scheduleRunId, body) {
+  const payload = {
+    from_date: body.from_date,
+    to_date: body.to_date,
+  }
+  if (body.topic != null && String(body.topic).trim() !== '') {
+    payload.topic = String(body.topic).trim()
+  }
   const res = await fetch(`${SCHEDULING_API_BASE}/schedules/${scheduleRunId}/publish`, {
     method: 'POST',
     headers: headersJsonWithUser(),
+    body: JSON.stringify(payload),
   })
   const data = await parseJson(res)
   if (!res.ok) {

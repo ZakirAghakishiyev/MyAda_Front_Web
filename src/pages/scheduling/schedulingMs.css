@@ -38,6 +38,23 @@
   margin: 0 0 12px;
 }
 
+.sched-ms-subsection-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 20px 0 10px;
+}
+
+.sched-ms-publish-result {
+  margin-top: 16px;
+}
+
+.sched-ms-table--compact th,
+.sched-ms-table--compact td {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 .sched-ms-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

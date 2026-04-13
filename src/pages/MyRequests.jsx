@@ -1,7 +1,6 @@
-import React, { useState, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mockRequests } from '../data/myRequestsItems'
-import { useCancelledRequests } from '../contexts/CancelledRequestsContext'
+import { getCurrentUserIds, getMemberRequests, mapListItemToCard } from '../api/supportApi'
 import './MyRequests.css'
 
 const IconBack = () => (
@@ -40,32 +39,50 @@ const IconFilter = () => (
   </svg>
 )
 
+const REFRESH_INTERVAL_MS = 10000
+
 const MyRequests = () => {
   const navigate = useNavigate()
-  const { isCancelled, getCancelReason } = useCancelledRequests()
   const [tab, setTab] = useState('open') // 'open' | 'completed' | 'cancelled'
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [viewMode, setViewMode] = useState('grid') // 'grid' | 'list'
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const { memberId } = getCurrentUserIds()
 
-  const requestsWithCancellation = useMemo(() => {
-    return mockRequests.map(r => {
-      if (isCancelled(r.id)) {
-        return { ...r, status: 'Cancelled', cancelReason: getCancelReason(r.id) }
-      }
-      return r
-    })
-  }, [isCancelled, getCancelReason])
+  const loadRequests = useCallback((showLoader = false) => {
+    if (showLoader) setLoading(true)
+    getMemberRequests(memberId)
+      .then((items) => setRequests(items.map(mapListItemToCard)))
+      .catch(() => setRequests([]))
+      .finally(() => {
+        if (showLoader) setLoading(false)
+      })
+  }, [memberId])
+
+  useEffect(() => {
+    loadRequests(true)
+    const intervalId = window.setInterval(() => loadRequests(false), REFRESH_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadRequests(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadRequests])
 
   const allCategories = useMemo(() => {
     const set = new Set()
-    requestsWithCancellation.forEach(r => set.add(r.category))
+    requests.forEach((r) => set.add(r.category))
     return Array.from(set)
-  }, [requestsWithCancellation])
+  }, [requests])
 
   const filteredRequests = useMemo(() => {
-    const statusFiltered = requestsWithCancellation.filter(r => {
-      if (tab === 'open') return ['In Progress', 'Assigned'].includes(r.status)
+    const statusFiltered = requests.filter((r) => {
+      if (tab === 'open') return ['New', 'Assigned', 'InProgress'].includes(r.status)
       if (tab === 'completed') return r.status === 'Completed'
       if (tab === 'cancelled') return r.status === 'Cancelled'
       return true
@@ -82,23 +99,14 @@ const MyRequests = () => {
         r.category.toLowerCase().includes(text)
       )
     })
-  }, [tab, requestsWithCancellation, search, categoryFilter])
+  }, [tab, requests, search, categoryFilter])
 
-  const openCount = requestsWithCancellation.filter(r => ['In Progress', 'Assigned'].includes(r.status)).length
-  const completedCount = requestsWithCancellation.filter(r => r.status === 'Completed').length
-  const cancelledCount = requestsWithCancellation.filter(r => r.status === 'Cancelled').length
+  const openCount = requests.filter((r) => ['New', 'Assigned', 'InProgress'].includes(r.status)).length
+  const completedCount = requests.filter((r) => r.status === 'Completed').length
+  const cancelledCount = requests.filter((r) => r.status === 'Cancelled').length
 
   const getServiceLabel = (request) => {
-    const itCategories = [
-      'Wi-Fi & Network',
-      'Email & Office 365',
-      'Password Reset',
-      'Projector/Display',
-      'Printer/Scanner',
-      'Software Installation',
-      'Computer Repair'
-    ]
-    return itCategories.includes(request.category) ? 'IT Services' : 'Facilities'
+    return String(request.service || '').toUpperCase() === 'IT' ? 'IT Services' : 'Facilities'
   }
 
   return (
@@ -197,7 +205,9 @@ const MyRequests = () => {
         </div>
       </div>
 
-      {filteredRequests.length > 0 ? (
+      {loading ? (
+        <p className="mr-empty">Loading requests...</p>
+      ) : filteredRequests.length > 0 ? (
         <>
           <div className={`mr-grid ${viewMode === 'list' ? 'mr-grid--list' : ''}`}>
             {filteredRequests.map(request => {

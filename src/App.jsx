@@ -22,6 +22,7 @@ import FMSupport from './pages/FMSupport'
 import MyRequests from './pages/MyRequests'
 import RequestDetail from './pages/RequestDetail'
 import SupportDispatcher from './pages/SupportDispatcher'
+import SupportDispatcherHistory from './pages/SupportDispatcherHistory'
 import AssignTask from './pages/AssignTask'
 import RequestDetailDispatcher from './pages/RequestDetailDispatcher'
 import SupportStaffDirectory from './pages/SupportStaffDirectory'
@@ -100,7 +101,8 @@ const AppContent = () => {
     '/student-services',
     '/support-dispatcher',
     '/support-dispatcher/staff',
-    '/support-dispatcher/assign-task'
+    '/support-dispatcher/assign-task',
+    '/support-dispatcher/history'
   ]
   const isClubDetailRoute = location.pathname.match(/^\/clubs\/\d+$/)
   const isProposeClubRoute = location.pathname === '/clubs/propose'
@@ -276,6 +278,7 @@ const AppContent = () => {
             </>
           } />
           <Route path="/support-dispatcher" element={<SupportDispatcher />} />
+          <Route path="/support-dispatcher/history" element={<SupportDispatcherHistory />} />
           <Route path="/support-dispatcher/:id" element={
             <>
               <SupportDispatcher />

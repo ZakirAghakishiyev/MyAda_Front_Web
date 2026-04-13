@@ -1,44 +1,13 @@
-import React, { useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import './ITSupport.css'
-
-const IT_CATEGORY_OPTIONS = [
-  'Wi-Fi & Network',
-  'Email & Office 365',
-  'Password Reset',
-  'Projector/Display',
-  'Printer/Scanner',
-  'Software Installation',
-  'Computer Repair',
-  'Other',
-]
-
-const FM_CATEGORY_OPTIONS = [
-  'HVAC',
-  'Plumbing',
-  'Electrical',
-  'Cleaning',
-  'Maintenance',
-  'Security',
-  'Keys/Access',
-  'Other',
-]
-
-const BUILDINGS = [
-  { value: 'main', label: 'Main Building' },
-  { value: 'library', label: 'Library' },
-  { value: 'sports', label: 'Sports Complex' },
-  { value: 'cafeteria', label: 'Cafeteria' },
-  { value: 'other', label: 'Other / External' },
-]
-
-const ROOMS_BY_BUILDING = {
-  main: ['101', '102', '201', '202', '301', '302'],
-  library: ['Reading Hall', 'Computer Room', 'Silent Zone'],
-  sports: ['Court 1', 'Court 2', 'Gym'],
-  cafeteria: ['Main Hall'],
-  other: ['Room 1', 'Room 2'],
-}
+import {
+  createSupportRequest,
+  getCategories,
+  getCurrentUserIds,
+  getMockLocations,
+  saveAttachmentsToMockFolder,
+} from '../api/supportApi'
 
 const SUPPORT_REQUEST_DRAFT_COOKIE_KEY = 'support_request_draft'
 
@@ -119,6 +88,8 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const [urgency, setUrgency] = useState('standard')
   const [attachments, setAttachments] = useState([])
   const [showError, setShowError] = useState(false)
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const locations = getMockLocations()
 
   useEffect(() => {
     const draft = getDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY)
@@ -136,7 +107,17 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     setUrgency(draft.urgency === 'critical' ? 'critical' : 'standard')
   }, [])
 
-  const categoryOptions = area === 'it' ? IT_CATEGORY_OPTIONS : FM_CATEGORY_OPTIONS
+  const roomOptions = useMemo(() => {
+    if (!building) return []
+    return locations.roomsByBuildingId[Number(building)] || []
+  }, [building, locations.roomsByBuildingId])
+
+  useEffect(() => {
+    const module = area === 'it' ? 'IT' : 'FM'
+    getCategories(module)
+      .then((items) => setCategoryOptions(items))
+      .catch(() => setCategoryOptions([]))
+  }, [area])
 
   const goBack = () => {
     if (window.history.length > 1) navigate(-1)
@@ -166,7 +147,7 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     alert('Support request draft saved. It will be restored next time you open this form on this browser.')
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const hasLocation =
       (locationType === 'building' && building && ((isRoomOrNonRoom === 'room' && room) || (isRoomOrNonRoom === 'nonRoom' && nonRoomLocation.trim()))) ||
@@ -176,9 +157,31 @@ const SupportRequest = ({ initialArea = 'it' }) => {
       return
     }
     setShowError(false)
-    // TODO: send to unified support API
-    clearDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY)
-    navigate('/my-requests')
+    const { memberId } = getCurrentUserIds()
+    try {
+      const attachmentUrls = await saveAttachmentsToMockFolder(attachments)
+      await createSupportRequest(memberId, {
+        area,
+        categoryId: Number(issueCategory),
+        locationType,
+        buildingId: locationType === 'building' ? Number(building) : null,
+        placeType: locationType === 'building' ? isRoomOrNonRoom : null,
+        roomId: locationType === 'building' && isRoomOrNonRoom === 'room' ? Number(room) : null,
+        areaDetails:
+          locationType === 'campus'
+            ? campusLocation.trim()
+            : isRoomOrNonRoom === 'nonRoom'
+              ? nonRoomLocation.trim()
+              : null,
+        description: description.trim(),
+        urgency,
+        attachmentUrls,
+      })
+      clearDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY)
+      navigate('/my-requests')
+    } catch (err) {
+      alert(err.message || 'Failed to submit support request.')
+    }
   }
 
   return (
@@ -240,8 +243,8 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                 >
                   <option value="">Select issue type</option>
                   {categoryOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
                     </option>
                   ))}
                 </select>
@@ -316,9 +319,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                           required
                         >
                           <option value="">Select building...</option>
-                          {BUILDINGS.map((b) => (
-                            <option key={b.value} value={b.value}>
-                              {b.label}
+                          {locations.buildings.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {`Building ${b.code}`}
                             </option>
                           ))}
                         </select>
@@ -365,9 +368,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                                 required
                               >
                                 <option value="">Select room...</option>
-                                {(ROOMS_BY_BUILDING[building] || []).map((r) => (
-                                  <option key={r} value={r}>
-                                    {r}
+                                {roomOptions.map((r) => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.code}
                                   </option>
                                 ))}
                               </select>

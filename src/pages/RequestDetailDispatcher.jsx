@@ -1,18 +1,17 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getRequestById } from '../data/myRequestsItems'
-import { useCancelledRequests } from '../contexts/CancelledRequestsContext'
 import './RequestDetail.css'
+import {
+  assignRequest,
+  getCurrentUserIds,
+  getRequestDetail,
+  getRequestTimeline,
+  getStaffOptionsByArea,
+} from '../api/supportApi'
 
 const IconBack = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
-const IconShare = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-    <path d="M8.59 13.51l6.82 3.98M15.41 6.51l-6.82 3.98" />
   </svg>
 )
 const IconPin = () => (
@@ -62,48 +61,79 @@ const IconStar = () => (
   </svg>
 )
 
+const REFRESH_INTERVAL_MS = 10000
+
 const RequestDetailDispatcher = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { isCancelled, getCancelReason, cancelRequest } = useCancelledRequests()
-  const baseRequest = getRequestById(id)
+  const [request, setRequest] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showContactModal, setShowContactModal] = useState(false)
-  const [showCancelModal, setShowCancelModal] = useState(false)
-  const [cancelReason, setCancelReason] = useState('')
   const [dispatcherAssignee, setDispatcherAssignee] = useState('')
   const [dispatcherNotes, setDispatcherNotes] = useState('')
+  const staffOptions = useMemo(
+    () => getStaffOptionsByArea(request?.service || 'IT'),
+    [request?.service]
+  )
+  const loadData = useCallback((showLoader = false) => {
+    if (showLoader) setLoading(true)
+    Promise.all([getRequestDetail(id), getRequestTimeline(id)])
+      .then(([detail, timelineItems]) => {
+        setRequest(detail)
+        setTimeline(timelineItems)
+      })
+      .catch(() => {
+        setRequest(null)
+        setTimeline([])
+      })
+      .finally(() => {
+        if (showLoader) setLoading(false)
+      })
+  }, [id])
 
-  const request = baseRequest
-    ? isCancelled(baseRequest.id)
-      ? {
-          ...baseRequest,
-          status: 'Cancelled',
-          cancelReason: getCancelReason(baseRequest.id),
-          timeline: [
-            ...baseRequest.timeline.filter((t) => ['Created', 'Assigned'].includes(t.step)),
-            { step: 'Cancelled', detail: getCancelReason(baseRequest.id), done: true }
-          ]
-        }
-      : baseRequest
-    : null
+  useEffect(() => {
+    let isMounted = true
+    const safeLoad = (showLoader = false) => {
+      if (!isMounted) return
+      loadData(showLoader)
+    }
+    safeLoad(true)
+    const intervalId = window.setInterval(() => safeLoad(false), REFRESH_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') safeLoad(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadData])
 
-  const handleConfirmCancel = () => {
-    if (!cancelReason.trim()) return
-    cancelRequest(id, cancelReason.trim())
-    setShowCancelModal(false)
-    setCancelReason('')
-  }
+  useEffect(() => {
+    if (request?.assignedStaffId != null) {
+      setDispatcherAssignee(String(request.assignedStaffId))
+      return
+    }
+    if (!request?.assignedTo) {
+      setDispatcherAssignee('')
+      return
+    }
+    const matched = staffOptions.find((s) => s.name === request.assignedTo)
+    setDispatcherAssignee(matched ? String(matched.id) : '')
+  }, [request, staffOptions])
 
   const handleConfirmAssignment = () => {
     if (!dispatcherAssignee) return
-    navigate('/support-dispatcher', {
-      state: {
-        newAssignment: {
-          id: request.id,
-          staffName: dispatcherAssignee
-        }
-      }
-    })
+    const { dispatcherId } = getCurrentUserIds()
+    assignRequest(request.id, dispatcherId, Number(dispatcherAssignee), dispatcherNotes)
+      .then(() => navigate('/support-dispatcher'))
+      .catch((err) => alert(err.message || 'Failed to assign ticket'))
+  }
+
+  if (loading) {
+    return <div className="rd-overlay"><div className="rd-popup">Loading request...</div></div>
   }
 
   if (!request) {
@@ -117,11 +147,11 @@ const RequestDetailDispatcher = () => {
     )
   }
 
-  const isOpen = ['In Progress', 'Assigned'].includes(request.status)
+  const isOpen = ['New', 'Assigned', 'InProgress'].includes(request.status)
   const isCompleted = request.status === 'Completed'
   const isCancelledStatus = request.status === 'Cancelled'
 
-  const priorityLabel = request.priority || (request.urgency === 'Urgent' ? 'High' : 'Low')
+  const priorityLabel = request.priority || request.urgency || 'Standard'
 
   return (
     <>
@@ -136,18 +166,10 @@ const RequestDetailDispatcher = () => {
             <button type="button" className="rd-back" onClick={() => navigate('/support-dispatcher')} aria-label="Back">
               <IconBack />
             </button>
-            <div className="rd-header-right">
-              <button type="button" className="rd-header-btn">
-                Print
-              </button>
-              <button type="button" className="rd-header-btn">
-                <IconShare /> Share
-              </button>
-            </div>
           </header>
 
           <div className="rd-summary">
-            <span className="rd-ticket-id">#{request.id}</span>
+            <span className="rd-ticket-id">{request.ticketNo || `#${request.id}`}</span>
             <div className="rd-summary-row">
               <h1 className="rd-title">{request.description}</h1>
               <span className={`rd-status-chip rd-status-chip--${request.status.toLowerCase().replace(' ', '-')}`}>
@@ -157,7 +179,7 @@ const RequestDetailDispatcher = () => {
             <div className="rd-summary-meta">
               <span className="rd-summary-category">{request.category}</span>
               <span className="rd-summary-dot">•</span>
-              <span className="rd-summary-created">{request.created}</span>
+              <span className="rd-summary-created">{request.created || request.createdAt}</span>
             </div>
           </div>
 
@@ -213,6 +235,19 @@ const RequestDetailDispatcher = () => {
                   )}
                 </section>
 
+                {Array.isArray(request.imageUrls) && request.imageUrls.length > 0 && (
+                  <section className="rd-card">
+                    <h2 className="rd-card-title">Images</h2>
+                    <div className="rd-images-grid">
+                      {request.imageUrls.map((url, idx) => (
+                        <a key={`${url}-${idx}`} href={url} target="_blank" rel="noreferrer" className="rd-image-link">
+                          <img src={url} alt={`Attachment ${idx + 1}`} className="rd-image" />
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 <section className="rd-card">
                   <h2 className="rd-card-title">Reporter Information</h2>
                   <div className="rd-detail-row">
@@ -234,12 +269,13 @@ const RequestDetailDispatcher = () => {
                     <IconTimeline /> Activity Timeline
                   </h2>
                   <ul className="rd-timeline">
-                    {request.timeline.map((item, i) => (
+                    {timeline.map((item, i) => (
                       <li key={i} className={`rd-timeline-item ${item.done ? 'rd-timeline-item--done' : ''}`}>
                         <span className="rd-timeline-dot">{item.done ? <IconCheck /> : null}</span>
                         <div className="rd-timeline-content">
                           <span className="rd-timeline-step">{item.step}</span>
                           {item.detail && <span className="rd-timeline-detail">{item.detail}</span>}
+                          {item.created && <span className="rd-timeline-detail">{item.created}</span>}
                         </div>
                       </li>
                     ))}
@@ -279,15 +315,20 @@ const RequestDetailDispatcher = () => {
                   <h2 className="rd-card-title">Dispatcher Action</h2>
                   <div className="rd-dispatcher-field">
                     <label className="rd-dispatcher-label">Assign Technician</label>
+                    {request.assignedTo && (
+                      <p className="rd-detail-value" style={{ margin: '0 0 8px' }}>
+                        Current assignee: {request.assignedTo}
+                      </p>
+                    )}
                     <select
                       className="rd-dispatcher-select"
                       value={dispatcherAssignee}
                       onChange={(e) => setDispatcherAssignee(e.target.value)}
                     >
                       <option value="">Choose staff member…</option>
-                      <option value="Jamie Chen">Jamie Chen</option>
-                      <option value="Alex Rodriguez">Alex Rodriguez</option>
-                      <option value="Maintenance Team">Maintenance Team</option>
+                      {staffOptions.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -309,7 +350,7 @@ const RequestDetailDispatcher = () => {
                       onClick={handleConfirmAssignment}
                       disabled={!dispatcherAssignee}
                     >
-                      Confirm Assignment
+                      {request.assignedTo ? 'Update Assignment' : 'Confirm Assignment'}
                     </button>
                   </div>
                 </section>
@@ -323,9 +364,6 @@ const RequestDetailDispatcher = () => {
                       <button type="button" className="rd-btn rd-btn--contact" onClick={() => setShowContactModal(true)}>
                         Contact Staff
                       </button>
-                      <button type="button" className="rd-btn rd-btn--cancel" onClick={() => setShowCancelModal(true)}>
-                        Cancel Ticket
-                      </button>
                     </div>
                   </section>
                 )}
@@ -334,42 +372,6 @@ const RequestDetailDispatcher = () => {
           </div>
         </div>
       </div>
-
-      {showCancelModal && (
-        <div className="rd-contact-overlay" onClick={() => setShowCancelModal(false)}>
-          <div className="rd-contact-modal rd-cancel-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="rd-contact-title">Cancel Request</h3>
-            <p className="rd-cancel-prompt">Please provide a reason for cancelling this request.</p>
-            <textarea
-              className="rd-cancel-reason-input"
-              placeholder="Enter reason..."
-              rows={4}
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-            />
-            <div className="rd-contact-btns">
-              <button
-                type="button"
-                className="rd-contact-btn rd-contact-btn--close"
-                onClick={() => {
-                  setShowCancelModal(false)
-                  setCancelReason('')
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rd-contact-btn rd-contact-btn--confirm"
-                onClick={handleConfirmCancel}
-                disabled={!cancelReason.trim()}
-              >
-                Confirm Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showContactModal && (
         <div className="rd-contact-overlay" onClick={() => setShowContactModal(false)}>

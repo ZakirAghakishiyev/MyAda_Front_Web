@@ -78,6 +78,27 @@ function statusPillClass(status) {
   return 'sched-ms-status-draft'
 }
 
+/** @returns {string} Empty if valid, else error message. */
+function validatePublishDateRange(fromDateStr, toDateStr) {
+  if (!fromDateStr?.trim() || !toDateStr?.trim()) {
+    return 'from_date and to_date are required (ISO dates).'
+  }
+  const from = new Date(`${fromDateStr.trim()}T12:00:00`)
+  const to = new Date(`${toDateStr.trim()}T12:00:00`)
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return 'Enter valid from_date and to_date.'
+  }
+  if (from > to) return 'from_date must be on or before to_date.'
+  const spanDays = Math.floor((to.getTime() - from.getTime()) / 86400000) + 1
+  if (spanDays > 731) return 'Inclusive date span must be at most 731 days.'
+  return ''
+}
+
+function defaultPublishFromTo() {
+  const y = new Date().getFullYear()
+  return { from: `${y}-01-15`, to: `${y}-05-01` }
+}
+
 const SchedulingPage = () => {
   const navigate = useNavigate()
 
@@ -100,6 +121,11 @@ const SchedulingPage = () => {
 
   const [publishing, setPublishing] = useState(false)
   const [publishMsg, setPublishMsg] = useState('')
+  const [publishMsgTone, setPublishMsgTone] = useState(null)
+  const [publishFromDate, setPublishFromDate] = useState(() => defaultPublishFromTo().from)
+  const [publishToDate, setPublishToDate] = useState(() => defaultPublishFromTo().to)
+  const [publishTopic, setPublishTopic] = useState('Scheduled class')
+  const [publishResult, setPublishResult] = useState(null)
 
   const [editSession, setEditSession] = useState(null)
   const [sessionOptions, setSessionOptions] = useState([])
@@ -157,6 +183,12 @@ const SchedulingPage = () => {
     refreshSessions(activeRunId).catch((e) => setPageError(e.message))
   }, [activeRunId, dayFilter, instructorFilter, refreshSessions])
 
+  useEffect(() => {
+    setPublishMsg('')
+    setPublishMsgTone(null)
+    setPublishResult(null)
+  }, [activeRunId])
+
   async function handleGenerate() {
     setPageError('')
     setGenerating(true)
@@ -193,19 +225,35 @@ const SchedulingPage = () => {
 
   async function handlePublish() {
     setPublishMsg('')
+    setPublishMsgTone(null)
+    setPublishResult(null)
     const uid = getSchedulingUserId()
     if (!uid) {
       setPublishMsg('Set Instructor user ID in the bar above.')
+      setPublishMsgTone('error')
       return
     }
     if (activeRunId == null) return
+    const rangeErr = validatePublishDateRange(publishFromDate, publishToDate)
+    if (rangeErr) {
+      setPublishMsg(rangeErr)
+      setPublishMsgTone('error')
+      return
+    }
     setPublishing(true)
     try {
-      await schedulingPublish(activeRunId)
-      setPublishMsg('Published.')
+      const data = await schedulingPublish(activeRunId, {
+        from_date: publishFromDate.trim(),
+        to_date: publishToDate.trim(),
+        topic: publishTopic.trim() || undefined,
+      })
+      setPublishMsg('Published. Attendance session generation completed for all lessons.')
+      setPublishMsgTone('success')
+      setPublishResult(data)
       await refreshRunOnly(activeRunId)
     } catch (e) {
       setPublishMsg(e.message || 'Publish failed.')
+      setPublishMsgTone('error')
     } finally {
       setPublishing(false)
     }
@@ -301,7 +349,9 @@ const SchedulingPage = () => {
         <h1>Scheduling</h1>
         <p className="scheduling-muted">
           Scheduling microservice at <span className="sched-ms-code">http://localhost:5009/api/v1</span>. Generate a
-          run, inspect sessions, patch placements, then publish when ready.
+          run, inspect sessions, patch placements, then publish when ready. Publish sends{' '}
+          <span className="sched-ms-code">from_date</span> / <span className="sched-ms-code">to_date</span> (and optional{' '}
+          <span className="sched-ms-code">topic</span>) to bulk-generate Attendance sessions per lesson.
         </p>
 
         <SchedulingUserIdBar />
@@ -375,6 +425,41 @@ const SchedulingPage = () => {
                 ))}
               </div>
             ) : null}
+
+            <h3 className="sched-ms-subsection-title">Publish to Attendance</h3>
+            <p className="scheduling-muted" style={{ marginTop: 0 }}>
+              POST <span className="sched-ms-code">/schedules/{'{id}'}/publish</span> with JSON body (snake_case). Run must be{' '}
+              <code>completed</code> with at least one scheduled session. Inclusive span ≤ 731 days.
+            </p>
+            <div className="sched-ms-form-grid">
+              <label className="sched-ms-field">
+                <span>from_date</span>
+                <input
+                  type="date"
+                  value={publishFromDate}
+                  onChange={(e) => setPublishFromDate(e.target.value)}
+                  disabled={!canPublish || publishing}
+                />
+              </label>
+              <label className="sched-ms-field">
+                <span>to_date</span>
+                <input
+                  type="date"
+                  value={publishToDate}
+                  onChange={(e) => setPublishToDate(e.target.value)}
+                  disabled={!canPublish || publishing}
+                />
+              </label>
+              <label className="sched-ms-field" style={{ gridColumn: '1 / -1' }}>
+                <span>topic (optional)</span>
+                <input
+                  value={publishTopic}
+                  onChange={(e) => setPublishTopic(e.target.value)}
+                  placeholder="Sent to Attendance for generated sessions"
+                  disabled={!canPublish || publishing}
+                />
+              </label>
+            </div>
             <div className="sched-ms-actions">
               <button
                 type="button"
@@ -384,8 +469,44 @@ const SchedulingPage = () => {
               >
                 {publishing ? 'Publishing…' : 'Publish schedule'}
               </button>
-              {publishMsg ? <span className={publishMsg.includes('fail') ? 'sched-ms-error' : 'sched-ms-success'}>{publishMsg}</span> : null}
+              {publishMsg ? (
+                <span className={publishMsgTone === 'error' ? 'sched-ms-error' : 'sched-ms-success'}>{publishMsg}</span>
+              ) : null}
             </div>
+            {(publishResult?.attendance_generations ?? publishResult?.attendanceGenerations)?.length ? (
+              <div className="sched-ms-publish-result">
+                <p className="scheduling-muted" style={{ marginBottom: 8 }}>
+                  <span className="sched-ms-code">status</span>: {publishResult.status ?? 'published'} ·{' '}
+                  <span className="sched-ms-code">schedule_run_id</span>:{' '}
+                  {publishResult.schedule_run_id ?? publishResult.scheduleRunId ?? activeRunId}
+                </p>
+                <div className="sched-ms-table-wrap">
+                  <table className="sched-ms-table sched-ms-table--compact">
+                    <thead>
+                      <tr>
+                        <th>lesson_id</th>
+                        <th>created_count</th>
+                        <th>skipped_duplicate_count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(publishResult.attendance_generations ?? publishResult.attendanceGenerations).map((row) => {
+                        const lid = row.lesson_id ?? row.lessonId
+                        const created = row.created_count ?? row.createdCount
+                        const skipped = row.skipped_duplicate_count ?? row.skippedDuplicateCount
+                        return (
+                          <tr key={lid}>
+                            <td>{lid}</td>
+                            <td>{created ?? '—'}</td>
+                            <td>{skipped ?? '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
             {!canPublish && runDetail.status !== 'published' ? (
               <p className="scheduling-muted" style={{ fontSize: 13 }}>
                 Publish is only allowed when status is <code>completed</code> and <code>X-User-Id</code> is set.

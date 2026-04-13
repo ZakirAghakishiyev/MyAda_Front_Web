@@ -1,7 +1,6 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getRequestById } from '../data/myRequestsItems'
-import { useCancelledRequests } from '../contexts/CancelledRequestsContext'
+import { cancelMemberRequest, getCurrentUserIds, getRequestDetail, getRequestTimeline } from '../api/supportApi'
 import './RequestDetail.css'
 
 const IconBack = () => (
@@ -50,34 +49,65 @@ const IconX = () => (
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 )
+const REFRESH_INTERVAL_MS = 10000
+
 const RequestDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { isCancelled, getCancelReason, cancelRequest } = useCancelledRequests()
-  const baseRequest = getRequestById(id)
+  const [request, setRequest] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showContactModal, setShowContactModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const loadData = useCallback((showLoader = false) => {
+    if (showLoader) setLoading(true)
+    Promise.all([getRequestDetail(id), getRequestTimeline(id)])
+      .then(([detail, timelineItems]) => {
+        setRequest(detail)
+        setTimeline(timelineItems)
+      })
+      .catch(() => {
+        setRequest(null)
+        setTimeline([])
+      })
+      .finally(() => {
+        if (showLoader) setLoading(false)
+      })
+  }, [id])
 
-  const request = baseRequest
-    ? isCancelled(baseRequest.id)
-      ? {
-          ...baseRequest,
-          status: 'Cancelled',
-          cancelReason: getCancelReason(baseRequest.id),
-          timeline: [
-            ...baseRequest.timeline.filter((t) => ['Created', 'Assigned'].includes(t.step)),
-            { step: 'Cancelled', detail: getCancelReason(baseRequest.id), done: true }
-          ]
-        }
-      : baseRequest
-    : null
+  useEffect(() => {
+    let isMounted = true
+    const safeLoad = (showLoader = false) => {
+      if (!isMounted) return
+      loadData(showLoader)
+    }
+    safeLoad(true)
+    const intervalId = window.setInterval(() => safeLoad(false), REFRESH_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') safeLoad(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadData])
 
   const handleConfirmCancel = () => {
     if (!cancelReason.trim()) return
-    cancelRequest(id, cancelReason.trim())
-    setShowCancelModal(false)
-    setCancelReason('')
+    const { memberId } = getCurrentUserIds()
+    cancelMemberRequest(id, memberId, cancelReason.trim())
+      .then(() => loadData(false))
+      .finally(() => {
+        setShowCancelModal(false)
+        setCancelReason('')
+      })
+  }
+
+  if (loading) {
+    return <div className="rd-overlay"><div className="rd-popup">Loading request...</div></div>
   }
 
   if (!request) {
@@ -91,11 +121,11 @@ const RequestDetail = () => {
     )
   }
 
-  const isOpen = ['In Progress', 'Assigned'].includes(request.status)
+  const isOpen = ['New', 'Assigned', 'InProgress'].includes(request.status)
   const isCompleted = request.status === 'Completed'
   const isCancelledStatus = request.status === 'Cancelled'
 
-  const priorityLabel = request.priority || (request.urgency === 'Urgent' ? 'High' : 'Low')
+  const priorityLabel = request.priority || request.urgency || 'Standard'
 
   return (
     <>
@@ -108,8 +138,8 @@ const RequestDetail = () => {
           </header>
 
           <div className="rd-summary">
-            <span className="rd-ticket-id">#{request.id}</span>
-            <h1 className="rd-title">{request.description}</h1>
+            <span className="rd-ticket-id">{request.ticketNo || `#${request.id}`}</span>
+            <h1 className="rd-title">{request.description || request.descriptionFull}</h1>
             <span className="rd-category-tag">{request.category}</span>
           </div>
 
@@ -139,13 +169,13 @@ const RequestDetail = () => {
               <div className="rd-detail-row">
                 <IconClock />
                 <span className="rd-detail-label">Created</span>
-                <span className="rd-detail-value">{request.created}</span>
+                <span className="rd-detail-value">{request.created || request.createdAt}</span>
               </div>
-              {isCompleted && request.completed && (
+              {isCompleted && (request.completedAt || request.completed) && (
                 <div className="rd-detail-row">
                   <IconCheck />
                   <span className="rd-detail-label">Completed</span>
-                  <span className="rd-detail-value">{request.completed}</span>
+                  <span className="rd-detail-value">{request.completed || request.completedAt}</span>
                 </div>
               )}
             </section>
@@ -154,8 +184,21 @@ const RequestDetail = () => {
               <h2 className="rd-card-title">
                 <IconDoc /> Description
               </h2>
-              <p className="rd-description">{request.descriptionFull || request.description}</p>
+              <p className="rd-description">{request.descriptionFull || request.description || ''}</p>
             </section>
+
+            {Array.isArray(request.imageUrls) && request.imageUrls.length > 0 && (
+              <section className="rd-card">
+                <h2 className="rd-card-title">Images</h2>
+                <div className="rd-images-grid">
+                  {request.imageUrls.map((url, idx) => (
+                    <a key={`${url}-${idx}`} href={url} target="_blank" rel="noreferrer" className="rd-image-link">
+                      <img src={url} alt={`Attachment ${idx + 1}`} className="rd-image" />
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {request.assignedTo && (
               <section className="rd-card rd-card--assigned">
@@ -183,12 +226,13 @@ const RequestDetail = () => {
                 <IconTimeline /> Timeline
               </h2>
               <ul className="rd-timeline">
-                {request.timeline.map((item, i) => (
+                {timeline.map((item, i) => (
                   <li key={i} className={`rd-timeline-item ${item.done ? 'rd-timeline-item--done' : ''}`}>
                     <span className="rd-timeline-dot">{item.done ? <IconCheck /> : null}</span>
                     <div className="rd-timeline-content">
                       <span className="rd-timeline-step">{item.step}</span>
                       {item.detail && <span className="rd-timeline-detail">{item.detail}</span>}
+                      {item.created && <span className="rd-timeline-detail">{item.created}</span>}
                     </div>
                   </li>
                 ))}

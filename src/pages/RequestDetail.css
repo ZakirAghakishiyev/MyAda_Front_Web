@@ -282,6 +282,27 @@
   line-height: 1.5;
 }
 
+.rd-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.rd-image-link {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.rd-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
 .rd-dispatcher-card {
   position: static;
 }

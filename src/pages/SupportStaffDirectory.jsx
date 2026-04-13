@@ -1,60 +1,24 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import adaLogo from '../assets/ada-logo.png'
 import './SupportStaffDirectory.css'
+import {
+  getMockPeople,
+  getStaffRequests,
+  getStaffStatusesByStatus,
+} from '../api/supportApi'
 
-const STAFF = [
-  {
-    id: 'alex',
-    name: 'Alex Rivera',
-    role: 'IT Support - Tier 2',
-    specialization: 'Network Admin',
-    area: 'IT',
-    status: 'Online',
-    activeTasks: 3,
-    loadPercent: 60,
-  },
-  {
-    id: 'sarah',
-    name: 'Sarah Jenkins',
-    role: 'FM - Maintenance',
-    specialization: 'Electrician',
-    area: 'FM',
-    status: 'On Break',
-    activeTasks: 1,
-    loadPercent: 20,
-  },
-  {
-    id: 'mark',
-    name: 'Mark Thompson',
-    role: 'IT Support - Tier 1',
-    specialization: 'Desktop Support',
-    area: 'IT',
-    status: 'Online',
-    activeTasks: 5,
-    loadPercent: 100,
-  },
-  {
-    id: 'david',
-    name: 'David Wu',
-    role: 'FM - Facilities',
-    specialization: 'Plumber',
-    area: 'FM',
-    status: 'Offline',
-    activeTasks: 0,
-    loadPercent: 0,
-  },
-  {
-    id: 'elena',
-    name: 'Elena Rodriguez',
-    role: 'IT Support - Cloud',
-    specialization: 'System Admin',
-    area: 'IT',
-    status: 'Online',
-    activeTasks: 2,
-    loadPercent: 40,
-  },
-]
+const STAFF = Object.entries(getMockPeople().staff).map(([id, s]) => ({
+  id,
+  memberId: Number(id),
+  name: s.fullName,
+  role: s.area === 'IT' ? 'IT Support Staff' : 'Facilities Staff',
+  specialization: s.area === 'IT' ? 'Technical Support' : 'Maintenance',
+  area: s.area,
+  status: 'Offline',
+  activeTasks: 0,
+  loadPercent: 0,
+}))
 
 const STATUS_DOT_COLOR = {
   Online: '#22c55e',
@@ -86,14 +50,42 @@ const SupportStaffDirectory = () => {
   const navigate = useNavigate()
   const [tab, setTab] = useState('all') // all | it | fm
   const [selectedId, setSelectedId] = useState(null)
+  const [staff, setStaff] = useState(STAFF)
+
+  useEffect(() => {
+    Promise.all([
+      getStaffStatusesByStatus('Online').catch(() => []),
+      getStaffStatusesByStatus('Offline').catch(() => []),
+      getStaffStatusesByStatus('OnBreak').catch(() => []),
+    ]).then(async ([online, offline, onBreak]) => {
+      const statusByMember = {}
+      online.forEach((x) => { statusByMember[x.memberId] = 'Online' })
+      offline.forEach((x) => { statusByMember[x.memberId] = 'Offline' })
+      onBreak.forEach((x) => { statusByMember[x.memberId] = 'On Break' })
+
+      const withTasks = await Promise.all(
+        STAFF.map(async (s) => {
+          const tasks = await getStaffRequests(s.memberId).catch(() => [])
+          const activeTasks = tasks.filter((t) => ['New', 'Assigned', 'InProgress'].includes(t.status)).length
+          return {
+            ...s,
+            status: statusByMember[s.memberId] || s.status,
+            activeTasks,
+            loadPercent: Math.min(100, activeTasks * 20),
+          }
+        })
+      )
+      setStaff(withTasks)
+    })
+  }, [])
 
   const filteredStaff = useMemo(() => {
-    if (tab === 'it') return STAFF.filter((s) => s.area === 'IT')
-    if (tab === 'fm') return STAFF.filter((s) => s.area === 'FM')
-    return STAFF
-  }, [tab])
+    if (tab === 'it') return staff.filter((s) => s.area === 'IT')
+    if (tab === 'fm') return staff.filter((s) => s.area === 'FM')
+    return staff
+  }, [tab, staff])
 
-  const selected = selectedId ? STAFF.find((s) => s.id === selectedId) : null
+  const selected = selectedId ? staff.find((s) => s.id === selectedId) : null
   const selectedTasks = selected
     ? STAFF_TASKS[selected.id] || STAFF_TASKS.default
     : []
@@ -168,7 +160,7 @@ const SupportStaffDirectory = () => {
                 className={`ssd-pill-tab ${tab === 'all' ? 'ssd-pill-tab--active' : ''}`}
                 onClick={() => setTab('all')}
               >
-                All Staff ({STAFF.length})
+                All Staff ({staff.length})
               </button>
               <button
                 type="button"

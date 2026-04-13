@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getCurrentUserIds, getStaffRequests, mapListItemToCard } from '../api/supportApi'
 import './StaffPortal.css'
 
 const IconLocation = () => (
@@ -16,35 +17,63 @@ const TIME_FILTERS = [
   { value: 'custom', label: 'Custom range' }
 ]
 
-// Mock history tickets (completed/resolved) with dates for filtering
-const mockHistoryTickets = [
-  { id: 'REQ-8805', tag: 'IT SUPPORT', tagClass: 'it', completedAt: '2026-03-05', title: 'Email access issue in Lab 3', location: 'Lab 3, North Wing', status: 'Completed' },
-  { id: 'REQ-8798', tag: 'FACILITIES', tagClass: 'fm', completedAt: '2026-03-04', title: 'HVAC adjustment Room 201', location: 'Main Building, Room 201', status: 'Completed' },
-  { id: 'REQ-8782', tag: 'IT SUPPORT', tagClass: 'it', completedAt: '2026-03-03', title: 'Printer setup Admin floor', location: 'Admin Building', status: 'Completed' },
-  { id: 'REQ-8761', tag: 'EMERGENCY', tagClass: 'emergency', completedAt: '2026-03-02', title: 'Power outlet repair', location: 'Library, Study Area', status: 'Completed' },
-  { id: 'REQ-8744', tag: 'FACILITIES', tagClass: 'fm', completedAt: '2026-02-28', title: 'Door hinge replacement B Block', location: 'B Block, 2nd Floor', status: 'Completed' },
-  { id: 'REQ-8720', tag: 'IT SUPPORT', tagClass: 'it', completedAt: '2026-02-25', title: 'Wi-Fi extender install', location: 'Dormitory East', status: 'Completed' }
-]
+const REFRESH_INTERVAL_MS = 10000
 
 const parseDate = (str) => {
-  const [y, m, d] = str.split('-').map(Number)
-  return new Date(y, m - 1, d)
+  if (!str) return new Date(0)
+  const d = new Date(str)
+  if (!Number.isNaN(d.getTime())) return d
+  const [y, m, day] = String(str).split('-').map(Number)
+  return new Date(y, (m || 1) - 1, day || 1)
 }
 
 const StaffPortalHistory = () => {
   const navigate = useNavigate()
+  const { staffId } = getCurrentUserIds()
   const [timeFilter, setTimeFilter] = useState('30')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const [tickets, setTickets] = useState([])
   const today = useMemo(() => new Date(), [])
+
+  useEffect(() => {
+    const loadHistory = () => {
+      getStaffRequests(staffId)
+        .then((items) =>
+          setTickets(
+            items
+              .map(mapListItemToCard)
+              .filter((t) => t.status === 'Completed')
+              .map((t) => ({
+                ...t,
+                completedAt: t.completed || t.completedAt || '',
+                title: t.description,
+                tag: t.urgency === 'Critical' ? 'EMERGENCY' : `${t.service || 'IT'} SUPPORT`,
+                tagClass: t.urgency === 'Critical' ? 'emergency' : String(t.service || '').toLowerCase(),
+              }))
+          )
+        )
+        .catch(() => setTickets([]))
+    }
+    loadHistory()
+    const intervalId = window.setInterval(loadHistory, REFRESH_INTERVAL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadHistory()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [staffId])
 
   const filteredTickets = useMemo(() => {
     let maxDays = 30
     if (timeFilter === 'custom') {
-      if (!customStart || !customEnd) return mockHistoryTickets
+      if (!customStart || !customEnd) return tickets
       const start = new Date(customStart)
       const end = new Date(customEnd)
-      return mockHistoryTickets.filter((t) => {
+      return tickets.filter((t) => {
         const d = parseDate(t.completedAt)
         return d >= start && d <= end
       })
@@ -52,8 +81,8 @@ const StaffPortalHistory = () => {
     maxDays = parseInt(timeFilter, 10) || 30
     const cutoff = new Date(today)
     cutoff.setDate(cutoff.getDate() - maxDays)
-    return mockHistoryTickets.filter((t) => parseDate(t.completedAt) >= cutoff)
-  }, [timeFilter, customStart, customEnd, today])
+    return tickets.filter((t) => parseDate(t.completedAt) >= cutoff)
+  }, [timeFilter, customStart, customEnd, tickets, today])
 
   return (
     <>
