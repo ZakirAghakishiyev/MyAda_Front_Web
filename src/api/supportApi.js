@@ -1,6 +1,6 @@
 import { authFetch } from '../auth'
 
-const SUPPORT_API_BASE = 'http://localhost:5007/api'
+const SUPPORT_API_BASE = 'http://51.20.193.29:5000/api'
 
 const MOCK_MEMBERS = {
   3001: { fullName: 'John Member', email: 'john@example.com' },

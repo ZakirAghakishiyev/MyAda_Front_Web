@@ -1,19 +1,108 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LostAndFound.css'
+import { createLostReport, getLostFoundCategories, uploadLostFoundImage } from '../api/lostFoundApi'
+import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
 
 const MAX_DESCRIPTION_LENGTH = 500
+const DEFAULT_CATEGORIES = ['Electronics', 'Documents', 'Personal Items', 'Accessories']
 
 const AnnounceLostItem = () => {
   const navigate = useNavigate()
   const [description, setDescription] = useState('')
   const [photoFile, setPhotoFile] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [buildings, setBuildings] = useState([])
+  const [rooms, setRooms] = useState([])
+  const [locationType, setLocationType] = useState('building')
+  const [buildingId, setBuildingId] = useState('')
+  const [roomId, setRoomId] = useState('')
+  const [roomAreaText, setRoomAreaText] = useState('')
+  const [campusLocation, setCampusLocation] = useState('')
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
 
-  const handleSubmit = (event) => {
+  useEffect(() => {
+    let isMounted = true
+    getBuildings()
+      .then((result) => {
+        if (isMounted) setBuildings(result)
+      })
+      .catch(() => {
+        if (isMounted) setBuildings([])
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    getLostFoundCategories()
+      .then((result) => {
+        if (!isMounted) return
+        setCategories(result.length ? result : DEFAULT_CATEGORIES)
+      })
+      .catch(() => {
+        if (isMounted) setCategories(DEFAULT_CATEGORIES)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (locationType !== 'building' || !buildingId) {
+      setRooms([])
+      return
+    }
+    let isMounted = true
+    getRoomsByBuildingId(buildingId)
+      .then((result) => {
+        if (isMounted) setRooms(result)
+      })
+      .catch(() => {
+        if (isMounted) setRooms([])
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [locationType, buildingId])
+
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    // TODO: integrate with backend API
-    alert('Lost item report submitted for review (mock).')
-    navigate('/lost-and-found')
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      const formData = new FormData(event.currentTarget)
+      const photoUrls = photoFile ? [await uploadLostFoundImage(photoFile)].filter(Boolean) : []
+      const selectedBuilding = buildings.find((b) => String(b.id) === String(buildingId))
+      const selectedRoom = rooms.find((r) => String(r.id) === String(roomId))
+      const payload = {
+        itemName: String(formData.get('itemName') || '').trim(),
+        category: String(formData.get('category') || '').trim() || DEFAULT_CATEGORIES[0],
+        description: String(description || '').trim(),
+        locationType,
+        building: locationType === 'building' ? selectedBuilding?.name || undefined : undefined,
+        isRoom: locationType === 'building' ? (roomId ? 'yes' : 'no') : undefined,
+        roomOrArea:
+          locationType === 'building'
+            ? (roomId ? selectedRoom?.name : roomAreaText) || undefined
+            : undefined,
+        campusLocation: locationType === 'campus' ? campusLocation || undefined : undefined,
+        dateLost: String(formData.get('dateLost') || '').trim(),
+        timeLost: String(formData.get('timeLost') || '').trim(),
+        contactName: String(formData.get('contactName') || '').trim(),
+        contactPhone: String(formData.get('contactPhone') || '').trim(),
+        photoUrls,
+      }
+      await createLostReport(payload)
+      alert('Lost item report submitted for review.')
+      navigate('/lost-and-found')
+    } catch (err) {
+      alert(err?.message || 'Failed to submit lost item report.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleDescriptionChange = (e) => {
@@ -50,15 +139,14 @@ const AnnounceLostItem = () => {
           </h2>
           <div className="lf-report-fields">
             <label className="lf-field">
-              <input type="text" required placeholder="Item Name *" />
+              <input type="text" required name="itemName" placeholder="Item Name *" />
             </label>
             <label className="lf-field">
-                <select required defaultValue="">
+                <select required defaultValue="" name="category">
                   <option value="" disabled>Category *</option>
-                  <option value="electronics">Electronics</option>
-                  <option value="documents">Documents</option>
-                  <option value="clothing">Clothing</option>
-                  <option value="other">Other</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
                 </select>
               </label>
           </div>
@@ -72,26 +160,56 @@ const AnnounceLostItem = () => {
           </h2>
           <div className="lf-report-fields">
             <label className="lf-field">
-              <select defaultValue="">
-                <option value="">Building (optional)</option>
-                <option value="main">Main Building</option>
-                <option value="library">Library</option>
-                <option value="sports">Sports Complex</option>
-                <option value="cafeteria">Cafeteria</option>
-                <option value="other">Other</option>
+              <select value={locationType} onChange={(e) => setLocationType(e.target.value)}>
+                <option value="building">Building</option>
+                <option value="campus">Campus</option>
               </select>
             </label>
-            <div className="lf-field-row">
+            {locationType === 'building' && (
+              <>
+                <label className="lf-field">
+                  <select value={buildingId} onChange={(e) => setBuildingId(e.target.value)}>
+                    <option value="">Building (optional)</option>
+                    {buildings.map((building) => (
+                      <option key={building.id} value={String(building.id)}>
+                        {building.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="lf-field-row">
+                  <label className="lf-field">
+                    <select value={roomId} onChange={(e) => setRoomId(e.target.value)} disabled={!buildingId}>
+                      <option value="">Room (optional)</option>
+                      {rooms.map((room) => (
+                        <option key={room.id} value={String(room.id)}>
+                          {room.name || room.number}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="lf-field">
+                    <input
+                      type="text"
+                      placeholder="Room/Area (optional)"
+                      value={roomAreaText}
+                      onChange={(e) => setRoomAreaText(e.target.value)}
+                      disabled={Boolean(roomId)}
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+            {locationType === 'campus' && (
               <label className="lf-field">
-                <input type="text" placeholder="Floor (optional)" />
+                <input
+                  type="text"
+                  placeholder="Campus location"
+                  value={campusLocation}
+                  onChange={(e) => setCampusLocation(e.target.value)}
+                />
               </label>
-              <label className="lf-field">
-                <input type="text" placeholder="Room/Area (optional)" />
-              </label>
-            </div>
-            <label className="lf-field">
-              <input type="text" placeholder="Last Known Location" />
-            </label>
+            )}
           </div>
         </section>
 
@@ -105,11 +223,11 @@ const AnnounceLostItem = () => {
             <div className="lf-field-row">
               <label className="lf-field">
                 <span className="lf-field-label">Date</span>
-                <input type="date" required />
+                <input type="date" required name="dateLost" />
               </label>
               <label className="lf-field">
                 <span className="lf-field-label">Time</span>
-                <input type="time" />
+                <input type="time" name="timeLost" />
               </label>
             </div>
           </div>
@@ -146,6 +264,7 @@ const AnnounceLostItem = () => {
               <input
                 type="file"
                 accept="image/*"
+                name="photo"
                 className="lf-add-photo-input"
                 onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
               />
@@ -164,16 +283,16 @@ const AnnounceLostItem = () => {
           </h2>
           <div className="lf-report-fields">
             <label className="lf-field">
-              <input type="text" placeholder="Your Name" />
+              <input type="text" name="contactName" placeholder="Your Name" />
             </label>
             <label className="lf-field">
-              <input type="tel" placeholder="Phone Number" />
+              <input type="tel" name="contactPhone" placeholder="Phone Number" />
             </label>
           </div>
         </section>
 
-        <button type="submit" className="lf-submit-review">
-          Submit for Review
+        <button type="submit" className="lf-submit-review" disabled={isSubmitting}>
+          {isSubmitting ? 'Submitting...' : 'Submit for Review'}
         </button>
       </form>
       </div>

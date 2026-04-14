@@ -1,2 +1,2 @@
 /** Base URL for admin scheduling/course APIs (local backend). */
-export const ADMIN_API_BASE = 'http://localhost:5008/api/admin'
+export const ADMIN_API_BASE = 'http://51.20.193.29:5000/api/admin'

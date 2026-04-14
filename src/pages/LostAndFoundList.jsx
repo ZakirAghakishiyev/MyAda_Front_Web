@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mockItems } from '../data/lostAndFoundItems'
+import { getLostFoundItems, getLostFoundStats } from '../api/lostFoundApi'
 import './LostAndFound.css'
 
 const IconPin = () => (
@@ -19,24 +19,77 @@ const IconCalendar = () => (
   </svg>
 )
 
+function computeDaysAgo(item) {
+  if (typeof item?.daysAgo === 'number') return item.daysAgo
+  const dateValue = item?.postedAt || item?.datePosted
+  if (!dateValue) return 0
+  const date = new Date(dateValue)
+  if (Number.isNaN(date.getTime())) return 0
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000))
+}
+
+function normalizeItem(item) {
+  return {
+    ...item,
+    title: item?.title || 'Untitled item',
+    description: item?.description || 'No description',
+    category: item?.category || 'Other',
+    location: item?.location || 'Location not specified',
+    type: item?.type || 'found',
+    status: item?.status || 'Pending Verification',
+    image: item?.image || item?.images?.[0] || null,
+    daysAgo: computeDaysAgo(item),
+  }
+}
+
 const LostAndFoundList = () => {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('total') // 'total' | 'active' | 'pending'
+  const [items, setItems] = useState([])
+  const [stats, setStats] = useState({ total: 0, active: 0, pendingVerification: 0 })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isMounted = true
+    const loadData = async () => {
+      setIsLoading(true)
+      setError('')
+      try {
+        const [itemsRes, statsRes] = await Promise.all([
+          getLostFoundItems({ page: 1, limit: 100 }),
+          getLostFoundStats(),
+        ])
+        if (!isMounted) return
+        setItems((itemsRes.items || []).map(normalizeItem))
+        setStats(statsRes)
+      } catch (err) {
+        if (!isMounted) return
+        setError(err?.message || 'Failed to load lost and found items.')
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+    loadData()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const filteredItems = useMemo(() => {
-    let items = mockItems
+    let list = items
 
     if (statusFilter === 'active') {
-      items = items.filter(item => item.status === 'Active')
+      list = list.filter(item => item.status === 'Active')
     } else if (statusFilter === 'pending') {
-      items = items.filter(item => item.status.toLowerCase().includes('pending'))
+      list = list.filter(item => item.status.toLowerCase().includes('pending'))
     }
 
-    if (!searchQuery.trim()) return items
+    if (!searchQuery.trim()) return list
 
     const q = searchQuery.trim().toLowerCase()
-    return items.filter(
+    return list.filter(
       item =>
         item.title.toLowerCase().includes(q) ||
         item.location.toLowerCase().includes(q) ||
@@ -45,9 +98,10 @@ const LostAndFoundList = () => {
     )
   }, [searchQuery, statusFilter])
 
-  const totalCount = mockItems.length
-  const activeCount = mockItems.filter(item => item.status === 'Active').length
-  const pendingCount = mockItems.filter(item => item.status.toLowerCase().includes('pending')).length
+  const totalCount = stats.total || items.length
+  const activeCount = stats.active || items.filter(item => item.status === 'Active').length
+  const pendingCount =
+    stats.pendingVerification || items.filter(item => item.status.toLowerCase().includes('pending')).length
 
   return (
     <div className="lf-page lf-list-page">
@@ -117,7 +171,11 @@ const LostAndFoundList = () => {
       </div>
 
       <div className="lf-list">
-        {filteredItems.length > 0 ? (
+        {isLoading ? (
+          <p className="lf-list-empty">Loading items...</p>
+        ) : error ? (
+          <p className="lf-list-empty">{error}</p>
+        ) : filteredItems.length > 0 ? (
           filteredItems.map(item => (
             <article
               key={item.id}

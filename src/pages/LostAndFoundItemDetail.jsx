@@ -1,6 +1,6 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getItemById } from '../data/lostAndFoundItems'
+import { createLostFoundClaim, getLostFoundItemById, getLostFoundTimeline } from '../api/lostFoundApi'
 import './LostAndFound.css'
 
 const IconBack = () => (
@@ -27,23 +27,106 @@ const IconCheck = () => (
 const LostAndFoundItemDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const item = getItemById(id)
+  const [item, setItem] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isClaiming, setIsClaiming] = useState(false)
 
-  if (!item) {
+  useEffect(() => {
+    let isMounted = true
+    const loadData = async () => {
+      setIsLoading(true)
+      setError('')
+      try {
+        const [itemRes, timelineRes] = await Promise.all([
+          getLostFoundItemById(id),
+          getLostFoundTimeline(id),
+        ])
+        if (!isMounted) return
+        setItem(itemRes || null)
+        setTimeline(Array.isArray(timelineRes) ? timelineRes : [])
+      } catch (err) {
+        if (!isMounted) return
+        setError(err?.message || 'Failed to load item details.')
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+    loadData()
+    return () => {
+      isMounted = false
+    }
+  }, [id])
+
+  const normalizedItem = useMemo(() => {
+    if (!item) return null
+    return {
+      ...item,
+      title: item?.title || 'Untitled item',
+      description: item?.description || 'No description',
+      category: item?.category || 'Other',
+      type: item?.type || 'found',
+      status: item?.status || 'Pending Verification',
+      location: item?.location || 'Location not specified',
+      image: item?.image || item?.images?.[0] || null,
+      referenceNumber: item?.referenceNumber || '-',
+      datePosted: item?.datePosted || item?.postedAt || '-',
+    }
+  }, [item])
+
+  if (isLoading) {
     return (
       <div className="lf-detail-overlay" onClick={() => navigate(-1)} role="dialog" aria-modal="true">
         <div className="lf-detail-popup" onClick={(e) => e.stopPropagation()}>
-          <p>Item not found.</p>
+          <p>Loading item details...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !normalizedItem) {
+    return (
+      <div className="lf-detail-overlay" onClick={() => navigate(-1)} role="dialog" aria-modal="true">
+        <div className="lf-detail-popup" onClick={(e) => e.stopPropagation()}>
+          <p>{error || 'Item not found.'}</p>
           <button type="button" className="lf-detail-btn" onClick={() => navigate(-1)}>Back</button>
         </div>
       </div>
     )
   }
 
-  const formatDate = (daysAgo) => {
-    const d = new Date()
-    d.setDate(d.getDate() - daysAgo)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const formatDate = (value) => {
+    if (!value) return '-'
+    if (typeof value === 'string') {
+      const parsed = new Date(value)
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      }
+      return value
+    }
+    return '-'
+  }
+
+  const handleClaim = async () => {
+    if (isClaiming || !normalizedItem) return
+    const claimType = normalizedItem.type === 'lost' ? 'finder' : 'owner'
+    setIsClaiming(true)
+    try {
+      await createLostFoundClaim(normalizedItem.id, {
+        claimType,
+        message: '',
+      })
+      alert('Claim submitted successfully.')
+    } catch (err) {
+      if (err?.status === 409) {
+        alert('You already submitted this claim for this item.')
+      } else {
+        alert(err?.message || 'Failed to submit claim.')
+      }
+    } finally {
+      setIsClaiming(false)
+    }
   }
 
   return (
@@ -63,30 +146,30 @@ const LostAndFoundItemDetail = () => {
 
         <div className="lf-detail-main">
           <div className="lf-detail-image-wrap lf-detail-image-wrap--scroll">
-            {item.image ? (
-              <img src={item.image} alt="" className="lf-detail-image" />
+            {normalizedItem.image ? (
+              <img src={normalizedItem.image} alt="" className="lf-detail-image" />
             ) : (
               <div className="lf-detail-image lf-detail-image-placeholder" />
             )}
           </div>
           <span className="lf-detail-category">
-            {item.category.toUpperCase()} · {item.type === 'lost' ? 'LOST ITEM' : 'FOUND ITEM'}
+            {normalizedItem.category.toUpperCase()} · {normalizedItem.type === 'lost' ? 'LOST ITEM' : 'FOUND ITEM'}
           </span>
-          <h1 id="lf-detail-title" className="lf-detail-title">{item.title}</h1>
+          <h1 id="lf-detail-title" className="lf-detail-title">{normalizedItem.title}</h1>
           <div className="lf-detail-meta">
             <span className="lf-detail-meta-row">
               <IconPin />
-              <span>{item.location}</span>
+              <span>{normalizedItem.location}</span>
             </span>
             <span className="lf-detail-meta-row">
               <IconCalendar />
-              <span>{formatDate(item.daysAgo)}</span>
+              <span>{formatDate(normalizedItem.postedAt || normalizedItem.datePosted)}</span>
             </span>
           </div>
 
           <section className="lf-detail-card">
             <h2 className="lf-detail-card-title">Description</h2>
-            <p className="lf-detail-card-text">{item.description}</p>
+            <p className="lf-detail-card-text">{normalizedItem.description}</p>
           </section>
 
           <section className="lf-detail-card">
@@ -94,23 +177,23 @@ const LostAndFoundItemDetail = () => {
             <dl className="lf-detail-dl">
               <div className="lf-detail-dl-row">
                 <dt>Category</dt>
-                <dd>{item.category}</dd>
+                <dd>{normalizedItem.category}</dd>
               </div>
               <div className="lf-detail-dl-row">
                 <dt>Type</dt>
-                <dd>{item.type === 'lost' ? 'Lost item' : 'Found item'}</dd>
+                <dd>{normalizedItem.type === 'lost' ? 'Lost item' : 'Found item'}</dd>
               </div>
               <div className="lf-detail-dl-row">
                 <dt>Status</dt>
-                <dd>{item.status}</dd>
+                <dd>{normalizedItem.status}</dd>
               </div>
               <div className="lf-detail-dl-row">
                 <dt>Reference #</dt>
-                <dd>{item.referenceNumber}</dd>
+                <dd>{normalizedItem.referenceNumber}</dd>
               </div>
               <div className="lf-detail-dl-row">
                 <dt>Date Posted</dt>
-                <dd>{item.datePosted}</dd>
+                <dd>{formatDate(normalizedItem.postedAt || normalizedItem.datePosted)}</dd>
               </div>
             </dl>
           </section>
@@ -118,25 +201,28 @@ const LostAndFoundItemDetail = () => {
           <section className="lf-detail-card">
             <h2 className="lf-detail-card-title">Timeline</h2>
             <ul className="lf-detail-timeline">
-              <li className="lf-detail-timeline-item lf-detail-timeline-item--done">
-                <span className="lf-detail-timeline-dot" aria-hidden="true"><IconCheck /></span>
-                <span>Item verified by staff</span>
-              </li>
-              <li className="lf-detail-timeline-item">
-                <span className="lf-detail-timeline-dot lf-detail-timeline-dot--outline" aria-hidden="true" />
-                <span>Item reported and submitted</span>
-              </li>
-              <li className="lf-detail-timeline-item">
-                <span className="lf-detail-timeline-dot lf-detail-timeline-dot--outline" aria-hidden="true" />
-                <span>Item found at {item.location}</span>
-              </li>
+              {timeline.length > 0 ? (
+                timeline.map((event, index) => (
+                  <li key={`${event?.label || 'event'}-${index}`} className={`lf-detail-timeline-item ${event?.done ? 'lf-detail-timeline-item--done' : ''}`}>
+                    <span className={`lf-detail-timeline-dot ${event?.done ? '' : 'lf-detail-timeline-dot--outline'}`} aria-hidden="true">
+                      {event?.done ? <IconCheck /> : null}
+                    </span>
+                    <span>{event?.label || 'Update'}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="lf-detail-timeline-item">
+                  <span className="lf-detail-timeline-dot lf-detail-timeline-dot--outline" aria-hidden="true" />
+                  <span>No timeline events yet.</span>
+                </li>
+              )}
             </ul>
           </section>
 
           <section className="lf-detail-actions">
             <div className="lf-detail-actions-btns">
-              <button type="button" className="lf-detail-btn lf-detail-btn--mine">
-                {item.type === 'lost' ? 'Item Found' : 'This Is Mine'}
+              <button type="button" className="lf-detail-btn lf-detail-btn--mine" onClick={handleClaim} disabled={isClaiming}>
+                {isClaiming ? 'Submitting...' : normalizedItem.type === 'lost' ? 'Item Found' : 'This Is Mine'}
               </button>
             </div>
           </section>

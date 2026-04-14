@@ -37,17 +37,27 @@ const IconCamera = () => (
 
 export default function LostAndFoundAdmin() {
   const navigate = useNavigate()
-  const { items, setItemStatus, updateItem } = useLostAndFoundAdmin()
+  const { items, isLoading, error, notifyOwner, confirmReceipt, confirmHandover } = useLostAndFoundAdmin()
   const [searchKeyword, setSearchKeyword] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All Categories')
   const [locationFilter, setLocationFilter] = useState('Main Campus')
   const [tableFilter, setTableFilter] = useState('All') // All | Pending | Ready | Completed
   const [verifyModalItem, setVerifyModalItem] = useState(null)
   const [handoverItem, setHandoverItem] = useState(null)
+  const [receiptStorageBin, setReceiptStorageBin] = useState('')
+  const [receiptCondition, setReceiptCondition] = useState('')
+  const [receiptNotes, setReceiptNotes] = useState('')
+  const [receiptVerified, setReceiptVerified] = useState(false)
+  const [handoverStudentName, setHandoverStudentName] = useState('')
+  const [handoverStudentId, setHandoverStudentId] = useState('')
+  const [handoverVerified, setHandoverVerified] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const manualEntryRef = useRef(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 5
+  const getStatus = (item) => String(item?.adminStatus || 'Pending')
 
   useEffect(() => {
     if (!manualEntryOpen) return
@@ -106,22 +116,96 @@ export default function LostAndFoundAdmin() {
   }
 
   const handleConfirmReceipt = (item) => {
+    setActionError('')
+    setReceiptStorageBin('')
+    setReceiptCondition('')
+    setReceiptNotes('')
+    setReceiptVerified(false)
     setVerifyModalItem(item)
   }
-  const handleVerifyApprove = () => {
-    if (verifyModalItem) {
-      setItemStatus(verifyModalItem.id, 'Received')
+  const handleVerifyApprove = async () => {
+    if (!verifyModalItem || isSubmitting) return
+    if (!receiptStorageBin.trim()) {
+      setActionError('Office Storage Bin / ID is required.')
+      return
+    }
+    if (!receiptCondition) {
+      setActionError('Verified condition is required.')
+      return
+    }
+    if (!receiptVerified) {
+      setActionError('Please confirm data accuracy before approval.')
+      return
+    }
+    setActionError('')
+    setIsSubmitting(true)
+    try {
+      await confirmReceipt(verifyModalItem.id, {
+        storageBinId: receiptStorageBin.trim(),
+        verifiedCondition: receiptCondition,
+        adminNotes: receiptNotes.trim(),
+      })
+      await notifyOwner(
+        verifyModalItem.id,
+        `Your ${verifyModalItem.title || 'item'} has been verified and is ready for pickup at the Lost & Found office.`
+      )
       setVerifyModalItem(null)
+    } catch (err) {
+      setActionError(err?.message || 'Failed to confirm receipt.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleMarkDelivered = (item) => {
+    setActionError('')
+    setHandoverStudentName('')
+    setHandoverStudentId('')
+    setHandoverVerified(false)
     setHandoverItem(item)
   }
-  const handleFinalizeDelivery = () => {
-    if (handoverItem) {
-      setItemStatus(handoverItem.id, 'Delivered')
+  const handleFinalizeDelivery = async () => {
+    if (!handoverItem || isSubmitting) return
+    if (!handoverStudentName.trim()) {
+      setActionError('Student name is required.')
+      return
+    }
+    if (!handoverStudentId.trim()) {
+      setActionError('Student ID number is required.')
+      return
+    }
+    if (!handoverVerified) {
+      setActionError('Please confirm student ID verification.')
+      return
+    }
+    setActionError('')
+    setIsSubmitting(true)
+    try {
+      await confirmHandover(handoverItem.id, {
+        claimantName: handoverStudentName.trim(),
+        claimantStudentId: handoverStudentId.trim(),
+      })
       setHandoverItem(null)
+    } catch (err) {
+      setActionError(err?.message || 'Failed to finalize delivery.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleNotifyOwner = async (item) => {
+    if (!item || isSubmitting) return
+    setActionError('')
+    setIsSubmitting(true)
+    try {
+      await notifyOwner(
+        item.id,
+        `An update is available for your ${item.title || 'item'} report. Please check your Lost & Found dashboard.`
+      )
+    } catch (err) {
+      setActionError(err?.message || 'Failed to notify owner.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -264,17 +348,17 @@ export default function LostAndFoundAdmin() {
                       </button>
                     </td>
                     <td>{item.category}</td>
-                    <td>{item.datePosted}</td>
+                    <td>{item.datePosted || (item.postedAt ? new Date(item.postedAt).toLocaleDateString() : '-')}</td>
                     <td>
-                      <span className={`lf-admin-status lf-admin-status--${item.adminStatus.toLowerCase()}`}>
-                        {item.adminStatus === 'Pending' && 'Newly Reported'}
-                        {item.adminStatus === 'Received' && 'In Office'}
-                        {item.adminStatus === 'Delivered' && 'Completed'}
+                      <span className={`lf-admin-status lf-admin-status--${getStatus(item).toLowerCase()}`}>
+                        {getStatus(item) === 'Pending' && 'Newly Reported'}
+                        {getStatus(item) === 'Received' && 'In Office'}
+                        {getStatus(item) === 'Delivered' && 'Completed'}
                       </span>
                     </td>
                     <td>
                       <div className="lf-admin-actions">
-                        {item.adminStatus === 'Pending' && (
+                        {getStatus(item) === 'Pending' && (
                           <button
                             type="button"
                             className="lf-admin-action-btn lf-admin-action-btn--blue"
@@ -283,9 +367,9 @@ export default function LostAndFoundAdmin() {
                             Confirm Receipt
                           </button>
                         )}
-                        {item.adminStatus === 'Received' && (
+                        {getStatus(item) === 'Received' && (
                           <>
-                            <button type="button" className="lf-admin-action-btn lf-admin-action-btn--orange">
+                            <button type="button" className="lf-admin-action-btn lf-admin-action-btn--orange" onClick={() => handleNotifyOwner(item)} disabled={isSubmitting}>
                               Notify Owner
                             </button>
                             <button
@@ -297,7 +381,7 @@ export default function LostAndFoundAdmin() {
                             </button>
                           </>
                         )}
-                        {item.adminStatus === 'Delivered' && (
+                        {getStatus(item) === 'Delivered' && (
                           <button type="button" className="lf-admin-action-btn lf-admin-action-btn--gray">
                             Archived
                           </button>
@@ -306,6 +390,16 @@ export default function LostAndFoundAdmin() {
                     </td>
                   </tr>
                 ))}
+                {isLoading && (
+                  <tr>
+                    <td colSpan="5">Loading...</td>
+                  </tr>
+                )}
+                {!isLoading && !paginatedItems.length && (
+                  <tr>
+                    <td colSpan="5">{error || 'No items found.'}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -402,11 +496,11 @@ export default function LostAndFoundAdmin() {
                 </label>
                 <label className="lf-admin-field">
                   <span>Office Storage Bin / ID *</span>
-                  <input type="text" placeholder="e.g. BIN-402-A" />
+                  <input type="text" placeholder="e.g. BIN-402-A" value={receiptStorageBin} onChange={(e) => setReceiptStorageBin(e.target.value)} />
                 </label>
                 <label className="lf-admin-field">
                   <span>Verified Condition *</span>
-                  <select>
+                  <select value={receiptCondition} onChange={(e) => setReceiptCondition(e.target.value)}>
                     <option value="">Select condition...</option>
                     <option value="good">Good</option>
                     <option value="fair">Fair</option>
@@ -415,19 +509,20 @@ export default function LostAndFoundAdmin() {
                 </label>
                 <label className="lf-admin-field">
                   <span>Internal Admin Notes</span>
-                  <textarea placeholder="Add any specific identifying markers not mentioned by student..." rows={3} />
+                  <textarea placeholder="Add any specific identifying markers not mentioned by student..." rows={3} value={receiptNotes} onChange={(e) => setReceiptNotes(e.target.value)} />
                 </label>
                 <label className="lf-admin-checkbox">
-                  <input type="checkbox" />
+                  <input type="checkbox" checked={receiptVerified} onChange={(e) => setReceiptVerified(e.target.checked)} />
                   <span>Confirm Data Accuracy — I have physically verified the item matches the student report and is now in secure storage.</span>
                 </label>
               </div>
             </div>
             <div className="lf-admin-modal-footer">
+              {actionError ? <p className="lf-admin-modal-info">{actionError}</p> : null}
               <p className="lf-admin-modal-info"><IconInfo /> Approving this item will automatically notify the student via the university mobile app and email.</p>
               <div>
                 <button type="button" className="lf-admin-btn-secondary" onClick={() => setVerifyModalItem(null)}>Cancel</button>
-                <button type="button" className="lf-admin-btn-primary" onClick={handleVerifyApprove}>Approve &amp; Notify Student</button>
+                <button type="button" className="lf-admin-btn-primary" onClick={handleVerifyApprove} disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Approve & Notify Student'}</button>
               </div>
             </div>
           </div>
@@ -470,14 +565,14 @@ export default function LostAndFoundAdmin() {
                 <h3>Claimant Verification</h3>
                 <label className="lf-admin-field">
                   <span>Student Name</span>
-                  <input type="text" placeholder="e.g. Alex Johnson" />
+                  <input type="text" placeholder="e.g. Alex Johnson" value={handoverStudentName} onChange={(e) => setHandoverStudentName(e.target.value)} />
                 </label>
                 <label className="lf-admin-field">
                   <span>Student ID Number</span>
-                  <input type="text" placeholder="e.g. 202312345" />
+                  <input type="text" placeholder="e.g. 202312345" value={handoverStudentId} onChange={(e) => setHandoverStudentId(e.target.value)} />
                 </label>
                 <label className="lf-admin-checkbox">
-                  <input type="checkbox" />
+                  <input type="checkbox" checked={handoverVerified} onChange={(e) => setHandoverVerified(e.target.checked)} />
                   <span>Student ID Verified Manually — I confirm that I have inspected the physical ID card and the photo matches the claimant.</span>
                 </label>
                 <div className="lf-admin-signature-zone">
@@ -494,9 +589,10 @@ export default function LostAndFoundAdmin() {
               </div>
             </div>
             <div className="lf-admin-modal-footer">
+              {actionError ? <p className="lf-admin-modal-info">{actionError}</p> : null}
               <button type="button" className="lf-admin-btn-secondary" onClick={() => setHandoverItem(null)}>Cancel</button>
-              <button type="button" className="lf-admin-btn-primary" onClick={handleFinalizeDelivery}>
-                <IconCheck /> Finalize Delivery
+              <button type="button" className="lf-admin-btn-primary" onClick={handleFinalizeDelivery} disabled={isSubmitting}>
+                <IconCheck /> {isSubmitting ? 'Submitting...' : 'Finalize Delivery'}
               </button>
             </div>
           </div>

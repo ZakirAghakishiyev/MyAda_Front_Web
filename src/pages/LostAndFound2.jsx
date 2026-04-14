@@ -1,10 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { mockItems, CURRENT_USER_ID } from '../data/lostAndFoundItems'
+import {
+  createFoundReport,
+  createLostReport,
+  getLostFoundCategories,
+  getLostFoundItems,
+  uploadLostFoundImages,
+} from '../api/lostFoundApi'
+import { getBuildings, getRoomsByBuildingId, validateRoomLocation } from '../api/locationApi'
 import './LostAndFound2.css'
 
 const STEPS = ['Info'] /* single step: all fields on one screen, submit directly */
-const CATEGORIES = ['All Items', 'Electronics', 'Documents', 'Personal Items', 'Accessories']
+const DEFAULT_REPORT_CATEGORIES = ['Electronics', 'Documents', 'Personal Items', 'Accessories']
 const ANNOUNCEMENT_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'lost', label: 'Lost items' },
@@ -48,22 +55,6 @@ const getDraftCookie = (key) => {
 const clearDraftCookie = (key) => {
   if (typeof document === 'undefined') return
   document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
-}
-
-const BUILDINGS = [
-  { value: 'main', label: 'Main Building' },
-  { value: 'library', label: 'Library' },
-  { value: 'sports', label: 'Sports Complex' },
-  { value: 'cafeteria', label: 'Cafeteria' },
-  { value: 'other', label: 'Other / External' }
-]
-
-const ROOMS_BY_BUILDING = {
-  main: ['101', '102', '201', '202', '301', '302'],
-  library: ['Reading Hall', 'Computer Room', 'Silent Zone'],
-  sports: ['Court 1', 'Court 2', 'Gym'],
-  cafeteria: ['Main Hall'],
-  other: ['Room 1', 'Room 2']
 }
 
 const IconSearch = () => (
@@ -112,10 +103,20 @@ const IconBulb = () => (
   </svg>
 )
 
+function computeDaysAgo(item) {
+  if (typeof item?.daysAgo === 'number') return item.daysAgo
+  const source = item?.postedAt || item?.datePosted
+  if (!source) return 0
+  const dt = new Date(source)
+  if (Number.isNaN(dt.getTime())) return 0
+  return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 86400000))
+}
+
 const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const [view, setView] = useState('dashboard') // 'dashboard' | 'report-lost' | 'report-found'
+  const isReportOpen = view === 'report-lost' || view === 'report-found'
 
   useEffect(() => {
     const openReport = initialReport || location.state?.openReport
@@ -126,12 +127,20 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const [announcementFilter, setAnnouncementFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('All Items')
   const [currentPage, setCurrentPage] = useState(1)
+  const [items, setItems] = useState([])
+  const [totalItems, setTotalItems] = useState(0)
+  const [isItemsLoading, setIsItemsLoading] = useState(false)
+  const [itemsError, setItemsError] = useState('')
+  const [buildings, setBuildings] = useState([])
+  const [rooms, setRooms] = useState([])
+  const [reportCategories, setReportCategories] = useState(DEFAULT_REPORT_CATEGORIES)
 
   // Report form state (shared structure for lost/found)
   const [reportStep, setReportStep] = useState(0)
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
   const [reportForm, setReportForm] = useState({
     itemName: '',
-    category: 'Electronics',
+    category: DEFAULT_REPORT_CATEGORIES[0],
     locationType: '',
     building: '',
     floor: '',
@@ -141,6 +150,68 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     description: '',
     photos: []
   })
+
+  useEffect(() => {
+    if (!isReportOpen) return
+    let isMounted = true
+    const loadBuildings = async () => {
+      try {
+        const result = await getBuildings()
+        if (!isMounted) return
+        setBuildings(result)
+      } catch {
+        if (!isMounted) return
+        setBuildings([])
+      }
+    }
+    loadBuildings()
+    return () => {
+      isMounted = false
+    }
+  }, [isReportOpen])
+
+  useEffect(() => {
+    if (!isReportOpen) return
+    let isMounted = true
+    getLostFoundCategories()
+      .then((result) => {
+        if (!isMounted) return
+        const categories = result.length ? result : DEFAULT_REPORT_CATEGORIES
+        setReportCategories(categories)
+        setReportForm((prev) => ({
+          ...prev,
+          category: categories.includes(prev.category) ? prev.category : categories[0],
+        }))
+      })
+      .catch(() => {
+        if (isMounted) setReportCategories(DEFAULT_REPORT_CATEGORIES)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [isReportOpen])
+
+  useEffect(() => {
+    if (!isReportOpen || reportForm.locationType !== 'building' || !reportForm.building) {
+      setRooms([])
+      return
+    }
+    let isMounted = true
+    const loadRooms = async () => {
+      try {
+        const result = await getRoomsByBuildingId(reportForm.building)
+        if (!isMounted) return
+        setRooms(result)
+      } catch {
+        if (!isMounted) return
+        setRooms([])
+      }
+    }
+    loadRooms()
+    return () => {
+      isMounted = false
+    }
+  }, [isReportOpen, reportForm.locationType, reportForm.building])
 
   useEffect(() => {
     if (view !== 'report-lost' && view !== 'report-found') return
@@ -158,51 +229,63 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     }
   }, [view])
 
-  const totalCount = mockItems.length
-  const activeCount = mockItems.filter(i => i.status === 'Active').length
-  const pendingCount = mockItems.filter(i => i.status.toLowerCase().includes('pending')).length
+  useEffect(() => {
+    if (view !== 'dashboard') return
+    let isMounted = true
+    const loadItems = async () => {
+      setIsItemsLoading(true)
+      setItemsError('')
+      try {
+        const type =
+          announcementFilter === 'lost'
+            ? 'lost'
+            : announcementFilter === 'found'
+              ? 'found'
+              : 'all'
+        const params = {
+          page: currentPage,
+          limit: ITEMS_PER_PAGE,
+          type,
+          q: searchQuery.trim() || undefined,
+          category: categoryFilter === 'All Items' ? undefined : categoryFilter,
+          postedBy: announcementFilter === 'my' ? 'me' : undefined,
+        }
+        const res = await getLostFoundItems(params)
+        if (!isMounted) return
+        setItems(Array.isArray(res.items) ? res.items : [])
+        setTotalItems(Number(res.total || 0))
+      } catch (err) {
+        if (!isMounted) return
+        setItemsError(err?.message || 'Failed to load items.')
+      } finally {
+        if (isMounted) setIsItemsLoading(false)
+      }
+    }
+    loadItems()
+    return () => {
+      isMounted = false
+    }
+  }, [view, announcementFilter, categoryFilter, searchQuery, currentPage])
 
-  const categoryMap = {
-    'Documents': 'Documents',
-    'Electronics': 'Electronics',
-    'Clothing': 'Personal Items',
-    'Other': 'Accessories'
-  }
-
-  const filteredItems = useMemo(() => {
-    let items = mockItems.map(item => ({
+  const normalizedItems = useMemo(() => {
+    let list = items.map(item => ({
       ...item,
-      displayCategory: categoryMap[item.category] || item.category,
-      type: item.type || 'found'
+      displayCategory: item.category || 'Other',
+      type: item.type || 'found',
+      image: item.image || item.images?.[0] || null,
+      daysAgo: computeDaysAgo(item),
+      location: item.location || 'Location not specified',
+      description: item.description || '',
     }))
-    if (announcementFilter === 'lost') {
-      items = items.filter(item => item.type === 'lost')
-    } else if (announcementFilter === 'found') {
-      items = items.filter(item => item.type === 'found')
-    } else if (announcementFilter === 'my') {
-      items = items.filter(item => item.postedBy === CURRENT_USER_ID)
-    }
-    if (categoryFilter !== 'All Items') {
-      items = items.filter(item => item.displayCategory === categoryFilter)
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase()
-      items = items.filter(
-        item =>
-          item.title.toLowerCase().includes(q) ||
-          item.location.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          (item.displayCategory && item.displayCategory.toLowerCase().includes(q))
-      )
-    }
-    return items
-  }, [searchQuery, categoryFilter, announcementFilter])
+    return list
+  }, [items])
 
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE))
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredItems.slice(start, start + ITEMS_PER_PAGE)
-  }, [filteredItems, currentPage])
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
+  const paginatedItems = normalizedItems
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, announcementFilter, categoryFilter])
 
   const openReportLost = () => setView('report-lost')
   const openReportFound = () => setView('report-found')
@@ -215,7 +298,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setReportStep(0)
     setReportForm({
       itemName: '',
-      category: 'Electronics',
+      category: reportCategories[0] || DEFAULT_REPORT_CATEGORIES[0],
       locationType: '',
       building: '',
       floor: '',
@@ -227,22 +310,75 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     })
   }
 
-  const handleReportSubmit = (e) => {
+  const handleReportSubmit = async (e) => {
     e.preventDefault()
-    if (view === 'report-lost') {
-      alert('Lost item report submitted for review (mock).')
-    } else {
-      alert('Found item report submitted for review (mock).')
-    }
-    const key = DRAFT_COOKIE_KEYS[view]
-    if (key) {
-      clearDraftCookie(key)
-    }
-    if (fromAdmin || location.state?.from === 'admin') {
-      navigate('/admin/lost-and-found')
+    if (isSubmittingReport) return
+    if (view === 'report-found' && reportForm.photos.length === 0) {
+      alert('Please upload at least one image for found items.')
       return
     }
-    backToDashboard()
+
+    setIsSubmittingReport(true)
+    try {
+      if (
+        reportForm.locationType === 'building' &&
+        reportForm.isRoom === 'yes' &&
+        reportForm.building &&
+        reportForm.roomArea
+      ) {
+        const isValid = await validateRoomLocation(reportForm.roomArea, reportForm.building)
+        if (!isValid) {
+          alert('Selected room does not belong to selected building.')
+          setIsSubmittingReport(false)
+          return
+        }
+      }
+
+      const photoUrls = await uploadLostFoundImages(reportForm.photos)
+      const selectedBuilding = buildings.find((b) => String(b.id) === String(reportForm.building))
+      const selectedRoom = rooms.find((r) => String(r.id) === String(reportForm.roomArea))
+      const basePayload = {
+        itemName: reportForm.itemName.trim(),
+        category: reportForm.category,
+        description: reportForm.description.trim(),
+        locationType: reportForm.locationType || 'building',
+        building: selectedBuilding?.name || undefined,
+        isRoom: reportForm.locationType === 'building' ? reportForm.isRoom || undefined : undefined,
+        roomOrArea:
+          reportForm.locationType === 'building'
+            ? reportForm.isRoom === 'yes'
+              ? selectedRoom?.name || undefined
+              : reportForm.roomArea || undefined
+            : undefined,
+        campusLocation: reportForm.locationType === 'campus' ? reportForm.campusLocation || undefined : undefined,
+        photoUrls,
+      }
+
+      if (view === 'report-lost') {
+        await createLostReport(basePayload)
+        alert('Lost item report submitted for review.')
+      } else {
+        await createFoundReport({
+          ...basePayload,
+          collectionPlace: 'Campus Lost & Found Office',
+        })
+        alert('Found item report submitted for review.')
+      }
+
+      const key = DRAFT_COOKIE_KEYS[view]
+      if (key) {
+        clearDraftCookie(key)
+      }
+      if (fromAdmin || location.state?.from === 'admin') {
+        navigate('/admin/lost-and-found')
+        return
+      }
+      backToDashboard()
+    } catch (err) {
+      alert(err?.message || 'Failed to submit report.')
+    } finally {
+      setIsSubmittingReport(false)
+    }
   }
 
   const handlePhotoChange = (e) => {
@@ -257,7 +393,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   }
   const handleDragOver = (e) => e.preventDefault()
 
-  const isReportOpen = view === 'report-lost' || view === 'report-found'
   const reportTitle = view === 'report-lost' ? 'Report a Lost Item' : 'Report a Found Item'
   const reportSubtitle = view === 'report-lost'
     ? 'Provide details about your lost item to help the community return it to you.'
@@ -329,10 +464,9 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                         value={reportForm.category}
                         onChange={e => setReportForm(f => ({ ...f, category: e.target.value }))}
                       >
-                        <option value="Electronics">Electronics</option>
-                        <option value="Documents">Documents</option>
-                        <option value="Personal Items">Personal Items</option>
-                        <option value="Accessories">Accessories</option>
+                        {reportCategories.map((category) => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
                       </select>
                     </label>
                   </div>
@@ -437,9 +571,9 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                             required={view === 'report-found'}
                           >
                             <option value="">Select building...</option>
-                            {BUILDINGS.map(b => (
-                              <option key={b.value} value={b.value}>
-                                {b.label}
+                            {buildings.map(b => (
+                              <option key={b.id} value={String(b.id)}>
+                                {b.name}
                               </option>
                             ))}
                           </select>
@@ -493,9 +627,9 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                               required={view === 'report-found'}
                             >
                               <option value="">Select room...</option>
-                              {(ROOMS_BY_BUILDING[reportForm.building] || []).map(room => (
-                                <option key={room} value={room}>
-                                  {room}
+                              {rooms.map(room => (
+                                <option key={room.id} value={String(room.id)}>
+                                  {room.name || room.number}
                                 </option>
                               ))}
                             </select>
@@ -581,8 +715,8 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
               <button type="button" className="lf2-btn lf2-btn--draft" onClick={handleSaveDraft}>
                 Save as Draft
               </button>
-              <button type="submit" className="lf2-btn lf2-btn--primary">
-                Submit
+              <button type="submit" className="lf2-btn lf2-btn--primary" disabled={isSubmittingReport}>
+                {isSubmittingReport ? 'Submitting...' : 'Submit'}
               </button>
             </div>
           </div>
@@ -629,30 +763,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         </div>
       </header>
 
-      <div className="lf2-stats">
-        <div className="lf2-stat-card">
-          <div className="lf2-stat-icon lf2-stat-icon--stack">📄</div>
-          <div className="lf2-stat-content">
-            <span className="lf2-stat-label">TOTAL ITEMS</span>
-            <span className="lf2-stat-value">{totalCount.toLocaleString()}</span>
-          </div>
-        </div>
-        <div className="lf2-stat-card">
-          <div className="lf2-stat-icon lf2-stat-icon--active"><IconFound /></div>
-          <div className="lf2-stat-content">
-            <span className="lf2-stat-label">ACTIVE ITEMS</span>
-            <span className="lf2-stat-value">{activeCount.toLocaleString()}</span>
-          </div>
-        </div>
-        <div className="lf2-stat-card">
-          <div className="lf2-stat-icon lf2-stat-icon--pending"><IconSearch /></div>
-          <div className="lf2-stat-content">
-            <span className="lf2-stat-label">PENDING VERIFICATION</span>
-            <span className="lf2-stat-value">{pendingCount.toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-
       <div className="lf2-search-wrap">
         <span className="lf2-search-icon"><IconSearch /></span>
         <input
@@ -682,7 +792,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       </div>
 
       <div className="lf2-categories">
-        {CATEGORIES.map(cat => (
+        {['All Items', ...reportCategories].map(cat => (
           <button
             key={cat}
             type="button"
@@ -695,47 +805,55 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       </div>
 
       <div className="lf2-grid">
-        {paginatedItems.map(item => (
-          <article
-            key={item.id}
-            className="lf2-card"
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate(`/lost-and-found/item/${item.id}`)}
-            onKeyDown={e => e.key === 'Enter' && navigate(`/lost-and-found/item/${item.id}`)}
-          >
-            <span className={`lf2-card-status lf2-card-status--${item.status === 'Active' ? 'active' : 'pending'}`}>
-              {item.status === 'Active' ? 'ACTIVE' : 'PENDING'}
-            </span>
-            <div className="lf2-card-image">
-              {item.image ? (
-                <img src={item.image} alt="" />
-              ) : null}
-            </div>
-            <div className="lf2-card-body">
-              <div className="lf2-card-title-row">
-                <h2 className="lf2-card-title">{item.title}</h2>
-                <span className="lf2-card-time">{item.daysAgo} {item.daysAgo === 1 ? 'day' : 'days'} ago</span>
+        {isItemsLoading ? (
+          <p className="lf-list-empty">Loading items...</p>
+        ) : itemsError ? (
+          <p className="lf-list-empty">{itemsError}</p>
+        ) : paginatedItems.length === 0 ? (
+          <p className="lf-list-empty">No items found.</p>
+        ) : (
+          paginatedItems.map(item => (
+            <article
+              key={item.id}
+              className="lf2-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/lost-and-found/item/${item.id}`)}
+              onKeyDown={e => e.key === 'Enter' && navigate(`/lost-and-found/item/${item.id}`)}
+            >
+              <span className={`lf2-card-status lf2-card-status--${item.status === 'Active' ? 'active' : 'pending'}`}>
+                {item.status === 'Active' ? 'ACTIVE' : 'PENDING'}
+              </span>
+              <div className="lf2-card-image">
+                {item.image ? (
+                  <img src={item.image} alt="" />
+                ) : null}
               </div>
-            <div className="lf2-card-location">
-              <span>{item.type === 'lost' ? 'Lost item' : 'Found item'}</span>
-            </div>
+              <div className="lf2-card-body">
+                <div className="lf2-card-title-row">
+                  <h2 className="lf2-card-title">{item.title}</h2>
+                  <span className="lf2-card-time">{item.daysAgo} {item.daysAgo === 1 ? 'day' : 'days'} ago</span>
+                </div>
               <div className="lf2-card-location">
-                <IconPin />
-                <span>{item.location}</span>
+                <span>{item.type === 'lost' ? 'Lost item' : 'Found item'}</span>
               </div>
-            <span className="lf2-card-category">
-              {item.displayCategory || item.category}
-            </span>
-              <p className="lf2-card-desc">{item.description}</p>
-            </div>
-          </article>
-        ))}
+                <div className="lf2-card-location">
+                  <IconPin />
+                  <span>{item.location}</span>
+                </div>
+              <span className="lf2-card-category">
+                {item.displayCategory || item.category}
+              </span>
+                <p className="lf2-card-desc">{item.description}</p>
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       <footer className="lf2-footer">
         <span className="lf2-footer-count">
-          Showing {paginatedItems.length} of {filteredItems.length} active items
+          Showing {paginatedItems.length} of {totalItems} items
         </span>
         <div className="lf2-pagination">
           <button

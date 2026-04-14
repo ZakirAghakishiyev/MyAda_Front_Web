@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import './LostAndFound.css'
@@ -38,11 +38,30 @@ const IconCamera = () => (
 export default function LostAndFoundAdminItemDetail() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { items, setItemStatus } = useLostAndFoundAdmin()
+  const { items, isLoading, notifyOwner, confirmReceipt, confirmHandover } = useLostAndFoundAdmin()
   const [verifyModalOpen, setVerifyModalOpen] = useState(false)
   const [handoverModalOpen, setHandoverModalOpen] = useState(false)
+  const [receiptStorageBin, setReceiptStorageBin] = useState('')
+  const [receiptCondition, setReceiptCondition] = useState('')
+  const [receiptVerified, setReceiptVerified] = useState(false)
+  const [handoverStudentName, setHandoverStudentName] = useState('')
+  const [handoverStudentId, setHandoverStudentId] = useState('')
+  const [handoverVerified, setHandoverVerified] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const item = items.find((i) => String(i.id) === String(id))
+  const displayImage = useMemo(() => item?.image || item?.images?.[0] || null, [item])
+
+  if (isLoading && !item) {
+    return (
+      <div className="lf-admin-detail-overlay" onClick={() => navigate('/admin/lost-and-found')} role="dialog" aria-modal="true">
+        <div className="lf-detail-popup lf-detail-popup--admin" onClick={(e) => e.stopPropagation()}>
+          <p>Loading item...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!item) {
     return (
@@ -64,13 +83,59 @@ export default function LostAndFoundAdminItemDetail() {
         ? 'In Office'
         : 'Completed'
 
-  const handleVerifyApprove = () => {
-    setItemStatus(item.id, 'Received')
-    setVerifyModalOpen(false)
+  const handleVerifyApprove = async () => {
+    if (isSubmitting) return
+    if (!receiptStorageBin.trim() || !receiptCondition || !receiptVerified) {
+      setActionError('Please fill required receipt fields and confirm data accuracy.')
+      return
+    }
+    setActionError('')
+    setIsSubmitting(true)
+    try {
+      await confirmReceipt(item.id, {
+        storageBinId: receiptStorageBin.trim(),
+        verifiedCondition: receiptCondition,
+      })
+      await notifyOwner(item.id, `Your ${item.title || 'item'} has been verified and is ready for pickup.`)
+      setVerifyModalOpen(false)
+    } catch (err) {
+      setActionError(err?.message || 'Failed to confirm receipt.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
-  const handleFinalizeDelivery = () => {
-    setItemStatus(item.id, 'Delivered')
-    setHandoverModalOpen(false)
+  const handleFinalizeDelivery = async () => {
+    if (isSubmitting) return
+    if (!handoverStudentName.trim() || !handoverStudentId.trim() || !handoverVerified) {
+      setActionError('Please complete claimant verification before finalizing.')
+      return
+    }
+    setActionError('')
+    setIsSubmitting(true)
+    try {
+      await confirmHandover(item.id, {
+        claimantName: handoverStudentName.trim(),
+        claimantStudentId: handoverStudentId.trim(),
+      })
+      setHandoverModalOpen(false)
+    } catch (err) {
+      setActionError(err?.message || 'Failed to finalize delivery.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleNotifyOwner = async () => {
+    if (isSubmitting) return
+    setActionError('')
+    setIsSubmitting(true)
+    try {
+      await notifyOwner(item.id, `An update is available for your ${item.title || 'item'} report.`)
+    } catch (err) {
+      setActionError(err?.message || 'Failed to notify owner.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const formatDate = (daysAgo) => {
@@ -102,8 +167,8 @@ export default function LostAndFoundAdminItemDetail() {
 
             <div className="lf-detail-main">
               <div className="lf-detail-image-wrap lf-detail-image-wrap--scroll">
-                {item.image ? (
-                  <img src={item.image} alt="" className="lf-detail-image" />
+                {displayImage ? (
+                  <img src={displayImage} alt="" className="lf-detail-image" />
                 ) : (
                   <div className="lf-detail-image lf-detail-image-placeholder" />
                 )}
@@ -149,7 +214,7 @@ export default function LostAndFoundAdminItemDetail() {
                   </div>
                   <div className="lf-detail-dl-row">
                     <dt>Date Posted</dt>
-                    <dd>{item.datePosted}</dd>
+                    <dd>{item.datePosted || (item.postedAt ? new Date(item.postedAt).toLocaleDateString() : '-')}</dd>
                   </div>
                 </dl>
               </section>
@@ -186,7 +251,7 @@ export default function LostAndFoundAdminItemDetail() {
                   )}
                   {item.adminStatus === 'Received' && (
                     <>
-                      <button type="button" className="lf-detail-btn lf-detail-btn--admin-notify">
+                      <button type="button" className="lf-detail-btn lf-detail-btn--admin-notify" onClick={handleNotifyOwner} disabled={isSubmitting}>
                         Notify Owner
                       </button>
                       <button
@@ -229,7 +294,7 @@ export default function LostAndFoundAdminItemDetail() {
               <div className="lf-admin-verify-section">
                 <h3>STUDENT-REPORTED INFO</h3>
                 <div className="lf-admin-verify-photo">
-                  {item.image ? <img src={item.image} alt="" /> : <div className="lf-admin-verify-photo-placeholder" />}
+                  {displayImage ? <img src={displayImage} alt="" /> : <div className="lf-admin-verify-photo-placeholder" />}
                 </div>
                 <dl className="lf-admin-verify-dl">
                   <dt>ITEM CATEGORY</dt>
@@ -237,7 +302,7 @@ export default function LostAndFoundAdminItemDetail() {
                   <dt>BRAND/MODEL</dt>
                   <dd>{item.title}</dd>
                   <dt>DATE FOUND</dt>
-                  <dd>{item.datePosted}</dd>
+                  <dd>{item.datePosted || (item.postedAt ? new Date(item.postedAt).toLocaleDateString() : '-')}</dd>
                 </dl>
                 <div className="lf-admin-verify-desc">
                   <strong>Student Description</strong>
@@ -254,11 +319,11 @@ export default function LostAndFoundAdminItemDetail() {
                 </label>
                 <label className="lf-admin-field">
                   <span>Office Storage Bin / ID *</span>
-                  <input type="text" placeholder="e.g. BIN-402-A" />
+                  <input type="text" placeholder="e.g. BIN-402-A" value={receiptStorageBin} onChange={(e) => setReceiptStorageBin(e.target.value)} />
                 </label>
                 <label className="lf-admin-field">
                   <span>Verified Condition *</span>
-                  <select>
+                  <select value={receiptCondition} onChange={(e) => setReceiptCondition(e.target.value)}>
                     <option value="">Select condition...</option>
                     <option value="good">Good</option>
                     <option value="fair">Fair</option>
@@ -266,16 +331,17 @@ export default function LostAndFoundAdminItemDetail() {
                   </select>
                 </label>
                 <label className="lf-admin-checkbox">
-                  <input type="checkbox" />
+                  <input type="checkbox" checked={receiptVerified} onChange={(e) => setReceiptVerified(e.target.checked)} />
                   <span>Confirm Data Accuracy — I have physically verified the item matches the student report and is now in secure storage.</span>
                 </label>
               </div>
             </div>
             <div className="lf-admin-modal-footer">
+              {actionError ? <p className="lf-admin-modal-info">{actionError}</p> : null}
               <p className="lf-admin-modal-info"><IconInfo /> Approving will notify the student via app and email.</p>
               <div>
                 <button type="button" className="lf-admin-btn-secondary" onClick={() => setVerifyModalOpen(false)}>Cancel</button>
-                <button type="button" className="lf-admin-btn-primary" onClick={handleVerifyApprove}>Approve &amp; Notify Student</button>
+                <button type="button" className="lf-admin-btn-primary" onClick={handleVerifyApprove} disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Approve & Notify Student'}</button>
               </div>
             </div>
           </div>
@@ -303,7 +369,7 @@ export default function LostAndFoundAdminItemDetail() {
               <div className="lf-admin-verify-section">
                 <h3>Item Details</h3>
                 <div className="lf-admin-verify-photo">
-                  {item.image ? <img src={item.image} alt="" /> : <div className="lf-admin-verify-photo-placeholder" />}
+                  {displayImage ? <img src={displayImage} alt="" /> : <div className="lf-admin-verify-photo-placeholder" />}
                 </div>
                 <p><strong>Category:</strong> {item.category}</p>
                 <p><strong>Location Found:</strong> {item.location}</p>
@@ -313,14 +379,14 @@ export default function LostAndFoundAdminItemDetail() {
                 <h3>Claimant Verification</h3>
                 <label className="lf-admin-field">
                   <span>Student Name</span>
-                  <input type="text" placeholder="e.g. Alex Johnson" />
+                  <input type="text" placeholder="e.g. Alex Johnson" value={handoverStudentName} onChange={(e) => setHandoverStudentName(e.target.value)} />
                 </label>
                 <label className="lf-admin-field">
                   <span>Student ID Number</span>
-                  <input type="text" placeholder="e.g. 202312345" />
+                  <input type="text" placeholder="e.g. 202312345" value={handoverStudentId} onChange={(e) => setHandoverStudentId(e.target.value)} />
                 </label>
                 <label className="lf-admin-checkbox">
-                  <input type="checkbox" />
+                  <input type="checkbox" checked={handoverVerified} onChange={(e) => setHandoverVerified(e.target.checked)} />
                   <span>Student ID Verified Manually</span>
                 </label>
                 <label className="lf-admin-upload-zone">
@@ -331,9 +397,10 @@ export default function LostAndFoundAdminItemDetail() {
               </div>
             </div>
             <div className="lf-admin-modal-footer">
+              {actionError ? <p className="lf-admin-modal-info">{actionError}</p> : null}
               <button type="button" className="lf-admin-btn-secondary" onClick={() => setHandoverModalOpen(false)}>Cancel</button>
-              <button type="button" className="lf-admin-btn-primary" onClick={handleFinalizeDelivery}>
-                <IconCheck /> Finalize Delivery
+              <button type="button" className="lf-admin-btn-primary" onClick={handleFinalizeDelivery} disabled={isSubmitting}>
+                <IconCheck /> {isSubmitting ? 'Submitting...' : 'Finalize Delivery'}
               </button>
             </div>
           </div>
