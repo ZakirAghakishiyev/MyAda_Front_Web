@@ -1,0 +1,286 @@
+/* Event Ticket – Registration confirmed, QR + Download only */
+.et-page {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.et-page-content {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+  flex: 1;
+}
+
+.et-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.et-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 20px;
+  color: #374151;
+  font-family: inherit;
+}
+
+.et-back:hover {
+  background: #e5e7eb;
+}
+
+.et-logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.et-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.et-nav button,
+.et-nav span {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  color: #64748b;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.et-nav button:hover {
+  color: #0f172a;
+}
+
+.et-nav-active {
+  color: #059669 !important;
+  font-weight: 600;
+}
+
+.et-profile {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.et-breadcrumb {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.et-confirm-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  background: #d1fae5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+
+.et-confirm-banner svg {
+  flex-shrink: 0;
+  color: #059669;
+}
+
+.et-confirm-banner strong {
+  display: block;
+  font-size: 16px;
+  color: #065f46;
+  margin-bottom: 4px;
+}
+
+.et-confirm-banner p {
+  margin: 0;
+  font-size: 14px;
+  color: #047857;
+  line-height: 1.5;
+}
+
+.et-ticket-wrap {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.et-ticket {
+  padding: 0;
+}
+
+.et-ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: #f0fdf4;
+  border-bottom: 2px solid #059669;
+}
+
+.et-ticket-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #059669;
+  letter-spacing: 0.04em;
+}
+
+.et-ticket-id {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.et-ticket-body {
+  display: flex;
+  gap: 32px;
+  padding: 28px 24px;
+  flex-wrap: wrap;
+}
+
+.et-ticket-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.et-ticket-qr img {
+  display: block;
+  width: 200px;
+  height: 200px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.et-ticket-scan {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+}
+
+.et-ticket-details {
+  flex: 1;
+  min-width: 240px;
+}
+
+.et-ticket-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 6px;
+  line-height: 1.3;
+}
+
+.et-ticket-presented {
+  font-size: 14px;
+  color: #059669;
+  margin: 0 0 20px;
+}
+
+.et-ticket-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.et-ticket-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.et-ticket-meta svg {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.et-ticket-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.et-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+}
+
+.et-btn--download {
+  background: #059669;
+  color: #fff;
+}
+
+.et-btn--download:hover {
+  background: #047857;
+}
+
+.et-not-found {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.et-not-found p {
+  margin: 0 0 16px;
+  color: #6b7280;
+}
+
+.et-footer {
+  margin-top: auto;
+  padding-top: 32px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.et-footer-logo {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.et-footer-copy {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.et-footer-links {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}

@@ -1,0 +1,96 @@
+QR ATTENDANCE — API ENDPOINTS
+=============================
+
+Assumptions:
+- Course list for instructors shows ONLY their own lessons (Lessons.Instructor_Id = current user).
+- Session model: Lesson_Sessions (Lesson_id, Date, Start_time, End_time).
+- Attendance: Session_Attendance (Session_id, Student_id, Status).
+- Enrollment: Lesson_Enrollments (Lesson_id, Student_id).
+
+
+INSTRUCTOR (scoped to own lessons)
+----------------------------------
+
+GET    /instructors/me/lessons
+       List only lessons where Instructor_Id = authenticated instructor.
+
+GET    /instructors/me/lessons/{lessonId}
+       Lesson detail; verify ownership before returning.
+
+GET    /instructors/me/lessons/{lessonId}/sessions
+       All sessions for that lesson (optional query: upcoming, past, from, to).
+
+GET    /instructors/me/lessons/{lessonId}/sessions/{sessionId}
+       Single session (date, times, optional attendance summary).
+
+POST   /instructors/me/lessons/{lessonId}/sessions
+       Create session (if instructors create sessions in the product).
+
+PATCH  /instructors/me/lessons/{lessonId}/sessions/{sessionId}
+       Update session (if allowed).
+
+POST   /instructors/me/sessions/{sessionId}/qr-token
+       Issue signed QR payload or deep-link for that session.
+
+GET    /instructors/me/sessions/{sessionId}/attendance
+       Roster + Session_Attendance for that session.
+
+PATCH  /instructors/me/sessions/{sessionId}/attendance/{studentId}
+       Override Status (e.g. Present, Late, Absent, Excused).
+
+GET    /instructors/me/sessions/{sessionId}/attendance/export
+       CSV or file export for that session.
+
+Note: Every /instructors/me/... handler must enforce lesson.Instructor_Id = current user.
+
+
+STUDENT
+-------
+
+POST   /attendance/qr/scan
+       Body: { token } or signed session reference.
+       Validate time window, enrollment; write Session_Attendance; idempotent.
+
+GET    /students/me/enrollments
+       Student's enrolled lessons (Lesson_Enrollments) — optional "my courses" UI.
+
+GET    /students/me/lessons/{lessonId}/sessions
+       Sessions for an enrolled lesson — optional timeline UI.
+
+GET    /students/me/lessons/{lessonId}/attendance
+       Student's own attendance across sessions for that lesson — optional history UI.
+
+
+ADMIN / REGISTRAR (optional)
+-----------------------------
+
+GET    /admin/instructors/{instructorId}/lessons
+       Cross-instructor lesson list (role: admin).
+
+GET    /admin/lessons/{lessonId}/sessions
+       Any lesson's sessions.
+
+GET    /admin/sessions/{sessionId}/attendance
+       Full roster for support/audit.
+
+PATCH  /admin/sessions/{sessionId}/attendance/{studentId}
+       Correct attendance mistakes.
+
+
+SHARED / INTERNAL (optional)
+----------------------------
+
+GET    /lessons/{lessonId}/enrollments
+       Enrollment list or "is enrolled" check (often internal or folded into scan).
+
+
+MINIMUM VIABLE SET (ship first)
+-------------------------------
+
+GET    /instructors/me/lessons
+GET    /instructors/me/lessons/{lessonId}/sessions
+POST   /instructors/me/sessions/{sessionId}/qr-token
+POST   /attendance/qr/scan
+GET    /instructors/me/sessions/{sessionId}/attendance
+
+Add PATCH .../attendance/{studentId} and GET .../export when the UI needs overrides and export.

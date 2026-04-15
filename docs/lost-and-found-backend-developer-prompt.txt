@@ -1,0 +1,435 @@
+================================================================================
+LOST & FOUND — BACKEND DEVELOPER BRIEF (FRONTEND ALIGNMENT)
+================================================================================
+Project: FrontWeb (ADA University Lost & Found UI)
+Purpose: Implement REST (or equivalent) APIs so the React app can replace mock
+data in `src/data/lostAndFoundItems.js` and `LostAndFoundAdminContext`.
+Base path suggestion: `/api` (example: `https://<host>/api/lost-and-found/...`)
+
+The UI currently uses in-memory mocks and alerts on submit. This document
+lists every screen, the data it displays, filters, and the requests/responses
+the backend should support.
+
+================================================================================
+1. FRONTEND ROUTES & SCREENS (WHAT TO POWER)
+================================================================================
+
+1.1 Public — Legacy list
+  Route: GET /lost-and-found (LostAndFoundList)
+  - Lists items with search (title, location, description, category).
+  - Tabs: Total | Active | Pending (filter by `status`: Active vs contains
+    "pending" case-insensitive).
+  - Navigates to item detail: /lost-and-found/item/:id
+  - Buttons: Report Lost → /lost-and-found/announce-lost
+             Report Found → /lost-and-found/announce-found
+
+1.2 Public — Primary hub (“LostAndFound2”)
+  Route: GET /lost-and-found-2
+  - Header stats: TOTAL ITEMS, ACTIVE ITEMS, PENDING VERIFICATION (derive
+    from aggregate counts).
+  - Search: same text fields as list.
+  - Filters:
+      * Announcement: All | Lost items | Found items | My announcements
+        → query `type` in {all,lost,found} and `postedBy=me` when "my".
+      * Category pills: All Items, Electronics, Documents, Personal Items,
+        Accessories
+        Note: mock data uses Clothing/Other; UI maps Clothing→Personal Items,
+        Other→Accessories for display. Backend should use ONE canonical
+        category set; either align DB to UI pills or return a displayCategory.
+  - Pagination: 8 items per page (configurable via `limit`).
+  - Item card opens: /lost-and-found/item/:id
+
+1.3 Public — Item detail (overlay)
+  Route: /lost-and-found/item/:id (LostAndFoundItemDetail)
+  - Shows: image(s), category, type (lost|found), title, location, derived
+    calendar date from `daysAgo` OR prefer explicit `postedAt` ISO from API.
+  - Sections: Description, Item Details (category, type, status,
+    referenceNumber, datePosted), Timeline (static copy in UI today).
+  - Primary CTA (not wired): "Item Found" if type=lost, "This Is Mine" if
+    type=found → backend should expose a **claim / interest** endpoint (see §6).
+
+1.4 Public — Report popups (legacy)
+  Routes:
+    /lost-and-found/announce-lost  (AnnounceLostItem)
+    /lost-and-found/announce-found (AnnounceFoundItem)
+  These forms are mostly uncontrolled in code but define fields the API must
+  accept (see §4).
+
+1.5 Public — Report flow (LostAndFound2 modal, same payload shape as main hub)
+  - Opens from /lost-and-found-2 or from admin “Manual Entry” with state
+    from=admin, openReport=lost|found (still posts a user/admin report).
+
+1.6 Admin — Dashboard
+  Route: /admin/lost-and-found (LostAndFoundAdmin)
+  - KPI cards: count adminStatus=Pending, Received, Delivered (UI duplicates
+    “Awaiting Pickup” with Received count).
+  - Table: filter tabs All | Pending | Ready (=Received) | Completed (=Delivered).
+  - Search: title, referenceNumber, category.
+  - Category sidebar filter (dynamic from items).
+  - Location filter exists in sidebar UI but is NOT applied in current code;
+    still recommend API support: `location` or `campus` query for future use.
+  - Row actions:
+      * Pending → “Confirm Receipt” (opens verify modal)
+      * Received → “Notify Owner” (UI stub), “Mark as Delivered” (handover)
+      * Delivered → “Archived” (read-only)
+  - Manual Entry → navigates to /lost-and-found-2 with admin context.
+
+1.7 Admin — Item detail overlay
+  Route: /admin/lost-and-found/item/:id (LostAndFoundAdminItemDetail)
+  - Same content as public detail plus admin workflow actions.
+  - Verify modal fields (staff intake) — should be persisted when approving:
+      * intakePhoto (file)
+      * storageBinId (e.g. BIN-402-A)
+      * condition: good | fair | damaged
+      * confirmAccuracy checkbox
+      * optional adminNotes (textarea in dashboard modal; not in overlay modal)
+  - Handover modal fields when marking delivered:
+      * claimantName, claimantStudentId
+      * studentIdVerified checkbox
+      * handoverProofPhoto (file)
+      * (dashboard modal also shows signature placeholder — optional)
+
+================================================================================
+2. CORE ITEM RESOURCE (LIST / DETAIL SHAPE)
+================================================================================
+Align list + detail responses so the frontend can render cards and overlays.
+
+Recommended fields (JSON keys):
+  id                  number|string   Primary key
+  type                string          "lost" | "found"
+  title               string          Item name / headline
+  location            string          Human-readable location (or build from parts)
+  category            string          Canonical: Electronics, Documents,
+                                      Personal Items, Accessories (or legacy +
+                                      mapping endpoint)
+  status              string          e.g. "Active", "Pending Verification"
+  adminStatus         string|null     "Pending" | "Received" | "Delivered"
+                                      Omit or null for anonymous public list if
+                                      policy requires; admin JWT sees it.
+  description         string          Max 500 chars (UI enforces on forms)
+  referenceNumber     string          e.g. "LF-000001"
+  datePosted          string          Display date (locale) OR use postedAt ISO
+  daysAgo             number          Optional computed for backward compatibility
+  postedAt            string          ISO 8601 (preferred over daysAgo alone)
+  image               string|null     Primary thumbnail URL
+  images              string[]        Optional gallery for detail views
+  postedByUserId      string          For "My announcements" filter (never expose
+                                      PII publicly without auth)
+
+Public list SHOULD NOT expose internal admin-only fields unless product requires
+transparency; admin list MUST include adminStatus and full audit fields you add.
+
+================================================================================
+3. ENDPOINTS — REQUESTS & RESPONSES
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 GET /lost-and-found/items  (public + admin)
+--------------------------------------------------------------------------------
+Description: Paginated list for LostAndFoundList, LostAndFound2, admin table.
+
+Headers:
+  Authorization: Bearer <token>   optional; if admin role, include admin fields
+
+Query parameters:
+  q | search          string     Search title, location, description, category
+  type                string     "lost" | "found" | omit for all
+  postedBy            string     "me" when authenticated = filter to submitter
+  category            string     Single category or "All Items" / omit = all
+  status              string     "active" | "pending" | omit (public tabs)
+  adminStatus         string     "Pending" | "Received" | "Delivered" (admin)
+  page                number     default 1
+  limit               number     default 10 (UI uses 8 on LF2, 5 on admin table)
+
+Response 200 application/json:
+{
+  "items": [ { ...Item } ],
+  "total": number
+}
+
+--------------------------------------------------------------------------------
+3.2 GET /lost-and-found/items/:id
+--------------------------------------------------------------------------------
+Description: Single item for public detail and admin detail.
+
+Headers:
+  Authorization: optional (admin sees adminStatus, notes, storage, etc.)
+
+Response 200: { ...Item, ...adminExtensions }
+Response 404: { "error": "NOT_FOUND", "message": "..." }
+
+--------------------------------------------------------------------------------
+3.3 GET /lost-and-found/stats  (optional but recommended)
+--------------------------------------------------------------------------------
+Description: LF2 header + potential home widgets.
+
+Query: same auth as list if “my” scoped stats are ever needed.
+
+Response 200:
+{
+  "total": number,
+  "active": number,
+  "pendingVerification": number
+}
+Definitions should match UI:
+  - active: status === "Active" (exact) OR your canonical active flag
+  - pendingVerification: status text contains "pending" (case-insensitive) OR
+    dedicated boolean/enum
+
+--------------------------------------------------------------------------------
+3.4 POST /lost-and-found/reports/lost
+--------------------------------------------------------------------------------
+Description: Submit lost report (LostAndFound2 form + AnnounceLostItem + admin
+manual lost).
+
+Headers:
+  Content-Type: application/json OR multipart/form-data
+  Authorization: optional (attach postedByUserId from token)
+
+JSON body (merge AnnounceLostItem + LF2 + api-spec where they differ):
+
+  itemName            string   required   (LF2: "Item Name")
+  category            string   required   Electronics | Documents |
+                                        Personal Items | Accessories
+  description         string   optional max 500
+
+  Location — LF2 structured (preferred):
+  locationType        string   optional for lost: "building" | "campus"
+  buildingCode        string   optional when building (main|library|sports|
+                                        cafeteria|other — match UI values)
+  isRoom              string   optional "yes" | "no" when building
+  roomOrArea          string   room id/name OR free-text location details
+  campusLocation      string   when locationType=campus
+
+  Location — legacy announce form (flat):
+  building            string   optional
+  floor               string   optional
+  roomArea            string   optional
+  lastKnownLocation   string   optional
+  dateLost            string   optional ISO date (announce form)
+  timeLost            string   optional HH:mm (announce form)
+
+  contactName         string   optional
+  contactPhone        string   optional
+  photoUrls           string[] optional if files uploaded separately
+
+Multipart: same logical fields + files[] or photos[] (PNG/JPG, UI states up to 10MB)
+
+Validation (match UI intent):
+  - Lost: location block optional (LF2); photos optional.
+  - At least itemName + category server-side.
+
+Response 201:
+{
+  "id": 6,
+  "referenceNumber": "LF-000006",
+  "status": "Pending Verification",
+  "message": "Lost item report submitted for review."
+}
+
+Response 400: validation errors with field-level detail.
+
+--------------------------------------------------------------------------------
+3.5 POST /lost-and-found/reports/found
+--------------------------------------------------------------------------------
+Description: Submit found report (LF2, AnnounceFoundItem, admin manual found).
+
+Same as §3.4 with these additions / stricter rules:
+
+  collectionPlace     string   required   (AnnounceFoundItem: where collected;
+                                        LF2 may encode in location text — still
+                                        expose explicit field for office pickup)
+
+Validation (match UI):
+  - Found: locationType required; if building → building + (room OR area detail);
+    if campus → campusLocation required.
+  - Found: at least one photo required (LF2 + AnnounceFoundItem).
+
+Response 201: same shape as lost.
+
+--------------------------------------------------------------------------------
+3.6 PATCH /lost-and-found/items/:id  (admin)
+--------------------------------------------------------------------------------
+Description: Update workflow + metadata (replaces LostAndFoundAdminContext
+setItemStatus / updateItem).
+
+Headers:
+  Authorization: Bearer <admin token>   required
+
+JSON body (partial update):
+  adminStatus         string   "Pending" | "Received" | "Delivered"
+  title               string   optional
+  description         string   optional
+  status              string   optional public-facing status
+  storageBinId        string   optional  (from verify modal)
+  condition           string   optional  good | fair | damaged
+  adminNotes          string   optional
+  reportedColor       string   optional  (UI shows “REPORTED COLOR” in verify)
+
+Response 200: full updated Item (+ admin fields)
+Response 403/401: not admin
+Response 404: not found
+
+Suggested atomic operations (optional niceties):
+  POST .../items/:id/confirm-receipt
+    body: { storageBinId, condition, intakePhotoUrl, confirmAccuracy: true,
+            adminNotes? }
+    → sets adminStatus Received, triggers student notification
+  POST .../items/:id/complete-delivery
+    body: { claimantName, claimantStudentId, studentIdVerified, handoverProofUrl? }
+    → sets adminStatus Delivered
+
+--------------------------------------------------------------------------------
+3.7 POST /lost-and-found/items  (admin manual create — optional)
+--------------------------------------------------------------------------------
+Description: If admin must create an inventory row without going through the
+public report UI.
+
+Headers: Authorization admin, Content-Type json or multipart
+
+Body:
+  title, category, location, description?, type (lost|found)?, adminStatus?,
+  image / file
+
+Response 201: created Item
+
+--------------------------------------------------------------------------------
+3.8 POST /lost-and-found/upload
+--------------------------------------------------------------------------------
+Description: Pre-upload images; returns URL referenced in photoUrls.
+
+Multipart: file or photo (single image)
+
+Response 201: { "url": "https://..." }
+
+================================================================================
+4. FIELD MATRIX — UI FORMS → API (QUICK REFERENCE)
+================================================================================
+
+LostAndFound2 report form (controlled):
+  itemName*, category*, locationType (building|campus) [required for found],
+  building*, isRoom* (yes|no), roomArea* (room select OR text), campusLocation*,
+  description (max 500), photos[] (required for found; PNG/JPG; multiple)
+
+AnnounceLostItem (legacy — inputs not wired to state; still product intent):
+  Item Name*, Category*, Building optional, Floor optional, Room/Area optional,
+  Last Known Location optional, Date*, Time optional, Description optional,
+  Photo optional, Your Name optional, Phone optional
+
+AnnounceFoundItem:
+  Item Name*, Category*, Building*, Floor*, Room/Area*, Where did you find it?*,
+  Date*, Time optional, Description, Photo*, Name optional, Phone optional,
+  Where can it be collected?*  → maps to collectionPlace
+
+Admin verify (intake):
+  intake identification photo*, storageBinId*, condition*, confirmAccuracy,
+  adminNotes (dashboard modal)
+
+Admin handover:
+  claimantName, claimantStudentId, studentIdVerified, handover proof photo,
+  optional signature asset
+
+================================================================================
+5. NOTIFY OWNER (UI PLACEHOLDER)
+================================================================================
+Buttons exist with no API call. Recommended:
+
+POST /lost-and-found/items/:id/notify
+  Headers: Authorization admin
+  Body: { "channel": "email" | "app" | "both", "message"?: string }
+  Response 202: { "queued": true }
+
+Or reuse your existing notification microservice with a stable correlation id.
+
+================================================================================
+6. PUBLIC CLAIM / “THIS IS MINE” / “ITEM FOUND” (UI NOT WIRED)
+================================================================================
+Buttons on LostAndFoundItemDetail need endpoints, for example:
+
+POST /lost-and-found/items/:id/claims
+  Headers: Authorization user (required)
+  Body:
+  {
+    "claimType": "owner" | "finder",
+    "message": "optional short text"
+  }
+  - For found items UI says "This Is Mine" → claimType owner.
+  - For lost items UI says "Item Found" → claimType finder (reporter found it).
+
+Response 201: { "claimId": "...", "status": "pending_review" }
+Response 409: duplicate claim
+Response 401: login required
+
+Admin can later list claims for an item (optional GET .../items/:id/claims).
+
+================================================================================
+7. AUTHENTICATION & AUTHORIZATION RULES (RECOMMENDED)
+================================================================================
+- Anonymous: GET list/detail limited fields; POST reports may be allowed with
+  captcha/rate limit or require login per policy.
+- Authenticated user: postedBy=me filters, claims, “my announcements”.
+- Admin role: adminStatus filters, PATCH, notify, confirm-receipt, delivery,
+  manual create.
+
+================================================================================
+8. PAGINATION & SORTING
+================================================================================
+- Default sort: newest first (postedAt DESC).
+- Return `total` for UI pagination.
+- LF2 uses page size 8; admin table 5 — honor `limit`.
+
+================================================================================
+9. CATEGORIES & COMPATIBILITY
+================================================================================
+Canonical set in LostAndFound2: Electronics, Documents, Personal Items,
+Accessories.
+Legacy mock/list uses Clothing, Other — map on read or migrate data.
+
+================================================================================
+10. TIMELINE / AUDIT (OPTIONAL ENHANCEMENT)
+================================================================================
+Public detail currently shows a static timeline. Backend can return:
+
+GET /lost-and-found/items/:id/timeline
+  Response: { "events": [ { "at": ISO, "label": string, "done": boolean } ] }
+
+Or embed `timeline` array on the item detail response.
+
+================================================================================
+11. ERROR FORMAT (CONSISTENT)
+================================================================================
+4xx/5xx JSON example:
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Human readable summary",
+  "details": { "field": ["reason"] }
+}
+
+================================================================================
+12. QUICK ENDPOINT TABLE
+================================================================================
+METHOD  ENDPOINT                                    AUTH        NOTES
+GET     /lost-and-found/items                       opt         List + filters
+GET     /lost-and-found/items/:id                   opt         Detail
+GET     /lost-and-found/stats                       opt         KPI counts
+POST    /lost-and-found/reports/lost               user/opt    Create lost report
+POST    /lost-and-found/reports/found              user/opt    Create found report
+POST    /lost-and-found/upload                     user/opt    Image URL
+PATCH   /lost-and-found/items/:id                  admin       Workflow + fields
+POST    /lost-and-found/items                      admin       Manual item (opt)
+POST    /lost-and-found/items/:id/notify           admin       Notify owner (opt)
+POST    /lost-and-found/items/:id/claims           user        Claim / interest
+POST    /lost-and-found/items/:id/confirm-receipt  admin       Atomic verify (opt)
+POST    /lost-and-found/items/:id/complete-delivery admin      Atomic handover (opt)
+
+================================================================================
+13. CLIENT NOTES (NOT BACKEND SCOPE BUT USEFUL)
+================================================================================
+- Draft save in LostAndFound2 uses browser cookies only; no server draft today.
+- Admin state is React context + mockItems clone — will be replaced by API +
+  cache invalidation after mutations.
+- Reference number format in UI: LF-######
+
+================================================================================
+END OF DOCUMENT
+================================================================================

@@ -1,0 +1,111 @@
+.ap-history-header {
+  margin-bottom: 24px;
+}
+
+.ap-history-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+
+.ap-history-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+.ap-history-card {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.ap-history-session-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ap-history-session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.ap-history-session-item:last-of-type {
+  border-bottom: none;
+}
+
+.ap-history-session-item:hover {
+  background: #f8fafc;
+}
+
+.ap-history-session-item--selected {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+}
+
+.ap-history-session-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.ap-history-session-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.ap-history-session-time {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.ap-history-session-rate {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.ap-history-detail {
+  padding: 20px;
+  background: #f8fafc;
+}
+
+.ap-history-detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 16px 0;
+}
+
+.ap-history-table-wrap {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.ap-history-detail .ap-students-table {
+  margin: 0;
+}
+
+.ap-history-detail .ap-students-table th,
+.ap-history-detail .ap-students-table td {
+  padding: 10px 16px;
+}

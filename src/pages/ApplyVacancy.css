@@ -1,0 +1,415 @@
+.apply-vacancy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1005;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow-y: auto;
+}
+
+.apply-vacancy-page {
+  width: 100%;
+  max-width: 720px;
+  min-height: 100vh;
+  background: #f0f9ff;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+}
+
+.apply-vacancy-page--narrow {
+  max-width: 480px;
+  padding: 24px;
+  background: #fff;
+}
+
+/* Breadcrumb */
+.apply-vacancy-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 16px 24px;
+  font-size: 14px;
+  color: #64748b;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.apply-vacancy-breadcrumb-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.apply-vacancy-breadcrumb-link:hover {
+  color: #2563eb;
+}
+
+.apply-vacancy-breadcrumb-current {
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.apply-vacancy-breadcrumb-sep {
+  color: #cbd5e1;
+}
+
+/* Content */
+.apply-vacancy-content {
+  flex: 1;
+  padding: 32px 24px 24px;
+}
+
+.apply-vacancy-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 8px;
+}
+
+.apply-vacancy-role-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 28px;
+}
+
+.apply-vacancy-role-dot {
+  color: #cbd5e1;
+}
+
+.apply-vacancy-role-club {
+  color: #334155;
+}
+
+/* Card */
+.apply-vacancy-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 28px;
+}
+
+.apply-vacancy-field {
+  margin-bottom: 28px;
+  position: relative;
+}
+
+.apply-vacancy-field:last-of-type {
+  margin-bottom: 0;
+}
+
+.apply-vacancy-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.apply-vacancy-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.apply-vacancy-required-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.apply-vacancy-hint {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.apply-vacancy-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #0f172a;
+  resize: vertical;
+  min-height: 160px;
+  box-sizing: border-box;
+  display: block;
+}
+
+.apply-vacancy-textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.apply-vacancy-textarea::placeholder {
+  color: #94a3b8;
+}
+
+.apply-vacancy-wordcount {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
+.apply-vacancy-wordcount--ok {
+  color: #059669;
+}
+
+/* Upload */
+.apply-vacancy-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 24px;
+  border: 2px dashed #bae6fd;
+  border-radius: 14px;
+  background: #f0f9ff;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.apply-vacancy-upload:hover,
+.apply-vacancy-upload--drag {
+  border-color: #2563eb;
+  background: #e0f2fe;
+}
+
+.apply-vacancy-upload svg:first-of-type {
+  color: #2563eb;
+}
+
+.apply-vacancy-upload-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.apply-vacancy-upload-browse {
+  font-size: 14px;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.apply-vacancy-upload-browse:hover {
+  text-decoration: underline;
+}
+
+.apply-vacancy-upload-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.apply-vacancy-upload-hint svg {
+  color: #94a3b8;
+}
+
+.apply-vacancy-upload-filename {
+  font-size: 13px;
+  color: #2563eb;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.apply-vacancy-upload-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Actions */
+.apply-vacancy-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.apply-vacancy-btn-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.apply-vacancy-btn-submit:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.apply-vacancy-btn-submit:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.apply-vacancy-back-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  color: #64748b;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.apply-vacancy-back-link:hover {
+  color: #2563eb;
+}
+
+.apply-vacancy-disclaimer {
+  font-size: 13px;
+  color: #64748b;
+  margin: 20px 0 0;
+  line-height: 1.5;
+}
+
+/* Feature boxes */
+.apply-vacancy-features {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .apply-vacancy-features {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.apply-vacancy-feature {
+  background: #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.apply-vacancy-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  color: #2563eb;
+  margin: 0 auto 12px;
+}
+
+.apply-vacancy-feature-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 6px;
+}
+
+.apply-vacancy-feature-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Footer */
+.apply-vacancy-footer {
+  padding: 20px 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.apply-vacancy-back-btn {
+  margin-top: 16px;
+  padding: 10px 20px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+@media (max-width: 768px) {
+  .apply-vacancy-overlay {
+    padding: 12px 0;
+  }
+
+  .apply-vacancy-page,
+  .apply-vacancy-page--narrow {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .apply-vacancy-breadcrumb,
+  .apply-vacancy-content {
+    padding: 16px;
+  }
+
+  .apply-vacancy-title {
+    font-size: 22px;
+  }
+
+  .apply-vacancy-card {
+    padding: 20px 16px;
+  }
+
+  .apply-vacancy-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .apply-vacancy-actions .apply-vacancy-btn-submit,
+  .apply-vacancy-actions .apply-vacancy-back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .apply-vacancy-footer {
+    padding: 16px;
+  }
+}

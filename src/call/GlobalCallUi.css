@@ -1,0 +1,153 @@
+/* App-wide incoming call + active call bar (dispatchers on any route) */
+
+.gc-incoming-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.gc-incoming-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.gc-incoming-title {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.gc-incoming-sub {
+  margin: 0 0 8px 0;
+  color: #475569;
+  font-size: 15px;
+}
+
+.gc-incoming-hint {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.gc-incoming-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.gc-incoming-reason {
+  flex: 1 1 160px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+}
+
+.gc-incoming-accept {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: none;
+  background: #0d9488;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gc-incoming-decline {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gc-active-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147482000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, #0f766e, #0d9488);
+  color: #ecfeff;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+}
+
+.gc-active-audio {
+  display: none;
+}
+
+.gc-active-label {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.gc-active-meta {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.gc-active-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+.gc-active-btn {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.gc-active-btn--ghost {
+  background: transparent;
+  color: #ecfeff;
+  border: 1px solid rgba(236, 254, 255, 0.45);
+}
+
+.gc-active-btn--end {
+  background: #fecaca;
+  color: #450a0a;
+}
+
+.gc-active-btn--unlock {
+  background: #fef9c3;
+  color: #713f12;
+}
+
+.gc-call-debug {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2147481000;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  max-width: min(360px, 92vw);
+  pointer-events: none;
+  line-height: 1.35;
+}

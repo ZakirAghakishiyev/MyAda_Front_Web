@@ -1,0 +1,30 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  background: white;
+}
+
+/* When a popup is opened from admin, keep source page visible behind it */
+.popup-source-wrap {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.popup-source-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: auto;
+}
+
+.popup-source-bg .lf-admin {
+  min-height: 100%;
+}

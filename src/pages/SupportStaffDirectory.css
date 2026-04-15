@@ -1,0 +1,477 @@
+.sd-page.sd-page--staff {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+  position: relative;
+}
+
+/* Spacer so main content aligns with Tickets page (stats row height) */
+.sd-stats-row--spacer {
+  min-height: 68px;
+  margin-bottom: 24px;
+}
+
+.ssd-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.ssd-logo-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.ssd-logo-img {
+  height: 32px;
+  width: auto;
+}
+
+.ssd-topnav {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.ssd-topnav-link {
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #4b5563;
+}
+
+.ssd-topnav-link--active {
+  background: #111827;
+  color: #f9fafb;
+}
+
+.sd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sd-header-link {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ssd-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.ssd-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ssd-tabs-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ssd-tabs {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.ssd-pill-tab {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  background: #f3f4f6;
+  font-size: 13px;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.ssd-pill-tab--active {
+  background: #111827;
+  color: #f9fafb;
+}
+
+.ssd-table {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.ssd-table-header {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) 120px minmax(0, 2fr);
+  padding: 10px 18px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.ssd-th {
+  padding: 4px 6px;
+}
+
+.ssd-th--member {
+  padding-left: 10px;
+}
+
+.ssd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) 120px minmax(0, 2fr);
+  padding: 10px 18px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.ssd-row:hover {
+  background: #f9fafb;
+}
+
+.ssd-cell {
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+}
+
+.ssd-cell--member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ssd-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ssd-avatar--large {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+
+.ssd-member-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ssd-member-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ssd-member-role {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.ssd-specialization-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.ssd-status-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f9fafb;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ssd-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.ssd-workload {
+  width: 100%;
+}
+
+.ssd-workload-text {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.ssd-cell--actions {
+  justify-content: flex-end;
+}
+
+.ssd-row-menu-btn {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+}
+
+.ssd-load-track {
+  margin-top: 4px;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.ssd-load-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: #22c55e;
+}
+
+.ssd-load-bar--high {
+  background: #f97316;
+}
+
+.ssd-load-bar--critical {
+  background: #ef4444;
+}
+
+.ssd-right {
+  position: absolute;
+  top: 130px;
+  right: 24px;
+  width: 340px;
+  display: flex;
+  z-index: 10;
+}
+
+.ssd-profile-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  padding: 16px 18px;
+  width: 100%;
+}
+
+.ssd-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ssd-profile-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ssd-profile-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: #111827;
+}
+
+.ssd-profile-role {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 2px 0 0 0;
+}
+
+.ssd-close-profile {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #9ca3af;
+}
+
+.ssd-profile-metrics {
+  display: flex;
+  justify-content: space-between;
+  margin: 10px 0 14px;
+}
+
+.ssd-metric-label {
+  font-size: 12px;
+  color: #6b7280;
+  display: block;
+}
+
+.ssd-metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ssd-schedule {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.ssd-schedule-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.ssd-schedule-title {
+  font-weight: 600;
+  color: #111827;
+}
+
+.ssd-schedule-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ssd-schedule-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+}
+
+.ssd-schedule-time {
+  width: 72px;
+  color: #6b7280;
+}
+
+.ssd-schedule-card {
+  flex: 1;
+  border-radius: 10px;
+  background: #f3f4f6;
+  padding: 6px 10px;
+}
+
+.ssd-schedule-item--active .ssd-schedule-card {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.ssd-schedule-main {
+  display: block;
+  font-weight: 600;
+}
+
+.ssd-schedule-sub {
+  display: block;
+  opacity: 0.85;
+}
+
+.ssd-schedule-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ssd-schedule-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ssd-schedule-btn--primary {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+@media (max-width: 960px) {
+  .ssd-right {
+    position: fixed;
+    inset: auto 12px 12px 12px;
+    width: auto;
+  }
+
+  .ssd-table-header,
+  .ssd-row {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) 120px;
+  }
+
+  .ssd-th:nth-child(4),
+  .ssd-th:nth-child(5),
+  .ssd-cell:nth-child(4),
+  .ssd-cell:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .ssd-table-header,
+  .ssd-row {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) 120px;
+  }
+
+  .ssd-th:nth-child(4),
+  .ssd-th:nth-child(5),
+  .ssd-cell:nth-child(4),
+  .ssd-cell:nth-child(5) {
+    display: none;
+  }
+}
+
+.ssd-task-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.ssd-task-status--completed {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.ssd-task-status--ongoing {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.ssd-task-status--scheduled {
+  background: #fefce8;
+  color: #92400e;
+}
+
