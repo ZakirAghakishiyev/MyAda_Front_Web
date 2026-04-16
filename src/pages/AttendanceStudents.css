@@ -103,6 +103,40 @@
   color: #b91c1c;
 }
 
+.ap-student-status--excused {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.ap-student-status--button {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ap-status-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ap-status-submit {
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.ap-status-save-message {
+  margin: 0 0 14px;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 600;
+}
 /* Student attendance history (on click) */
 .ap-student-detail {
   padding: 20px;
@@ -136,6 +170,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
   padding: 10px 14px;
   background: #fff;
   border-radius: 8px;

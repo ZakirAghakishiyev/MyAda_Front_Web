@@ -35,7 +35,6 @@ const DISPATCHER_ROLE_USERS_BASE_URLS = [
   'http://51.20.193.29:5000/api/auth/users-by-role',
   'http://51.20.193.29:5001/api/auth/users-by-role',
 ]
-
 const LOCATION_DATA = {
   buildings: [
     { id: 1, code: 'A' },
@@ -343,7 +342,6 @@ export async function getActiveDispatchers() {
   }
   return []
 }
-
 export function getMockLocations() {
   return LOCATION_DATA
 }
@@ -562,7 +560,6 @@ export async function isDispatcherActiveByMemberId(memberId) {
 }
 
 isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = false
-
 export function mapListItemToCard(item) {
   return {
     id: String(item.id),

@@ -34,6 +34,8 @@ import AttendancePortal from './pages/AttendancePortal'
 import AttendanceCourseList from './pages/AttendanceCourseList'
 import AttendanceStudents from './pages/AttendanceStudents'
 import AttendanceHistory from './pages/AttendanceHistory'
+import AttendanceStudentScanner from './pages/AttendanceStudentScanner'
+import AttendanceQrTestPage from './pages/AttendanceQrTestPage'
 import StaffPortalHistory from './pages/StaffPortalHistory'
 import StaffTicketDetail from './pages/StaffTicketDetail'
 import ComingSoonPage from './pages/ComingSoonPage'
@@ -300,6 +302,8 @@ const AppContent = () => {
             <Route path="ticket/:id" element={<StaffTicketDetail />} />
           </Route>
           <Route path="/attendance" element={<Navigate to="/attendance/demo" replace />} />
+          <Route path="/attendance/student/scan" element={<AttendanceStudentScanner />} />
+          <Route path="/attendance/test" element={<AttendanceQrTestPage />} />
           <Route path="/attendance/:instructorId" element={<AttendanceCourseList />} />
           <Route path="/attendance/:instructorId/lesson/:lessonId/students" element={<AttendanceStudents />} />
           <Route path="/attendance/:instructorId/lesson/:lessonId/history" element={<AttendanceHistory />} />

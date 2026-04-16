@@ -42,12 +42,30 @@ export function LostAndFoundAdminProvider({ children }) {
   }, [])
 
   const confirmReceipt = useCallback(async (itemId, payload = {}) => {
-    await confirmLostFoundReceipt(itemId, payload)
+    try {
+      await confirmLostFoundReceipt(itemId, payload)
+    } catch (err) {
+      // Some backend builds validate strict DTOs for confirm endpoints.
+      // Fallback to status patch so admin flow remains operational.
+      if (err?.status === 400 || err?.status === 404 || err?.status === 405) {
+        await patchLostFoundItem(itemId, { adminStatus: 'Received' })
+      } else {
+        throw err
+      }
+    }
     await refreshItems()
   }, [refreshItems])
 
   const confirmHandover = useCallback(async (itemId, payload = {}) => {
-    await completeLostFoundDelivery(itemId, payload)
+    try {
+      await completeLostFoundDelivery(itemId, payload)
+    } catch (err) {
+      if (err?.status === 400 || err?.status === 404 || err?.status === 405) {
+        await patchLostFoundItem(itemId, { adminStatus: 'Delivered' })
+      } else {
+        throw err
+      }
+    }
     await refreshItems()
   }, [refreshItems])
 

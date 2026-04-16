@@ -3,6 +3,40 @@
  * Replace with API calls when backend is ready.
  */
 
+const ATTENDANCE_STATUS_OVERRIDES_KEY = 'attendance_status_overrides'
+const ATTENDED_STATUSES = new Set(['present', 'late'])
+
+function readStatusOverrides() {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(ATTENDANCE_STATUS_OVERRIDES_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeStatusOverrides(overrides) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(ATTENDANCE_STATUS_OVERRIDES_KEY, JSON.stringify(overrides))
+}
+
+function getOverrideKey(sessionId, studentId) {
+  return `${sessionId}::${studentId}`
+}
+
+function getResolvedStatus(sessionId, studentId, fallbackStatus) {
+  const overrides = readStatusOverrides()
+  return overrides[getOverrideKey(sessionId, studentId)] || fallbackStatus
+}
+
+export function saveManualAttendanceStatus({ sessionId, studentId, status }) {
+  const overrides = readStatusOverrides()
+  overrides[getOverrideKey(sessionId, studentId)] = status
+  writeStatusOverrides(overrides)
+  return { sessionId, studentId, status, savedAt: new Date().toISOString() }
+}
 export const PAST_SESSIONS_BY_CRN = {
   '10101': [
     { id: 's1', date: '2024-03-01', startTime: '09:00', endTime: '10:30' },
@@ -133,7 +167,11 @@ export function getSessionsForCrn(lessonId) {
 }
 
 export function getStudentsForSession(sessionId) {
-  return STUDENTS_BY_SESSION[sessionId] || defaultSessionStudents
+  const source = STUDENTS_BY_SESSION[sessionId] || defaultSessionStudents
+  return source.map((student) => ({
+    ...student,
+    status: getResolvedStatus(sessionId, student.studentId, student.status),
+  }))
 }
 
 export function formatAttendanceDate(dateStr) {
@@ -188,7 +226,7 @@ export function getStudentAttendanceForCrn(lessonId) {
   })
 
   return Object.values(studentMap).map((s) => {
-    const attendedCount = s.sessionHistory.filter((h) => h.status === 'present' || h.status === 'late').length
+    const attendedCount = s.sessionHistory.filter((h) => ATTENDED_STATUSES.has(h.status)).length
     const totalSessions = sessions.length
     const rate = totalSessions ? Math.round((attendedCount / totalSessions) * 100) : 0
     return {

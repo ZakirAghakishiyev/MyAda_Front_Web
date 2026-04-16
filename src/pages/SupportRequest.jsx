@@ -3,33 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import './ITSupport.css'
 import {
   createSupportRequest,
+  getCategories,
   getCurrentUserIds,
   getMockLocations,
   saveAttachmentsToMockFolder,
 } from '../api/supportApi'
 
 const SUPPORT_REQUEST_DRAFT_COOKIE_KEY = 'support_request_draft'
-
-const LOCAL_CATEGORY_OPTIONS_BY_AREA = {
-  it: [
-    { id: 1001, name: 'Network / Wi-Fi' },
-    { id: 1002, name: 'Email / account access' },
-    { id: 1003, name: 'Software / application' },
-    { id: 1004, name: 'Hardware / printer' },
-    { id: 1005, name: 'Classroom AV' },
-    { id: 1006, name: 'Password / MFA' },
-    { id: 1007, name: 'Other (IT)' },
-  ],
-  fm: [
-    { id: 2001, name: 'HVAC / heating & cooling' },
-    { id: 2002, name: 'Plumbing / water' },
-    { id: 2003, name: 'Electrical / lighting' },
-    { id: 2004, name: 'Doors / locks / access' },
-    { id: 2005, name: 'Cleaning / waste' },
-    { id: 2006, name: 'Grounds / exterior' },
-    { id: 2007, name: 'Other (Facilities)' },
-  ],
-}
 
 const setDraftCookie = (key, value, days = 7) => {
   if (typeof document === 'undefined') return
@@ -133,7 +113,10 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   }, [building, locations.roomsByBuildingId])
 
   useEffect(() => {
-    setCategoryOptions(LOCAL_CATEGORY_OPTIONS_BY_AREA[area] || [])
+    const module = area === 'it' ? 'IT' : 'FM'
+    getCategories(module)
+      .then((items) => setCategoryOptions(items))
+      .catch(() => setCategoryOptions([]))
   }, [area])
 
   const goBack = () => {
