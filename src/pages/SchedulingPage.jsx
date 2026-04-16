@@ -348,7 +348,7 @@ const SchedulingPage = () => {
 
         <h1>Scheduling</h1>
         <p className="scheduling-muted">
-          Scheduling microservice at <span className="sched-ms-code">http://51.20.193.29:5000/api/v1</span>. Generate a
+          Scheduling microservice at <span className="sched-ms-code">http://localhost:5009/api/v1</span>. Generate a
           run, inspect sessions, patch placements, then publish when ready. Publish sends{' '}
           <span className="sched-ms-code">from_date</span> / <span className="sched-ms-code">to_date</span> (and optional{' '}
           <span className="sched-ms-code">topic</span>) to bulk-generate Attendance sessions per lesson.

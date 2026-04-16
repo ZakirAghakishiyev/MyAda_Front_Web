@@ -5,8 +5,9 @@ import * as attendanceApi from '../api/attendance'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 
-const QR_REFRESH_INTERVAL_MS = 10_000
+const QR_REFRESH_INTERVAL_MS = 5_000
 const QR_RETRY_DELAY_MS = 3000
+const QR_REFRESH_SECONDS = QR_REFRESH_INTERVAL_MS / 1000
 
 const IconBarChart = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -109,6 +110,7 @@ export default function AttendancePortal() {
   const hasLoggedQrGenRef = useRef(false)
 
   const ids = {
+    instructorId: instructorId || 'demo',
     lessonId: lessonId || 'demo',
     sessionId: sessionState?.sessionId,
     attendanceSessionId: sessionState?.attendanceSessionId,
@@ -118,19 +120,29 @@ export default function AttendancePortal() {
     setLogEntries((prev) => [...prev, { time: formatTime(), message, highlight }])
   }, [])
 
-  const handleInitializeSession = useCallback(() => {
-    const data = attendanceApi.getStaticSessionState()
-    setSessionState(data)
-    setSessionClosed(false)
-    setRound1Completed(false)
-    setRound2Completed(false)
-    setCanActivate(true)
-    setCurrentRound(0)
-    setAttendanceActive(false)
+  const handleInitializeSession = useCallback(async () => {
+    setSessionLoading(true)
     setSessionError(null)
-    setSessionInitialized(true)
-    addLog(`Session Initialized: ${lessonId || 'demo'}`, true)
-  }, [lessonId, addLog])
+    try {
+      const data = await attendanceApi.getSessionState({
+        instructorId,
+        lessonId,
+      })
+      setSessionState(data)
+      setSessionClosed(Boolean(data.closed))
+      setRound1Completed(Boolean(data.round1Completed))
+      setRound2Completed(Boolean(data.round2Completed))
+      setCanActivate(Boolean(data.canActivate))
+      setCurrentRound(Number(data.currentRound) || 0)
+      setAttendanceActive(Boolean(data.currentRound))
+      setSessionInitialized(true)
+      addLog(`Session initialized from backend: ${lessonId || 'demo'}`, true)
+    } catch (e) {
+      setSessionError(e.message || 'Failed to load attendance session')
+    } finally {
+      setSessionLoading(false)
+    }
+  }, [instructorId, lessonId, addLog])
 
   const fetchQR = useCallback(async () => {
     if (!attendanceActive || sessionClosed) return
@@ -176,13 +188,13 @@ export default function AttendancePortal() {
       return
     }
 
-    let countdown = 10
+    let countdown = QR_REFRESH_SECONDS
     setQrRefreshCountdown(countdown)
 
     const tick = () => {
       countdown -= 1
       setQrRefreshCountdown((c) => Math.max(0, c - 1))
-      if (countdown <= 0) countdown = 10
+      if (countdown <= 0) countdown = QR_REFRESH_SECONDS
     }
 
     fetchQR()
@@ -190,7 +202,7 @@ export default function AttendancePortal() {
     countdownTimerRef.current = countdownInterval
 
     const refreshInterval = setInterval(() => {
-      setQrRefreshCountdown(10)
+      setQrRefreshCountdown(QR_REFRESH_SECONDS)
       fetchQR()
     }, QR_REFRESH_INTERVAL_MS)
     refreshTimerRef.current = refreshInterval
@@ -224,7 +236,8 @@ export default function AttendancePortal() {
       addLog(`Attendance Round ${nextRound} Started`, true)
       setCurrentRound(nextRound)
       setAttendanceActive(true)
-      setSessionState((s) => ({ ...(s || {}), currentRound: nextRound }))
+      setCanActivate(true)
+      setSessionState((s) => ({ ...(s || {}), currentRound: nextRound, closed: false, canActivate: true }))
     } catch (e) {
       setRoundActionError(e.message || 'Failed to start round')
     } finally {
@@ -381,7 +394,7 @@ export default function AttendancePortal() {
                   {attendanceActive && (
                     <div className="ap-qr-refresh">
                       <div className="ap-qr-refresh-bar">
-                        <div className="ap-qr-refresh-fill" style={{ width: `${(qrRefreshCountdown / 10) * 100}%` }} />
+                        <div className="ap-qr-refresh-fill" style={{ width: `${(qrRefreshCountdown / QR_REFRESH_SECONDS) * 100}%` }} />
                       </div>
                       <span className="ap-qr-refresh-text">QR REFRESHING IN… {qrRefreshCountdown}S</span>
                     </div>

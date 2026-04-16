@@ -1,10 +1,17 @@
 import React, { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getSessionsForCrn, getStudentsForSession, formatAttendanceDate } from '../data/attendanceData'
+import {
+  getSessionsForCrn,
+  getStudentsForSession,
+  formatAttendanceDate,
+  saveManualAttendanceStatus,
+} from '../data/attendanceData'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 import './AttendanceStudents.css'
 import './AttendanceHistory.css'
+
+const STATUS_ORDER = ['late', 'absent', 'present', 'excused']
 
 function getAttendanceRate(sessionId) {
   const students = getStudentsForSession(sessionId)
@@ -19,6 +26,7 @@ const statusLabel = (status) => {
     case 'present': return { text: 'PRESENT', className: 'ap-student-status--present' }
     case 'late': return { text: 'LATE', className: 'ap-student-status--late' }
     case 'absent': return { text: 'ABSENT', className: 'ap-student-status--absent' }
+    case 'excused': return { text: 'EXCUSED', className: 'ap-student-status--excused' }
     default: return { text: status?.toUpperCase() || '—', className: '' }
   }
 }
@@ -29,9 +37,33 @@ export default function AttendanceHistory() {
   const lessonBase = `/attendance/${encodeURIComponent(instructorId || 'demo')}/lesson/${encodeURIComponent(lessonId || 'demo')}`
   const sessions = getSessionsForCrn(lessonId)
   const [selectedSessionId, setSelectedSessionId] = useState(null)
+  const [draftStatuses, setDraftStatuses] = useState({})
+  const [saveMessage, setSaveMessage] = useState('')
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId)
   const sessionStudents = selectedSessionId ? getStudentsForSession(selectedSessionId) : []
+
+  const cycleStatus = (sessionId, studentId, currentStatus) => {
+    const nextIndex = (STATUS_ORDER.indexOf(currentStatus) + 1) % STATUS_ORDER.length
+    const nextStatus = STATUS_ORDER[nextIndex >= 0 ? nextIndex : 0]
+    setDraftStatuses((prev) => ({
+      ...prev,
+      [`${sessionId}::${studentId}`]: nextStatus,
+    }))
+    setSaveMessage('')
+  }
+
+  const handleSubmitStatus = (sessionId, studentId, fallbackStatus) => {
+    const key = `${sessionId}::${studentId}`
+    const status = draftStatuses[key] || fallbackStatus
+    saveManualAttendanceStatus({ sessionId, studentId, status })
+    setDraftStatuses((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+    setSaveMessage('Attendance status updated locally.')
+  }
 
   return (
     <div className="attendance-portal">
@@ -97,6 +129,7 @@ export default function AttendanceHistory() {
               <h2 className="ap-history-detail-title">
                 {formatAttendanceDate(selectedSession.date)} · {selectedSession.startTime} – {selectedSession.endTime}
               </h2>
+              {saveMessage ? <p className="ap-status-save-message">{saveMessage}</p> : null}
               <div className="ap-history-table-wrap">
                 <table className="ap-students-table">
                   <thead>
@@ -108,13 +141,33 @@ export default function AttendanceHistory() {
                   </thead>
                   <tbody>
                     {sessionStudents.map((s) => {
-                      const { text, className } = statusLabel(s.status)
+                      const draftKey = `${selectedSession.id}::${s.studentId}`
+                      const currentStatus = draftStatuses[draftKey] || s.status
+                      const hasDraft = draftStatuses[draftKey] && draftStatuses[draftKey] !== s.status
+                      const { text, className } = statusLabel(currentStatus)
                       return (
                         <tr key={s.id}>
                           <td>{s.name}</td>
                           <td>{s.studentId}</td>
                           <td>
-                            <span className={`ap-student-status ${className}`}>{text}</span>
+                            <div className="ap-status-editor">
+                              <button
+                                type="button"
+                                className={`ap-student-status ap-student-status--button ${className}`}
+                                onClick={() => cycleStatus(selectedSession.id, s.studentId, currentStatus)}
+                              >
+                                {text}
+                              </button>
+                              {hasDraft ? (
+                                <button
+                                  type="button"
+                                  className="ap-status-submit"
+                                  onClick={() => handleSubmitStatus(selectedSession.id, s.studentId, s.status)}
+                                >
+                                  Submit
+                                </button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       )

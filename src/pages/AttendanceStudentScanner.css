@@ -1,0 +1,258 @@
+.attendance-student-scanner {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f7f8fc 0%, #eef2ff 100%);
+  color: #1d2433;
+}
+
+.attendance-student-scanner__container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 20px 56px;
+}
+
+.attendance-student-scanner__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.attendance-student-scanner__eyebrow {
+  margin: 0 0 8px;
+  color: #4f46e5;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.attendance-student-scanner__header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+}
+
+.attendance-student-scanner__subtitle {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.attendance-student-scanner__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #111827;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.attendance-student-scanner__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.attendance-student-scanner__card {
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.attendance-student-scanner__card h2 {
+  margin: 0 0 14px;
+  font-size: 1.15rem;
+}
+
+.attendance-student-scanner__card--full {
+  grid-column: 1 / -1;
+}
+
+.attendance-student-scanner__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.attendance-student-scanner__meta > div,
+.attendance-student-scanner__preview > div {
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #f9fafb;
+}
+
+.attendance-student-scanner__meta-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.attendance-student-scanner__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.attendance-student-scanner__field input {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  font: inherit;
+}
+
+.attendance-student-scanner__actions,
+.attendance-student-scanner__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.attendance-student-scanner__actions button,
+.attendance-student-scanner__form button {
+  min-height: 46px;
+  border: none;
+  border-radius: 14px;
+  background: #4f46e5;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.attendance-student-scanner__actions button:last-child {
+  background: #111827;
+}
+
+.attendance-student-scanner__actions button:disabled,
+.attendance-student-scanner__form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.attendance-student-scanner__camera {
+  margin-top: 16px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0f172a;
+  min-height: 280px;
+}
+
+.attendance-student-scanner__video,
+.attendance-student-scanner__camera-placeholder {
+  width: 100%;
+  min-height: 280px;
+}
+
+.attendance-student-scanner__video {
+  display: block;
+  object-fit: cover;
+}
+
+.attendance-student-scanner__camera-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.attendance-student-scanner__status,
+.attendance-student-scanner__hint {
+  margin: 12px 0 0;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.attendance-student-scanner__error,
+.attendance-student-scanner__success {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+}
+
+.attendance-student-scanner__error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.attendance-student-scanner__success {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.attendance-student-scanner__preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.attendance-student-scanner__preview code,
+.attendance-student-scanner__preview pre {
+  display: block;
+  margin: 0;
+  overflow-x: auto;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.attendance-student-scanner__preview pre {
+  white-space: pre-wrap;
+}
+
+.attendance-student-scanner__responses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.attendance-student-scanner__response {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.attendance-student-scanner__response--success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.attendance-student-scanner__response--error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.attendance-student-scanner__response--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+@media (max-width: 900px) {
+  .attendance-student-scanner__grid,
+  .attendance-student-scanner__preview,
+  .attendance-student-scanner__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-student-scanner__header {
+    flex-direction: column;
+  }
+}
