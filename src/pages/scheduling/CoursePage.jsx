@@ -6,8 +6,6 @@ import { MOCK_INSTRUCTORS, instructorNameById } from '../../data/mockInstructors
 import '../SchedulingPage.css'
 import './CoursePage.css'
 
-const UNASSIGNED_ROOM_ID = 0
-
 const SEMESTERS = [
   { value: 'Fall', label: 'Fall' },
   { value: 'Spring', label: 'Spring' },
@@ -33,6 +31,7 @@ const initialCatalogForm = () => ({
 
 const initialLessonForm = () => ({
   courseId: '',
+  roomId: '1',
   academicYear: String(new Date().getFullYear()),
   semester: 'Fall',
   maxCapacity: '',
@@ -59,7 +58,6 @@ const CoursePage = () => {
   const [instructorInput, setInstructorInput] = useState('')
   const [instructorMenuOpen, setInstructorMenuOpen] = useState(false)
   const instructorComboboxRef = useRef(null)
-
   const addCoursePanelRef = useRef(null)
   const [existingCoursesMaxHeight, setExistingCoursesMaxHeight] = useState(null)
 
@@ -223,7 +221,8 @@ const CoursePage = () => {
     setLessonMessage({ type: '', text: '' })
 
     const courseId = toInt(lessonForm.courseId)
-    const instructorId = toInt(lessonInstructorId)
+    const instructorId = lessonInstructorId.trim()
+    const roomId = toInt(lessonForm.roomId)
     const academicYear = toInt(lessonForm.academicYear)
     const maxCapacity = toInt(lessonForm.maxCapacity)
 
@@ -231,8 +230,12 @@ const CoursePage = () => {
       setLessonMessage({ type: 'error', text: 'Select a catalog course.' })
       return
     }
-    if (instructorId == null) {
+    if (!instructorId) {
       setLessonMessage({ type: 'error', text: 'Select an instructor from the list.' })
+      return
+    }
+    if (roomId == null || roomId <= 0) {
+      setLessonMessage({ type: 'error', text: 'roomId must be a positive integer.' })
       return
     }
     if (academicYear == null || academicYear < 2000 || academicYear > 2100) {
@@ -247,7 +250,7 @@ const CoursePage = () => {
     const payload = {
       courseId,
       instructorId,
-      roomId: UNASSIGNED_ROOM_ID,
+      roomId,
       academicYear,
       semester: lessonForm.semester,
       maxCapacity,
@@ -423,7 +426,7 @@ const CoursePage = () => {
               ) : null}
 
               <div className="course-field course-field-combobox" ref={instructorComboboxRef}>
-                <span id="instructor-combobox-label">instructorId</span>
+                <span id="instructor-combobox-label">instructorId (GUID)</span>
                 <div className="instructor-combobox">
                   <input
                     type="text"
@@ -491,6 +494,10 @@ const CoursePage = () => {
               <label className="course-field">
                 <span>maxCapacity</span>
                 <input type="number" min={0} value={lessonForm.maxCapacity} onChange={onChangeLesson('maxCapacity')} required />
+              </label>
+              <label className="course-field">
+                <span>roomId</span>
+                <input type="number" min={1} value={lessonForm.roomId} onChange={onChangeLesson('roomId')} required />
               </label>
 
               {lessonMessage.text ? (

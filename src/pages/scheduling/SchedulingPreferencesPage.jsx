@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import SchedulingUserIdBar from '../../components/scheduling/SchedulingUserIdBar'
 import { preferencesGet, preferencesPut } from '../../api/schedulingMsApi'
+import { SCHEDULING_API_BASE } from '../../api/schedulingConfig'
 import { getSchedulingUserId } from '../../utils/schedulingUserId'
 import '../SchedulingPage.css'
 import './schedulingMs.css'
@@ -127,7 +128,7 @@ const SchedulingPreferencesPage = () => {
         <h1>Instructor preferences</h1>
         <p className="scheduling-muted">
           Uses <span className="sched-ms-code">GET/PUT /api/v1/instructors/me/preferences</span> on the scheduling
-          service at <span className="sched-ms-code">http://localhost:5009/api/v1</span>. Preferences are per instructor and term.
+          service at <span className="sched-ms-code">{SCHEDULING_API_BASE}</span>. Preferences are per instructor and term.
         </p>
 
         <SchedulingUserIdBar />

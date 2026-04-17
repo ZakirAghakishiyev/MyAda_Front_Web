@@ -10,6 +10,7 @@ import {
   schedulingPatchSession,
   schedulingPublish,
 } from '../api/schedulingMsApi'
+import { SCHEDULING_API_BASE, SCHEDULING_DEV_USER_ID_HEADER } from '../api/schedulingConfig'
 import { instructorNameById } from '../data/mockInstructors'
 import { getSchedulingUserId } from '../utils/schedulingUserId'
 import './SchedulingPage.css'
@@ -348,7 +349,7 @@ const SchedulingPage = () => {
 
         <h1>Scheduling</h1>
         <p className="scheduling-muted">
-          Scheduling microservice at <span className="sched-ms-code">http://localhost:5009/api/v1</span>. Generate a
+          Scheduling microservice at <span className="sched-ms-code">{SCHEDULING_API_BASE}</span>. Generate a
           run, inspect sessions, patch placements, then publish when ready. Publish sends{' '}
           <span className="sched-ms-code">from_date</span> / <span className="sched-ms-code">to_date</span> (and optional{' '}
           <span className="sched-ms-code">topic</span>) to bulk-generate Attendance sessions per lesson.
@@ -361,8 +362,8 @@ const SchedulingPage = () => {
         <section className="sched-ms-section">
           <h2>Generate schedule</h2>
           <p className="scheduling-muted" style={{ marginTop: 0 }}>
-            POST <span className="sched-ms-code">/schedules/generate</span> — no <span className="sched-ms-code">X-User-Id</span>{' '}
-            required.
+            POST <span className="sched-ms-code">/schedules/generate</span> — no{' '}
+            <span className="sched-ms-code">{SCHEDULING_DEV_USER_ID_HEADER}</span> required.
           </p>
           <div className="sched-ms-form-grid">
             <label className="sched-ms-field">
@@ -509,7 +510,8 @@ const SchedulingPage = () => {
             ) : null}
             {!canPublish && runDetail.status !== 'published' ? (
               <p className="scheduling-muted" style={{ fontSize: 13 }}>
-                Publish is only allowed when status is <code>completed</code> and <code>X-User-Id</code> is set.
+                Publish is only allowed when status is <code>completed</code> and{' '}
+                <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> is set.
               </p>
             ) : null}
           </section>

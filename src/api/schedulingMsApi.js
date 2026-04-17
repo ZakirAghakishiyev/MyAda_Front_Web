@@ -1,4 +1,4 @@
-import { SCHEDULING_API_BASE } from './schedulingConfig'
+import { SCHEDULING_API_BASE, SCHEDULING_DEV_USER_ID_HEADER } from './schedulingConfig'
 import { getSchedulingUserId } from '../utils/schedulingUserId'
 
 async function parseJson(res) {
@@ -22,24 +22,32 @@ function detailMessage(data, res) {
   return `Request failed (${res.status})`
 }
 
+function parseSchedulingUserId() {
+  const raw = getSchedulingUserId()
+  if (raw === '' || raw == null) return null
+  const n = Number.parseInt(String(raw), 10)
+  return Number.isFinite(n) ? n : null
+}
+
 function headersJsonWithUser() {
   const h = { 'Content-Type': 'application/json' }
-  const raw = getSchedulingUserId()
-  if (raw !== '' && raw != null) {
-    const n = Number.parseInt(String(raw), 10)
-    if (Number.isFinite(n)) h['X-User-Id'] = String(n)
-  }
+  const userId = parseSchedulingUserId()
+  if (userId != null) h[SCHEDULING_DEV_USER_ID_HEADER] = String(userId)
   return h
 }
 
 function headersUserOnly() {
   const h = {}
-  const raw = getSchedulingUserId()
-  if (raw !== '' && raw != null) {
-    const n = Number.parseInt(String(raw), 10)
-    if (Number.isFinite(n)) h['X-User-Id'] = String(n)
-  }
+  const userId = parseSchedulingUserId()
+  if (userId != null) h[SCHEDULING_DEV_USER_ID_HEADER] = String(userId)
   return h
+}
+
+function assertSchedulingUserIdHeader() {
+  if (parseSchedulingUserId() != null) return
+  const err = new Error(`Set a valid integer user id for ${SCHEDULING_DEV_USER_ID_HEADER}.`)
+  err.status = 400
+  throw err
 }
 
 /** POST /schedules/generate — no X-User-Id required */
@@ -98,6 +106,7 @@ export async function schedulingGetUnscheduled(scheduleRunId) {
 }
 
 export async function schedulingPatchSession(scheduleRunId, sessionId, body) {
+  assertSchedulingUserIdHeader()
   const res = await fetch(`${SCHEDULING_API_BASE}/schedules/${scheduleRunId}/sessions/${sessionId}`, {
     method: 'PATCH',
     headers: headersJsonWithUser(),
@@ -134,6 +143,7 @@ export async function schedulingGetSessionOptions(scheduleRunId, sessionId) {
  * @param {{ from_date: string, to_date: string, topic?: string | null }} body
  */
 export async function schedulingPublish(scheduleRunId, body) {
+  assertSchedulingUserIdHeader()
   const payload = {
     from_date: body.from_date,
     to_date: body.to_date,
@@ -156,6 +166,7 @@ export async function schedulingPublish(scheduleRunId, body) {
 }
 
 export async function preferencesGet(academicYear, semester) {
+  assertSchedulingUserIdHeader()
   const q = new URLSearchParams({
     academic_year: String(academicYear),
     semester: String(semester),
@@ -173,6 +184,7 @@ export async function preferencesGet(academicYear, semester) {
 }
 
 export async function preferencesPut(body) {
+  assertSchedulingUserIdHeader()
   const res = await fetch(`${SCHEDULING_API_BASE}/instructors/me/preferences`, {
     method: 'PUT',
     headers: headersJsonWithUser(),

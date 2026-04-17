@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { getSchedulingUserId, setSchedulingUserId } from '../../utils/schedulingUserId'
+import { SCHEDULING_DEV_USER_ID_HEADER } from '../../api/schedulingConfig'
 
 /**
- * Dev header for scheduling microservice: `X-User-Id` must match instructor_user_id.
+ * Dev header for scheduling microservice must match instructor_user_id.
  */
 export default function SchedulingUserIdBar() {
   const [value, setValue] = useState(() => getSchedulingUserId())
@@ -28,7 +29,8 @@ export default function SchedulingUserIdBar() {
         onBlur={() => setSchedulingUserId(value)}
       />
       <p className="sched-ms-user-bar-hint">
-        Sent as <code>X-User-Id</code> for preferences, session edits, and publish. Stored for this browser session.
+        Sent as <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> for preferences, session edits, and publish. Stored for this
+        browser session.
       </p>
     </div>
   )

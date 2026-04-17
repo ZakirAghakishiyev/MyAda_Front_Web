@@ -2,12 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  getSessionState,
-  getQRPayload,
+  parseAttendanceQrPayload,
   resolveAuthenticatedStudentId,
   scanAttendanceQrCode,
-  validateAttendanceQrToken,
 } from '../api/attendance'
+import { getAccessToken } from '../auth'
 import './AttendanceQrTestPage.css'
 
 const QR_REFRESH_INTERVAL_MS = 5_000
@@ -37,22 +36,22 @@ function mapSubmitError(error) {
 }
 
 export default function AttendanceQrTestPage() {
-  const refreshTimerRef = useRef(null)
   const countdownTimerRef = useRef(null)
 
   const [currentToken, setCurrentToken] = useState('')
   const [countdown, setCountdown] = useState(QR_REFRESH_SECONDS)
-  const [tokenError, setTokenError] = useState('')
   const [copyMessage, setCopyMessage] = useState('')
   const [instructorId, setInstructorId] = useState('')
   const [lessonId, setLessonId] = useState('')
-  const [sessionId, setSessionId] = useState('')
-  const [resolvedSessionState, setResolvedSessionState] = useState(null)
+  const [sessionId, setSessionId] = useState('static-session-1')
+  const [roundCount, setRoundCount] = useState(1)
   const [studentIdOverride, setStudentIdOverride] = useState('')
   const [manualToken, setManualToken] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitResult, setSubmitResult] = useState(null)
+  const [tokenError, setTokenError] = useState('')
+  const [lastSubmittedToken, setLastSubmittedToken] = useState('')
 
   const resolvedStudentId = useMemo(() => {
     try {
@@ -62,33 +61,27 @@ export default function AttendanceQrTestPage() {
     }
   }, [studentIdOverride])
 
-  const resolveSession = useCallback(async () => {
-    const state = await getSessionState({ instructorId, lessonId })
-    setResolvedSessionState(state)
-    setSessionId(String(state.sessionId || ''))
-    return state
-  }, [instructorId, lessonId])
+  const staticQrPayload = useMemo(() => {
+    const instructorJwt = getAccessToken() || null
+    return JSON.stringify({
+      token: 'ADA_STATIC_TEST_TOKEN',
+      sessionId: String(sessionId || 'static-session-1'),
+      roundCount: Number.isFinite(Number(roundCount)) ? Number(roundCount) : 1,
+      instructorJwt,
+    })
+  }, [roundCount, sessionId])
 
   const refreshQrToken = useCallback(async () => {
     setTokenError('')
     try {
-      const activeSessionId =
-        String(sessionId || '').trim() ||
-        String(resolvedSessionState?.sessionId || '').trim() ||
-        String((await resolveSession()).sessionId || '').trim()
-
-      const data = await getQRPayload({
-        instructorId,
-        sessionId: activeSessionId,
-      })
-      const token = String(data?.payload || data?.token || '').trim()
+      const token = String(staticQrPayload).trim()
       setCurrentToken(token)
       setManualToken(token)
       setCountdown(QR_REFRESH_SECONDS)
     } catch (error) {
-      setTokenError(error?.message || 'Failed to generate a QR token.')
+      setTokenError(error?.message || 'Failed to generate static test QR payload.')
     }
-  }, [instructorId, resolveSession, resolvedSessionState?.sessionId, sessionId])
+  }, [staticQrPayload])
 
   useEffect(() => {
     countdownTimerRef.current = setInterval(() => {
@@ -96,34 +89,13 @@ export default function AttendanceQrTestPage() {
     }, 1000)
 
     return () => {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
     }
   }, [])
 
   useEffect(() => {
-    if (!String(instructorId).trim() || !String(lessonId).trim()) {
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current)
-        refreshTimerRef.current = null
-      }
-      setCurrentToken('')
-      return
-    }
-
     void refreshQrToken()
-
-    refreshTimerRef.current = setInterval(() => {
-      void refreshQrToken()
-    }, QR_REFRESH_INTERVAL_MS)
-
-    return () => {
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current)
-        refreshTimerRef.current = null
-      }
-    }
-  }, [instructorId, lessonId, refreshQrToken])
+  }, [refreshQrToken])
 
   const handleCopyToken = useCallback(async () => {
     if (!currentToken) return
@@ -142,9 +114,9 @@ export default function AttendanceQrTestPage() {
     setSubmitError('')
     setSubmitResult(null)
 
-    let safeToken
+    let parsed
     try {
-      safeToken = validateAttendanceQrToken(manualToken)
+      parsed = parseAttendanceQrPayload(manualToken)
     } catch (error) {
       setSubmitError(error.message)
       return
@@ -154,8 +126,9 @@ export default function AttendanceQrTestPage() {
     try {
       const result = await scanAttendanceQrCode({
         studentId: studentIdOverride || undefined,
-        scannedToken: safeToken,
+        scannedToken: manualToken,
       })
+      setLastSubmittedToken(parsed.token)
       setSubmitResult(result)
     } catch (error) {
       setSubmitError(mapSubmitError(error))
@@ -165,8 +138,19 @@ export default function AttendanceQrTestPage() {
   }, [manualToken, studentIdOverride])
 
   const requestPreview = useMemo(() => {
-    return JSON.stringify({ token: manualToken.trim() || currentToken || 'ADA_abc12' }, null, 2)
-  }, [currentToken, manualToken])
+    let parsed = { token: 'ADA_STATIC_TEST_TOKEN', qrContext: null }
+    try {
+      parsed = parseAttendanceQrPayload(manualToken.trim() || currentToken || '')
+    } catch {
+      // Keep fallback preview for invalid inputs.
+    }
+    return JSON.stringify({
+      studentId: resolvedStudentId || '<studentId>',
+      token: parsed.token,
+      ...(parsed.qrContext ? { qrContext: parsed.qrContext } : {}),
+      deviceInfo: '<browser user-agent>',
+    }, null, 2)
+  }, [currentToken, manualToken, resolvedStudentId])
 
   return (
     <div className="attendance-qr-test">
@@ -189,7 +173,8 @@ export default function AttendanceQrTestPage() {
           <section className="attendance-qr-test__card">
             <h2>1. Live QR to scan</h2>
             <p className="attendance-qr-test__hint">
-              Enter the real instructor and lesson ids first. The QR refreshes every {QR_REFRESH_SECONDS} seconds and contains only the plain token returned by the attendance backend.
+              Static test mode: QR payload is generated locally and includes `token`, `sessionId`,
+              `roundCount`, and the logged-in JWT access token.
             </p>
 
             <label className="attendance-qr-test__field">
@@ -198,7 +183,7 @@ export default function AttendanceQrTestPage() {
                 type="text"
                 value={instructorId}
                 onChange={(event) => setInstructorId(event.target.value)}
-                placeholder="Example: 1"
+                placeholder="Example: 4c7a6f09-2e2d-4b3d-9f56-0d4fd9a5f1a2"
               />
             </label>
 
@@ -222,12 +207,23 @@ export default function AttendanceQrTestPage() {
               />
             </label>
 
+            <label className="attendance-qr-test__field">
+              <span>Round count</span>
+              <input
+                type="number"
+                min="1"
+                value={roundCount}
+                onChange={(event) => setRoundCount(Number(event.target.value) || 1)}
+                placeholder="Example: 1"
+              />
+            </label>
+
             <div className="attendance-qr-test__qr-box">
               {currentToken ? (
                 <QRCodeSVG value={currentToken} size={220} level="M" includeMargin />
               ) : (
                 <div className="attendance-qr-test__placeholder">
-                  Enter instructor and lesson ids to load a real QR token.
+                  Static test payload will appear here.
                 </div>
               )}
             </div>
@@ -243,29 +239,21 @@ export default function AttendanceQrTestPage() {
             </div>
 
             <label className="attendance-qr-test__field">
-              <span>Current token</span>
+              <span>Current QR payload</span>
               <input type="text" value={currentToken} readOnly />
             </label>
 
             <div className="attendance-qr-test__actions">
-              <button type="button" onClick={() => void resolveSession()}>
-                Resolve session
-              </button>
               <button type="button" onClick={() => void refreshQrToken()}>
-                Refresh token now
+                Refresh payload now
               </button>
               <button type="button" onClick={() => void handleCopyToken()}>
-                Copy token
+                Copy payload
               </button>
             </div>
 
             {copyMessage ? <p className="attendance-qr-test__success">{copyMessage}</p> : null}
             {tokenError ? <p className="attendance-qr-test__error">{tokenError}</p> : null}
-            {resolvedSessionState ? (
-              <p className="attendance-qr-test__success">
-                Session loaded: {resolvedSessionState.sessionId}
-              </p>
-            ) : null}
           </section>
 
           <section className="attendance-qr-test__card">
@@ -314,7 +302,7 @@ export default function AttendanceQrTestPage() {
             {submitResult ? (
               <div className="attendance-qr-test__result" role="status">
                 <strong>{submitResult.message || 'Attendance marked successfully.'}</strong>
-                <span>Token sent: {manualToken.trim()}</span>
+                <span>Token sent: {lastSubmittedToken || 'N/A'}</span>
                 <span>Recorded at: {formatRecordedAt(submitResult.recordedAt) || 'No timestamp returned'}</span>
               </div>
             ) : null}

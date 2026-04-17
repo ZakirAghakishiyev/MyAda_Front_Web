@@ -28,14 +28,31 @@ export async function fetchLessons() {
  * @param {number} payload.maxCapacity
  */
 export async function createLesson(payload) {
+  const normalizedPayload = {
+    courseId: payload.courseId,
+    instructorId: payload.instructorId,
+    academicYear: payload.academicYear,
+    semester: payload.semester,
+    // Attendance admin API expects `capacity` in CreateLessonDto.
+    capacity: payload.capacity ?? payload.maxCapacity,
+    // Treat 0 / null / undefined as "unassigned room" and omit from body.
+    ...(payload.roomId != null && Number(payload.roomId) > 0 ? { roomId: Number(payload.roomId) } : {}),
+  }
+
   const res = await authFetch(LESSONS_BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizedPayload),
   })
   const data = await parseJson(res)
   if (!res.ok) {
-    const err = new Error(data?.message || `Create lesson failed (${res.status})`)
+    const detail =
+      data?.title ||
+      data?.message ||
+      flattenValidationErrors(data?.errors) ||
+      flattenValidationDetail(data?.detail) ||
+      `Create lesson failed (${res.status})`
+    const err = new Error(detail)
     err.status = res.status
     err.body = data
     throw err
@@ -56,4 +73,26 @@ async function parseJson(res) {
 function unwrapEnvelope(data) {
   if (data && data.result !== undefined) return data.result
   return data
+}
+
+function flattenValidationErrors(errors) {
+  if (!errors || typeof errors !== 'object') return ''
+  const all = Object.values(errors)
+    .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .map((x) => String(x || '').trim())
+    .filter(Boolean)
+  return all.join(' ')
+}
+
+function flattenValidationDetail(detail) {
+  if (typeof detail === 'string') return detail
+  if (!Array.isArray(detail)) return ''
+  return detail
+    .map((d) => {
+      if (typeof d === 'string') return d
+      if (d && typeof d === 'object' && d.msg) return String(d.msg)
+      return ''
+    })
+    .filter(Boolean)
+    .join(' ')
 }

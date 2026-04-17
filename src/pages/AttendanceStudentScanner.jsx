@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  parseAttendanceQrPayload,
   resolveAuthenticatedStudentId,
   scanAttendanceQrCode,
-  validateAttendanceQrToken,
 } from '../api/attendance'
 import { getAccessToken } from '../auth'
 import './AttendanceStudentScanner.css'
@@ -85,9 +85,9 @@ export default function AttendanceStudentScanner() {
   const submitScannedToken = useCallback(async (rawToken, sourceLabel) => {
     if (isSubmittingRef.current) return
 
-    let token
+    let parsed
     try {
-      token = validateAttendanceQrToken(rawToken)
+      parsed = parseAttendanceQrPayload(rawToken)
     } catch (error) {
       setSubmitError(error.message)
       setResult(null)
@@ -98,13 +98,13 @@ export default function AttendanceStudentScanner() {
     setIsSubmitting(true)
     setSubmitError('')
     setResult(null)
-    setLastScannedToken(token)
+    setLastScannedToken(parsed.token)
     setScanMessage(`Token detected from ${sourceLabel}. Sending attendance request...`)
 
     try {
       const response = await scanAttendanceQrCode({
         studentId: studentIdOverride || undefined,
-        scannedToken: token,
+        scannedToken: rawToken,
       })
 
       setResult(response)
@@ -206,11 +206,21 @@ export default function AttendanceStudentScanner() {
   }, [stopScanner])
 
   const requestPreview = useMemo(() => {
-    const safeToken = lastScannedToken || manualToken.trim() || 'ADA_d4f8k9x1'
+    const rawValue = manualToken.trim() || ''
+    let parsed = { token: lastScannedToken || 'ADA_d4f8k9x1', qrContext: null }
+    try {
+      if (rawValue) parsed = parseAttendanceQrPayload(rawValue)
+    } catch {
+      // Keep token-only fallback preview for malformed input.
+    }
     const studentId = resolvedStudentId || '<studentId>'
     return {
       endpoint: `/api/students/${studentId}/attendance/qr/scan`,
-      body: JSON.stringify({ token: safeToken }, null, 2),
+      body: JSON.stringify({
+        studentId,
+        token: parsed.token,
+        ...(parsed.qrContext ? { qrContext: parsed.qrContext } : {}),
+      }, null, 2),
     }
   }, [lastScannedToken, manualToken, resolvedStudentId])
 
@@ -222,8 +232,9 @@ export default function AttendanceStudentScanner() {
             <p className="attendance-student-scanner__eyebrow">Student Attendance</p>
             <h1>Scan attendance QR</h1>
             <p className="attendance-student-scanner__subtitle">
-              The QR payload must be the plain token value only. Once detected, the client posts
-              it to the authenticated student attendance scan endpoint.
+              The QR payload can be a plain token or a JSON object containing a token. Once
+              detected, the client extracts the token and posts it to the authenticated student
+              attendance scan endpoint.
             </p>
           </div>
           <Link to="/" className="attendance-student-scanner__link">
