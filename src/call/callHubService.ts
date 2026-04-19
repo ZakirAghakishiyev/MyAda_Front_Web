@@ -6,7 +6,7 @@ function uniqueUrls(urls: string[]) {
 
 /**
  * Dev: prefer Vite proxy (`/call/hub`) when enabled to avoid CORS.
- * Prod / direct: try `:5000` first (common for ASP.NET), then default HTTP port.
+ * Prod / direct: use API gateway `/call/hub` (default `:5000`).
  * Override with `VITE_CALL_HUB_URL` or `VITE_API_BASE`.
  */
 export function buildCallHubUrlCandidates(): string[] {
@@ -23,7 +23,7 @@ export function buildCallHubUrlCandidates(): string[] {
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
   const bases = envBase
     ? [envBase]
-    : ['http://51.20.193.29:5000', 'http://51.20.193.29']
+    : ['http://13.60.31.141:5000']
 
   return uniqueUrls(bases.map((b) => `${b}/call/hub`))
 }

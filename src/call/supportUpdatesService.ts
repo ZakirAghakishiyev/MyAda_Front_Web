@@ -18,7 +18,7 @@ function buildSupportUpdatesHubCandidates(): string[] {
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
   const bases = envBase
     ? [envBase]
-    : ['http://51.20.193.29:5000', 'http://51.20.193.29']
+    : ['http://13.60.31.141:5000', 'http://13.60.31.141']
 
   return uniqueUrls(bases.map((b) => `${b}/support/hubs/support-updates`))
 }

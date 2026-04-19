@@ -19,6 +19,12 @@ export type HubParticipant = {
   displayName?: string
 }
 
+export type IceConfigurationPayload = {
+  generatedAtUtc?: string
+  expiresAtUtc?: string
+  iceServers?: RTCIceServer[]
+}
+
 export type ConnectedPayload = {
   connectionId: string
   userId: string
@@ -26,6 +32,7 @@ export type ConnectedPayload = {
   isDispatcher?: boolean
   roles?: string[]
   dispatcherInboxGroup?: string
+  iceConfiguration?: IceConfigurationPayload | null
 }
 
 export type IncomingCallPayload = {

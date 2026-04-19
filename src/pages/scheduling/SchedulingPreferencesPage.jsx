@@ -127,7 +127,7 @@ const SchedulingPreferencesPage = () => {
         <h1>Instructor preferences</h1>
         <p className="scheduling-muted">
           Uses <span className="sched-ms-code">GET/PUT /api/v1/instructors/me/preferences</span> on the scheduling
-          service at <span className="sched-ms-code">http://51.20.193.29:5000/api/v1</span>. Preferences are per instructor and term.
+          service at <span className="sched-ms-code">http://13.60.31.141:5000/api/v1</span>. Preferences are per instructor and term.
         </p>
 
         <SchedulingUserIdBar />

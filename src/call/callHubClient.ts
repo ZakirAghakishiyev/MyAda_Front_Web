@@ -1,14 +1,38 @@
 import * as signalR from '@microsoft/signalr'
 
-const DEFAULT_CALL_HUB_URL = 'http://51.20.193.29/call/hub'
+const DEFAULT_GATEWAY_BASE = 'http://13.60.31.141:5000'
+const DEFAULT_CALL_HUB_URL = `${DEFAULT_GATEWAY_BASE}/call/hub`
+
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/$/, '')
+}
+
+function resolveGatewayBase() {
+  const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim()
+  if (envBase) return trimTrailingSlash(envBase)
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return trimTrailingSlash(window.location.origin)
+  }
+  return DEFAULT_GATEWAY_BASE
+}
 
 function resolveHubUrl() {
   const explicit = (import.meta.env.VITE_CALL_HUB_URL as string | undefined)?.trim()
-  if (explicit) return explicit
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
-    return `${window.location.origin}/call/hub`
+  if (explicit) return trimTrailingSlash(explicit)
+  const base = resolveGatewayBase()
+  if (!base) return DEFAULT_CALL_HUB_URL
+  return `${base}/call/hub`
+}
+
+export function buildIceServersEndpoint(hubUrl: string) {
+  const cleanHubUrl = trimTrailingSlash(hubUrl)
+  if (/\/call\/hub$/i.test(cleanHubUrl)) {
+    return cleanHubUrl.replace(/\/hub$/i, '/webrtc/ice-servers')
   }
-  return DEFAULT_CALL_HUB_URL
+  if (/\/hub$/i.test(cleanHubUrl)) {
+    return cleanHubUrl.replace(/\/hub$/i, '/webrtc/ice-servers')
+  }
+  return `${resolveGatewayBase()}/call/webrtc/ice-servers`
 }
 
 export type CallHubMethod =
@@ -20,14 +44,24 @@ export type CallHubMethod =
   | 'SendOffer'
   | 'SendAnswer'
   | 'SendIceCandidate'
+  | 'GetIceConfiguration'
   | 'EndCall'
 
 class CallHubClient {
   private connection: signalR.HubConnection | null = null
   private connectInFlight: Promise<void> | null = null
+  private lastHubUrl: string | null = null
 
   get state() {
     return this.connection?.state ?? signalR.HubConnectionState.Disconnected
+  }
+
+  get resolvedHubUrl() {
+    return this.lastHubUrl
+  }
+
+  get iceServersEndpoint() {
+    return buildIceServersEndpoint(this.lastHubUrl || resolveHubUrl())
   }
 
   async connect(getAccessToken: () => string | null) {
@@ -35,9 +69,11 @@ class CallHubClient {
     if (this.connectInFlight) return this.connectInFlight
 
     this.connectInFlight = (async () => {
+      const hubUrl = resolveHubUrl()
+      this.lastHubUrl = hubUrl
       if (!this.connection) {
         this.connection = new signalR.HubConnectionBuilder()
-          .withUrl(resolveHubUrl(), {
+          .withUrl(hubUrl, {
             accessTokenFactory: () => getAccessToken() || '',
           })
           .withAutomaticReconnect()
@@ -58,6 +94,12 @@ class CallHubClient {
     if (this.connection.state !== signalR.HubConnectionState.Disconnected) {
       await this.connection.stop()
     }
+  }
+
+  async stop() {
+    await this.disconnect()
+    this.connection = null
+    this.lastHubUrl = null
   }
 
   on(eventName: string, cb: (...args: any[]) => void) {

@@ -1,7 +1,7 @@
 import { getAccessToken } from '../auth'
 
 const ATTENDANCE_API_BASE =
-  import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || 'http://localhost:5008'
+  import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || 'http://13.60.31.141:5008'
 
 const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{6,512}$/
 

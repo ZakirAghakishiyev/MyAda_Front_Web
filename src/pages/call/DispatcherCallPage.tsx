@@ -9,7 +9,7 @@ const DispatcherCallPage: React.FC = () => {
     <div style={{ maxWidth: 960, margin: '24px auto', padding: 16, display: 'grid', gap: 16 }}>
       <h1>Dispatcher Call Panel</h1>
       <p style={{ color: '#64748b', fontSize: 14 }}>
-        Incoming calls and the in-call bar are shown on every page while you are logged in. Use this screen for status and staff activity.
+        Incoming calls and the in-call modal are shown on every page while you are logged in. Use this screen for status and staff activity.
       </p>
       <p>
         Status: <strong>{phase}</strong>

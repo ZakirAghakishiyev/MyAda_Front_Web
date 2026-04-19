@@ -36,7 +36,7 @@ const IconChevron = () => (
 )
 
 const CLUB_CATEGORIES_URL =
-  import.meta.env.VITE_CLUB_CATEGORIES_URL ?? 'http://51.20.193.29:5000/club/api/v1/categories'
+  import.meta.env.VITE_CLUB_CATEGORIES_URL ?? 'http://13.60.31.141:5000/club/api/v1/categories'
 
 const ClubsList = () => {
   const navigate = useNavigate()

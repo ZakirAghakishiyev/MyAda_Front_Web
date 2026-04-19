@@ -11,6 +11,7 @@ import type {
   CallRingingPayload,
   CallTimedOutPayload,
   ConnectedPayload,
+  IceConfigurationPayload,
   IcePayload,
   IncomingCallPayload,
   JoinedRoomPayload,
@@ -42,14 +43,40 @@ type CallContextValue = {
 
 const CallContext = createContext<CallContextValue | null>(null)
 
-const rtcConfig: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
-}
+const LEGACY_FALLBACK_ICE_SERVERS: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302'] }]
 
 const CALL_DEBUG =
   import.meta.env.DEV || String(import.meta.env.VITE_CALL_DEBUG || '').toLowerCase() === 'true'
 const dbg = (...args: any[]) => {
   if (CALL_DEBUG) console.info('[CALL-DBG]', ...args)
+}
+
+function normalizeIceServers(iceServers: unknown): RTCIceServer[] {
+  if (!Array.isArray(iceServers)) return []
+  return iceServers
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      const raw = entry as { urls?: unknown; username?: unknown; credential?: unknown }
+      const hasValidUrls =
+        typeof raw.urls === 'string' ||
+        (Array.isArray(raw.urls) && raw.urls.length > 0 && raw.urls.every((x) => typeof x === 'string'))
+      if (!hasValidUrls) return null
+      const normalized: RTCIceServer = { urls: raw.urls as string | string[] }
+      if (typeof raw.username === 'string') normalized.username = raw.username
+      if (typeof raw.credential === 'string') normalized.credential = raw.credential
+      return normalized
+    })
+    .filter((entry): entry is RTCIceServer => Boolean(entry))
+}
+
+function hasFreshIceConfiguration(config: IceConfigurationPayload | null) {
+  if (!config) return false
+  if (!normalizeIceServers(config.iceServers).length) return false
+  if (!config.expiresAtUtc) return true
+  const expiresMs = Date.parse(config.expiresAtUtc)
+  if (!Number.isFinite(expiresMs)) return true
+  // Refresh if credentials are about to expire.
+  return expiresMs - Date.now() > 30_000
 }
 
 function formatCallHubError(err: unknown): string {
@@ -67,6 +94,7 @@ function formatCallHubError(err: unknown): string {
 export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const hubRef = useRef(callHubClient)
   const hubEventsForConnectionId = useRef<string | null>(null)
+  const iceConfigurationRef = useRef<IceConfigurationPayload | null>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const statsTimerRef = useRef<number | null>(null)
   const remoteStreamRef = useRef<MediaStream | null>(null)
@@ -89,10 +117,55 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPhase(msg.toLowerCase().includes('401') || msg.toLowerCase().includes('unauthorized') ? 'auth-expired' : 'error')
   }, [])
 
+  const resolveIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
+    if (hasFreshIceConfiguration(iceConfigurationRef.current)) {
+      return normalizeIceServers(iceConfigurationRef.current?.iceServers)
+    }
+
+    if (hubRef.current.state === signalR.HubConnectionState.Connected) {
+      try {
+        const hubConfig = await hubRef.current.invoke<IceConfigurationPayload>('GetIceConfiguration')
+        if (hubConfig) {
+          iceConfigurationRef.current = hubConfig
+          const fromHub = normalizeIceServers(hubConfig.iceServers)
+          if (fromHub.length) return fromHub
+        }
+      } catch (err) {
+        dbg('GetIceConfiguration failed', String((err as Error)?.message || err))
+      }
+    }
+
+    const token = getAccessToken()
+    if (!token) return []
+
+    const endpoint = hubRef.current.iceServersEndpoint
+    try {
+      const res = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        dbg('ICE HTTP request failed', { endpoint, status: res.status })
+        return []
+      }
+      const payload = (await res.json()) as IceConfigurationPayload
+      iceConfigurationRef.current = payload
+      return normalizeIceServers(payload?.iceServers)
+    } catch (err) {
+      dbg('ICE HTTP request error', String((err as Error)?.message || err))
+      return []
+    }
+  }, [])
+
   const ensurePeerConnection = useCallback(async () => {
     if (pcRef.current) return pcRef.current
 
-    const pc = new RTCPeerConnection(rtcConfig)
+    let iceServers = await resolveIceServers()
+    if (!iceServers.length) {
+      dbg('ICE config unavailable; falling back to public STUN.')
+      iceServers = LEGACY_FALLBACK_ICE_SERVERS
+    }
+
+    const pc = new RTCPeerConnection({ iceServers })
     pcRef.current = pc
     dbg('PeerConnection created')
     const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
@@ -165,7 +238,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return pc
-  }, [])
+  }, [resolveIceServers])
 
   const cleanupPeer = useCallback(() => {
     if (statsTimerRef.current) {
@@ -192,6 +265,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dispatcherInboxGroup: payload.dispatcherInboxGroup ?? null,
       })
       localConnectionIdRef.current = payload.connectionId || null
+      if (payload.iceConfiguration) {
+        iceConfigurationRef.current = payload.iceConfiguration
+      }
       setConnected(payload)
       setPhase('connected')
     })
@@ -227,12 +303,27 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.on('CallRejected', (payload: CallRejectedPayload) => {
       setError(payload.reason || 'Call rejected.')
+      setIncomingCall(null)
+      setRinging(null)
+      setOtherParticipants([])
+      setCallId(null)
+      setRoomId(null)
       setPhase('rejected')
     })
     hub.on('CallCancelled', (_payload: CallCancelledPayload) => {
+      setIncomingCall(null)
+      setRinging(null)
+      setOtherParticipants([])
+      setCallId(null)
+      setRoomId(null)
       setPhase('cancelled')
     })
     hub.on('CallTimedOut', (_payload: CallTimedOutPayload) => {
+      setIncomingCall(null)
+      setRinging(null)
+      setOtherParticipants([])
+      setCallId(null)
+      setRoomId(null)
       setPhase('timeout')
     })
     hub.on('JoinedRoom', async (payload: JoinedRoomPayload) => {
@@ -264,11 +355,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.on('LeftRoom', (_payload: LeftRoomPayload) => {
       cleanupPeer()
+      setIncomingCall(null)
+      setRinging(null)
       setOtherParticipants([])
+      setCallId(null)
+      setRoomId(null)
       setPhase('connected')
     })
     hub.on('ParticipantLeft', (_payload: ParticipantLeftPayload) => {
       cleanupPeer()
+      setIncomingCall(null)
+      setRinging(null)
+      setOtherParticipants([])
+      setCallId(null)
+      setRoomId(null)
       setPhase('ended')
     })
     hub.on('ReceiveOffer', async (payload: OfferPayload) => {
@@ -300,6 +400,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cleanupPeer()
       setIncomingCall(null)
       setRinging(null)
+      setOtherParticipants([])
+      setCallId(null)
+      setRoomId(null)
       setPhase('ended')
     })
     hub.onClose((err) => {
@@ -310,10 +413,28 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.onReconnected(() => {
       setPhase((prev) => (prev === 'auth-expired' ? prev : 'connected'))
+      void hub
+        .invoke<IceConfigurationPayload>('GetIceConfiguration')
+        .then((payload) => {
+          if (payload) iceConfigurationRef.current = payload
+        })
+        .catch((err) => {
+          dbg('GetIceConfiguration after reconnect failed', String((err as Error)?.message || err))
+        })
     })
   }, [cleanupPeer, ensurePeerConnection])
 
   const connect = useCallback(async () => {
+    if (hubRef.current.state === signalR.HubConnectionState.Connected) {
+      const id = hubRef.current.connectionId
+      localConnectionIdRef.current = id || localConnectionIdRef.current
+      if (id && hubEventsForConnectionId.current !== id) {
+        wireEvents()
+        hubEventsForConnectionId.current = id
+      }
+      return
+    }
+
     setPhase('connecting')
     setError(null)
     try {
@@ -339,6 +460,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cleanupPeer()
     hubEventsForConnectionId.current = null
     await hubRef.current.stop()
+    iceConfigurationRef.current = null
     setPhase('idle')
     setIncomingCall(null)
     setRinging(null)
@@ -395,6 +517,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await hubRef.current.invoke('RejectCall', targetCallId, reason || null)
         setIncomingCall(null)
         setRinging(null)
+        setOtherParticipants([])
+        setCallId(null)
+        setRoomId(null)
         setPhase('connected')
       } catch (err) {
         setErrorFrom(err)
@@ -427,6 +552,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cleanupPeer()
     setIncomingCall(null)
     setRinging(null)
+    setOtherParticipants([])
+    setCallId(null)
+    setRoomId(null)
     setPhase('connected')
   }, [cleanupPeer, setErrorFrom])
 
@@ -441,6 +569,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cleanupPeer()
     setIncomingCall(null)
     setRinging(null)
+    setOtherParticipants([])
+    setCallId(null)
+    setRoomId(null)
     setPhase('ended')
   }, [cleanupPeer, setErrorFrom])
 

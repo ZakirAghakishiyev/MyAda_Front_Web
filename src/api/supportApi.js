@@ -5,9 +5,9 @@ const SUPPORT_API_BASES = (
     ? [String(import.meta.env.VITE_SUPPORT_API_BASE).trim()]
     : [
         // Gateway-correct support route
-        'http://51.20.193.29:5000/support/api',
+        'http://13.60.31.141:5000/support/api',
         // Direct support service (diagnostics / fallback)
-        'http://51.20.193.29:5008/api',
+        'http://13.60.31.141:5008/api',
       ]
 )
   .map((x) => x.replace(/\/$/, ''))
@@ -32,8 +32,8 @@ const MOCK_DISPATCHERS = {
 }
 
 const DISPATCHER_ROLE_USERS_BASE_URLS = [
-  'http://51.20.193.29:5000/api/auth/users-by-role',
-  'http://51.20.193.29:5001/api/auth/users-by-role',
+  'http://13.60.31.141:5000/api/auth/users-by-role',
+  'http://13.60.31.141:5001/api/auth/users-by-role',
 ]
 const LOCATION_DATA = {
   buildings: [
