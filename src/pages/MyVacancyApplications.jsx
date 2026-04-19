@@ -122,9 +122,9 @@ const MyVacancyApplications = () => {
       setListError('')
       try {
         const raw = await fetchMyVacancyApplications({ page: 1, limit: 50 })
-        const items = raw?.items ?? []
+        const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : []
         if (cancelled) return
-        setApplications(Array.isArray(items) ? items.map(mapMeRowToApplication) : [])
+        setApplications(items.map(mapMeRowToApplication))
       } catch (e) {
         if (!cancelled) {
           setApplications([])

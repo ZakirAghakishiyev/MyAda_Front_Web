@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { getStudentServicesEvent } from '../api/clubApi'
-import { mapEventFromApi } from '../api/clubMappers'
+import { getStudentServicesEvent, fetchClub } from '../api/clubApi'
+import { mapEventFromApi, mapClubFromApi } from '../api/clubMappers'
 import './EventDetail.css'
 
 const IconBack = () => (
@@ -46,18 +46,46 @@ const formatTime = (t) => {
   return `${hour}:${m.toString().padStart(2, '0')} ${period}`
 }
 
+function mergeEventForDetail(fromState, mapped) {
+  const raw = mapped?.raw && typeof mapped.raw === 'object' ? mapped.raw : fromState?.raw
+  const m = mapped || (raw ? mapEventFromApi(raw) : null)
+  const clubName = m?.clubName || fromState?.club || ''
+  const clubId = m?.clubId ?? fromState?.clubId ?? raw?.clubId ?? raw?.club?.id
+  return {
+    ...fromState,
+    id: String(m?.id ?? fromState?.id ?? ''),
+    title: m?.title ?? fromState?.title,
+    date: m?.date ?? fromState?.date,
+    time: m?.time ?? fromState?.time,
+    club: clubName || fromState?.club,
+    clubId,
+    clubName: clubName || fromState?.club,
+    venue: m?.location ?? fromState?.venue,
+    durationHours: fromState?.durationHours ?? 2,
+    description: m?.description ?? fromState?.description,
+    subEvents: m?.subEvents ?? fromState?.subEvents ?? [],
+    image: m?.image ?? fromState?.image,
+    capacity: fromState?.capacity ?? m?.seatLimit,
+    raw: m?.raw ?? raw,
+  }
+}
+
 const StudentServicesEventDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const location = useLocation()
   const [event, setEvent] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [hostClub, setHostClub] = useState(null)
+  const [hostClubLoading, setHostClubLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     const fromState = location.state?.event
     if (fromState && String(fromState.id) === String(id)) {
-      setEvent(fromState)
+      const raw = fromState.raw && typeof fromState.raw === 'object' ? fromState.raw : null
+      const mapped = raw ? mapEventFromApi(raw) : null
+      setEvent(mergeEventForDetail(fromState, mapped))
       setLoading(false)
       return () => { cancelled = true }
     }
@@ -75,22 +103,7 @@ const StudentServicesEventDetail = () => {
           setEvent(null)
           return
         }
-        setEvent({
-          id: m.id,
-          title: m.title,
-          date: m.date,
-          time: m.time,
-          club: m.clubName,
-          venue: m.location,
-          durationHours: 2,
-          description: m.description,
-          subEvents: (m.subEvents || []).map((s) => ({
-            title: s.title,
-            startTime: s.startTime,
-            endTime: s.endTime,
-          })),
-          image: m.image,
-        })
+        setEvent(mergeEventForDetail(null, m))
       } catch {
         if (!cancelled) setEvent(null)
       } finally {
@@ -99,6 +112,35 @@ const StudentServicesEventDetail = () => {
     })()
     return () => { cancelled = true }
   }, [id, location.state])
+
+  useEffect(() => {
+    if (!event) {
+      setHostClub(null)
+      return
+    }
+    const raw = event.raw && typeof event.raw === 'object' ? event.raw : {}
+    const clubId = event.clubId ?? raw.clubId ?? raw.club?.id
+    if (clubId == null || clubId === '') {
+      setHostClub(null)
+      return
+    }
+    let cancelled = false
+    setHostClubLoading(true)
+    ;(async () => {
+      try {
+        const rawClub = await fetchClub(clubId)
+        if (cancelled) return
+        setHostClub(mapClubFromApi(rawClub))
+      } catch {
+        if (!cancelled) setHostClub(null)
+      } finally {
+        if (!cancelled) setHostClubLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [event])
 
   const handleBack = () => {
     navigate('/student-services', { state: { section: 'events' } })
@@ -146,7 +188,7 @@ const StudentServicesEventDetail = () => {
         className="ed-hero"
         style={event.image ? { backgroundImage: `url(${event.image})` } : undefined}
       >
-        <span className="ed-hero-category">{event.club || 'Event'}</span>
+        <span className="ed-hero-category">{event.clubName || event.club || 'Event'}</span>
         <h1 id="event-detail-title" className="ed-hero-title">{event.title}</h1>
       </div>
 
@@ -222,9 +264,32 @@ const StudentServicesEventDetail = () => {
           <div className="ed-sidebar-card">
             <span className="ed-sidebar-label">Hosted by</span>
             <div className="ed-host">
-              <div className="ed-host-avatar">{(event.club || 'E').charAt(0)}</div>
+              <div
+                className="ed-host-avatar"
+                style={
+                  hostClub?.image
+                    ? { backgroundImage: `url(${hostClub.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                    : undefined
+                }
+              >
+                {!hostClub?.image ? (hostClub?.name || event.clubName || event.club || 'E').charAt(0) : null}
+              </div>
               <div>
-                <strong>{event.club || '—'}</strong>
+                <strong>{hostClub?.name || event.clubName || event.club || '—'}</strong>
+                <span>
+                  {hostClubLoading
+                    ? 'Loading club…'
+                    : hostClub
+                      ? `${Number(hostClub.members) || 0} members`
+                      : '—'}
+                </span>
+                <span>
+                  {hostClub?.establishedYear
+                    ? `Established ${hostClub.establishedYear}`
+                    : hostClub?.raw?.foundedAt
+                      ? `Established ${String(hostClub.raw.foundedAt).slice(0, 4)}`
+                      : '—'}
+                </span>
               </div>
             </div>
           </div>

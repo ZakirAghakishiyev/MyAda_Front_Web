@@ -1,5 +1,6 @@
-import { authFetch, forceLogoutAndRedirectLogin } from '../auth/authClient'
+import { authFetch } from '../auth/authClient'
 import { getAccessToken } from '../auth/tokenStorage'
+import { getJwtUserId } from '../auth/jwtRoles'
 import { clubUrl } from './clubConfig'
 
 async function readJsonSafe(res) {
@@ -12,17 +13,37 @@ async function readJsonSafe(res) {
   }
 }
 
+/** Club Management service uses AutoWrapper: successful bodies often nest the payload under `result`. */
+function unwrapApiResponse(data) {
+  if (data == null || typeof data !== 'object') return data
+  if (Object.prototype.hasOwnProperty.call(data, 'result') && data.result !== undefined) return data.result
+  if (Object.prototype.hasOwnProperty.call(data, 'data') && data.data !== undefined) return data.data
+  return data
+}
+
+function usersScopedPath(suffix) {
+  const userId = getJwtUserId()
+  if (!userId) {
+    const err = new Error('Could not resolve your user id from the session. Please sign in again.')
+    err.status = 401
+    throw err
+  }
+  const rest = String(suffix || '').replace(/^\//, '')
+  return `users/${encodeURIComponent(userId)}/${rest}`
+}
+
 export async function clubPublicFetch(path, init = {}) {
   const res = await fetch(clubUrl(path), init)
   return res
 }
 
 export async function clubAuthFetch(path, init = {}) {
-  // Club endpoints are protected; avoid silent 401 loops when user is unauthenticated.
+  // Do not redirect to /login here: missing token is a normal state on public routes.
+  // Callers handle errors; session expiry is still handled inside authFetch (refresh → logout only on refresh failure).
   if (!getAccessToken()) {
-    forceLogoutAndRedirectLogin()
     const err = new Error('Authentication required.')
     err.status = 401
+    err.code = 'CLUB_AUTH_REQUIRED'
     throw err
   }
   return authFetch(clubUrl(path), init)
@@ -32,31 +53,38 @@ export async function clubPublicJson(path, init = {}) {
   const res = await clubPublicFetch(path, init)
   const data = await readJsonSafe(res)
   if (!res.ok) {
-    const err = new Error(
-      typeof data === 'object' && data?.message ? data.message : `Request failed (${res.status})`
-    )
+    const msg =
+      typeof data === 'object' && data != null
+        ? data.message || data.title || data.detail || `Request failed (${res.status})`
+        : typeof data === 'string' && data
+          ? data
+          : `Request failed (${res.status})`
+    const err = new Error(String(msg))
     err.status = res.status
     err.body = data
     throw err
   }
-  return data
+  return unwrapApiResponse(data)
 }
 
 export async function clubAuthJson(path, init = {}) {
   const res = await clubAuthFetch(path, init)
   const data = await readJsonSafe(res)
   if (!res.ok) {
-    if (res.status === 401) {
-      forceLogoutAndRedirectLogin()
-    }
-    const err = new Error(
-      typeof data === 'object' && data?.message ? data.message : `Request failed (${res.status})`
-    )
+    // Do not force global logout on 401: authFetch already refreshes once; a 401 here may be
+    // club-service policy (audience/scope), not a dead app session. Redirecting nukes navigation between club pages.
+    const msg =
+      typeof data === 'object' && data != null
+        ? data.message || data.title || data.detail || `Request failed (${res.status})`
+        : typeof data === 'string' && data
+          ? data
+          : `Request failed (${res.status})`
+    const err = new Error(String(msg))
     err.status = res.status
     err.body = data
     throw err
   }
-  return data
+  return unwrapApiResponse(data)
 }
 
 /* --- Categories (public) --- */
@@ -159,35 +187,38 @@ export function submitVacancyApplication(vacancyId, formData) {
 /* --- Me --- */
 
 export function fetchMyClubMemberships() {
-  return clubAuthJson('me/club-memberships', { method: 'GET' })
+  return clubAuthJson(usersScopedPath('club-memberships'), { method: 'GET' })
 }
 
 export function fetchMyVacancyApplications(params = {}) {
   const q = new URLSearchParams()
   q.set('page', String(params.page ?? 1))
   q.set('limit', String(params.limit ?? 50))
-  return clubAuthJson(`me/vacancy-applications?${q}`, { method: 'GET' })
+  return clubAuthJson(`${usersScopedPath('vacancy-applications')}?${q}`, { method: 'GET' })
 }
 
 export function fetchMyMembershipApplications() {
-  return clubAuthJson('me/membership-applications', { method: 'GET' })
+  return clubAuthJson(usersScopedPath('membership-applications'), { method: 'GET' })
 }
 
 export function fetchMyEventRegistrations() {
-  return clubAuthJson('me/event-registrations', { method: 'GET' })
+  return clubAuthJson(usersScopedPath('event-registrations'), { method: 'GET' })
 }
 
 export function fetchMyClubNotifications(type = 'all') {
   const q = new URLSearchParams({ type })
-  return clubAuthJson(`me/club-notifications?${q}`, { method: 'GET' })
+  return clubAuthJson(`${usersScopedPath('club-notifications')}?${q}`, { method: 'GET' })
 }
 
 export function markClubNotificationRead(notificationId) {
-  return clubAuthJson(`me/club-notifications/${encodeURIComponent(notificationId)}/read`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
-  })
+  return clubAuthJson(
+    `${usersScopedPath('club-notifications')}/${encodeURIComponent(notificationId)}/read`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }
+  )
 }
 
 /* --- Club proposal (student) — protected in doc; uses multipart --- */
@@ -386,8 +417,14 @@ export function deleteClubAdminEmployee(clubId, employeeId) {
   })
 }
 
-export function fetchClubAdminEvents(clubId) {
-  return clubAuthJson(clubAdminPath(clubId, 'events'), { method: 'GET' })
+export function fetchClubAdminEvents(clubId, params = {}) {
+  const q = new URLSearchParams()
+  if (params.status) q.set('status', String(params.status))
+  if (params.search) q.set('search', String(params.search))
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 24))
+  const qs = q.toString()
+  return clubAuthJson(clubAdminPath(clubId, `events${qs ? `?${qs}` : ''}`), { method: 'GET' })
 }
 
 export function patchClubAdminEvent(clubId, eventId, body) {

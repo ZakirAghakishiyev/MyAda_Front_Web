@@ -1,10 +1,10 @@
 /**
  * Club service base URL (see Club API docs).
- * Local gateway: `http://localhost:5000/club` → `{base}/api/v1/...`
- * Direct service (no gateway): set `VITE_CLUB_API_BASE=http://localhost:5003`
+ * Local Docker service: `http://localhost:5003` → `{base}/api/v1/...`
+ * Deployed gateway: `http://<host>:5000/club` (gateway strips `/club` before forwarding).
  */
 export const CLUB_API_BASE = (
-  import.meta.env.VITE_CLUB_API_BASE ?? 'http://localhost:5000/club'
+  import.meta.env.VITE_CLUB_API_BASE ?? 'http://localhost:5003'
 ).replace(/\/+$/, '')
 
 /** Origin without `/club` — used to resolve relative image paths from the API. */

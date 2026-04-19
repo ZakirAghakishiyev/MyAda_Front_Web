@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { fetchClub, fetchClubAdminDashboard, fetchMyClubMemberships, postClubAdminAnnouncement } from '../../api/clubApi'
 import { mapClubFromApi } from '../../api/clubMappers'
 import { userHasJwtAdminRole } from '../../auth/jwtRoles'
+import { roleMayManageClub } from '../../auth/clubStaffRoles'
 import { ClubAdminAccessContext } from '../../contexts/ClubAdminAccessContext'
 import adaLogo from '../../assets/ada-logo.png'
 import './ClubAdmin.css'
@@ -84,16 +85,6 @@ const IconClose = () => (
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 )
-
-function roleMayManageClub(role) {
-  const r = String(role || '').toLowerCase()
-  if (!r) return false
-  return (
-    /\b(admin|president|officer|employee|staff|lead|coordinator|treasurer|secretary|manager|director)\b/.test(r) ||
-    r.includes('admin') ||
-    r.includes('employee')
-  )
-}
 
 function ClubAdminClubPicker({ onChoose, membershipsLoading, membershipOptions, manualId, setManualId }) {
   return (

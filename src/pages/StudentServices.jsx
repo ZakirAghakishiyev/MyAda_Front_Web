@@ -13,6 +13,13 @@ import {
   rejectStudentServicesEventProposal,
   requestRevisionStudentServicesEventProposal,
   createStudentServicesEvent,
+  fetchStudentServicesClubMembers,
+  fetchStudentServicesClubEmployees,
+  patchStudentServicesClub,
+  approveStudentServicesClubProfileImage,
+  deleteStudentServicesClubMember,
+  createStudentServicesClubEmployee,
+  patchStudentServicesClubEmployee,
 } from '../api/clubApi'
 import {
   mapStudentServicesClubProposal,
@@ -24,6 +31,35 @@ import { mockClubMembers as initialMembers, mockClubEmployees as initialEmployee
 import adaLogo from '../assets/ada-logo.png'
 import './StudentServices.css'
 import './club-admin/ClubAdmin.css'
+
+function mapSsMemberRow(row, index) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    id: row.id ?? row.memberId ?? `ss-m-${index}`,
+    name: String(row.name ?? row.firstName ?? '—'),
+    surname: String(row.surname ?? row.lastName ?? ''),
+    email: String(row.email ?? ''),
+    studentId: row.studentId != null ? String(row.studentId) : undefined,
+    position: String(row.position ?? row.role ?? 'Member'),
+    joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
+    age: row.age != null ? Number(row.age) : null,
+  }
+}
+
+function mapSsEmployeeRow(row, index) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    id: row.id ?? row.employeeId ?? `ss-e-${index}`,
+    name: String(row.name ?? row.firstName ?? '—'),
+    surname: String(row.surname ?? row.lastName ?? ''),
+    email: String(row.email ?? ''),
+    position: String(row.position ?? row.positionName ?? row.role ?? '—'),
+    department: row.department != null ? String(row.department) : '',
+    studentId: row.studentId != null ? String(row.studentId) : undefined,
+    joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
+    age: row.age != null ? Number(row.age) : null,
+  }
+}
 
 const ADD_EVENT_DRAFT_COOKIE_KEY = 'student_services_add_event_draft'
 
@@ -1043,16 +1079,33 @@ const StudentServices = () => {
     )
   }, [clubEmployees, clubEmployeeSearch])
 
-  const handleSaveClubSettings = () => {
+  const handleSaveClubSettings = async () => {
     if (!selectedDirectoryClub) return
+    const cid = selectedDirectoryClub.id
+    const name = clubEditName.trim() || selectedDirectoryClub.name
+    const status = clubEditStatus || selectedDirectoryClub.status
+    const rawDesc =
+      selectedDirectoryClub.raw && typeof selectedDirectoryClub.raw === 'object'
+        ? selectedDirectoryClub.raw.description
+        : null
+    try {
+      await patchStudentServicesClub(cid, {
+        name,
+        description: rawDesc != null ? String(rawDesc) : name,
+        status,
+      })
+    } catch (e) {
+      alert(e?.message || 'Could not save club.')
+      return
+    }
     const updateClub = (profileImageUrl) => {
       setDirectoryClubs((prev) =>
         prev.map((c) =>
           c.id === selectedDirectoryClub.id
             ? {
                 ...c,
-                name: clubEditName.trim() || c.name,
-                status: clubEditStatus || c.status,
+                name,
+                status,
                 ...(profileImageUrl != null && { profileImageUrl }),
               }
             : c
@@ -1068,13 +1121,19 @@ const StudentServices = () => {
     } else {
       updateClub(selectedDirectoryClub.profileImageUrl)
     }
+    refreshStudentServicesFromApi()
   }
 
-  const handleApproveProposedClubImage = () => {
+  const handleApproveProposedClubImage = async () => {
     if (!selectedDirectoryClub || !selectedDirectoryClub.proposedProfileImageUrl) return
     const ok = window.confirm('Approve this proposed club logo?')
     if (!ok) return
-
+    try {
+      await approveStudentServicesClubProfileImage(selectedDirectoryClub.id)
+    } catch (e) {
+      alert(e?.message || 'Could not approve image.')
+      return
+    }
     setDirectoryClubs((prev) =>
       prev.map((c) =>
         c.id === selectedDirectoryClub.id
@@ -1087,20 +1146,32 @@ const StudentServices = () => {
       )
     )
     alert('Proposed logo approved.')
+    refreshStudentServicesFromApi()
   }
 
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     const id = addEmployeeId.trim()
     const position = addEmployeePosition && addEmployeePosition !== 'Select position' ? addEmployeePosition : null
-    if (!id || !position) return
-    const nextId = Math.max(0, ...clubEmployees.map((e) => e.id)) + 1
-    setClubEmployees((prev) => [
-      ...prev,
-      { id: nextId, name: 'New', surname: 'Employee', email: `${id}@university.edu`, position, studentId: id, joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), age: null },
-    ])
+    if (!id || !position || !selectedDirectoryClub) return
+    try {
+      await createStudentServicesClubEmployee(selectedDirectoryClub.id, {
+        studentId: id,
+        position,
+      })
+    } catch (e) {
+      alert(e?.message || 'Could not add employee.')
+      return
+    }
     setAddEmployeeOpen(false)
     setAddEmployeeId('')
     setAddEmployeePosition('')
+    try {
+      const rawE = await fetchStudentServicesClubEmployees(selectedDirectoryClub.id)
+      const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
+      setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+    } catch {
+      /* ignore */
+    }
   }
 
   const handleEmployeePositionChange = (employeeId, newPosition, currentPosition) => {
@@ -1112,11 +1183,23 @@ const StudentServices = () => {
     }
   }
 
-  const handleConfirmEmployeePosition = (employeeId) => {
+  const handleConfirmEmployeePosition = async (employeeId) => {
     const newPosition = pendingEmployeePosition[employeeId]
-    if (newPosition == null) return
+    if (newPosition == null || !selectedDirectoryClub) return
+    try {
+      await patchStudentServicesClubEmployee(selectedDirectoryClub.id, String(employeeId), {
+        position: newPosition,
+      })
+    } catch (e) {
+      alert(e?.message || 'Could not update position.')
+      return
+    }
     setClubEmployees((prev) => prev.map((emp) => (emp.id === employeeId ? { ...emp, position: newPosition } : emp)))
-    setPendingEmployeePosition((prev) => { const next = { ...prev }; delete next[employeeId]; return next })
+    setPendingEmployeePosition((prev) => {
+      const next = { ...prev }
+      delete next[employeeId]
+      return next
+    })
   }
 
   const renderCommandClubDetail = (backLabel = 'Back to Master Directory') => {
@@ -1221,7 +1304,23 @@ const StudentServices = () => {
                     <div className="club-admin-popup-body"><p>Are you sure you want to remove this member from the club?</p></div>
                     <div className="club-admin-popup-footer">
                       <button type="button" className="club-admin-btn-secondary" onClick={() => setRemoveMemberId(null)}>Cancel</button>
-                      <button type="button" className="club-admin-btn-danger" onClick={() => { setClubMembers((prev) => prev.filter((x) => x.id !== removeMemberId)); setRemoveMemberId(null) }}>Remove</button>
+                      <button
+                        type="button"
+                        className="club-admin-btn-danger"
+                        onClick={async () => {
+                          if (removeMemberId == null || !selectedDirectoryClub) return
+                          try {
+                            await deleteStudentServicesClubMember(selectedDirectoryClub.id, String(removeMemberId))
+                          } catch (e) {
+                            alert(e?.message || 'Could not remove member.')
+                            return
+                          }
+                          setClubMembers((prev) => prev.filter((x) => x.id !== removeMemberId))
+                          setRemoveMemberId(null)
+                        }}
+                      >
+                        Remove
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1720,6 +1819,33 @@ const StudentServices = () => {
       setClubEditStatus(club.status)
     }
   }, [directorySelectedClubId, directoryClubs])
+
+  useEffect(() => {
+    if (!directorySelectedClubId) return
+    let cancelled = false
+    const clubId = directorySelectedClubId
+    ;(async () => {
+      try {
+        const [rawM, rawE] = await Promise.all([
+          fetchStudentServicesClubMembers(clubId).catch(() => ({ items: [] })),
+          fetchStudentServicesClubEmployees(clubId).catch(() => ({ items: [] })),
+        ])
+        if (cancelled) return
+        const mItems = Array.isArray(rawM?.items) ? rawM.items : Array.isArray(rawM) ? rawM : []
+        const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
+        setClubMembers(mItems.map(mapSsMemberRow).filter(Boolean))
+        setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+      } catch {
+        if (!cancelled) {
+          setClubMembers([])
+          setClubEmployees([])
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [directorySelectedClubId])
 
   const setEventRoomAssignmentAt = (index, buildingId, roomId) => {
     setEventRoomAssignments((prev) => {

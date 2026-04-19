@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRegisteredEvents } from '../contexts/RegisteredEventsContext'
-import { fetchEvent, fetchMyEventRegistrations, registerForEvent } from '../api/clubApi'
-import { mapEventFromApi } from '../api/clubMappers'
+import { fetchEvent, fetchMyEventRegistrations, registerForEvent, fetchClub } from '../api/clubApi'
+import { mapEventFromApi, mapClubFromApi } from '../api/clubMappers'
 import './EventDetail.css'
 
 const IconBack = () => (
@@ -58,6 +58,8 @@ const EventDetail = () => {
   const [loading, setLoading] = useState(true)
   const [apiRegistered, setApiRegistered] = useState(false)
   const [registering, setRegistering] = useState(false)
+  const [hostClub, setHostClub] = useState(null)
+  const [hostClubLoading, setHostClubLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -87,6 +89,35 @@ const EventDetail = () => {
     })()
     return () => { cancelled = true }
   }, [id])
+
+  useEffect(() => {
+    if (!event) {
+      setHostClub(null)
+      return
+    }
+    const raw = event.raw && typeof event.raw === 'object' ? event.raw : {}
+    const clubId = event.clubId ?? raw.clubId ?? raw.club?.id
+    if (clubId == null || clubId === '') {
+      setHostClub(null)
+      return
+    }
+    let cancelled = false
+    setHostClubLoading(true)
+    ;(async () => {
+      try {
+        const rawClub = await fetchClub(clubId)
+        if (cancelled) return
+        setHostClub(mapClubFromApi(rawClub))
+      } catch {
+        if (!cancelled) setHostClub(null)
+      } finally {
+        if (!cancelled) setHostClubLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [event])
 
   const registered = apiRegistered || isRegistered(id)
 
@@ -255,11 +286,32 @@ const EventDetail = () => {
           <div className="ed-sidebar-card">
             <span className="ed-sidebar-label">Hosted by</span>
             <div className="ed-host">
-              <div className="ed-host-avatar">{(event.clubName || 'C').charAt(0)}</div>
+              <div
+                className="ed-host-avatar"
+                style={
+                  hostClub?.image
+                    ? { backgroundImage: `url(${hostClub.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                    : undefined
+                }
+              >
+                {!hostClub?.image ? (hostClub?.name || event.clubName || 'C').charAt(0) : null}
+              </div>
               <div>
-                <strong>{event.clubName || 'Club'}</strong>
-                <span>2,400 members</span>
-                <span>Established 2015</span>
+                <strong>{hostClub?.name || event.clubName || 'Club'}</strong>
+                <span>
+                  {hostClubLoading
+                    ? 'Loading club…'
+                    : hostClub
+                      ? `${Number(hostClub.members) || 0} members`
+                      : '—'}
+                </span>
+                <span>
+                  {hostClub?.establishedYear
+                    ? `Established ${hostClub.establishedYear}`
+                    : hostClub?.raw?.foundedAt
+                      ? `Established ${String(hostClub.raw.foundedAt).slice(0, 4)}`
+                      : '—'}
+                </span>
               </div>
             </div>
           </div>

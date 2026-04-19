@@ -182,6 +182,12 @@ export function mapStudentServicesEventProposal(p, index = 0) {
 
 export function mapStudentServicesDirectoryClub(c) {
   if (!c || typeof c !== 'object') return null
+  const profileImageUrl =
+    c.profileImageUrl != null
+      ? resolveClubMediaUrl(c.profileImageUrl) || c.profileImageUrl
+      : c.image != null
+        ? resolveClubMediaUrl(c.image) || c.image
+        : undefined
   return {
     id: String(c.id),
     name: String(c.name ?? ''),
@@ -192,6 +198,7 @@ export function mapStudentServicesDirectoryClub(c) {
     category: String(c.category ?? ''),
     status: String(c.status ?? 'Active'),
     iconColor: c.iconColor ?? 'blue',
+    profileImageUrl,
     proposedProfileImageUrl: c.proposedProfileImageUrl
       ? resolveClubMediaUrl(c.proposedProfileImageUrl)
       : undefined,

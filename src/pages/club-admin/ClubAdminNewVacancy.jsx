@@ -72,11 +72,21 @@ const ClubAdminNewVacancy = () => {
     e.preventDefault()
     const titleText = (selectedPosition?.title || customTitle.trim()).trim()
     if (!titleText) return
+    const desc = description.trim() || '—'
+    const body = {
+      description: desc,
+      publish: true,
+    }
+    if (titleText) body.title = titleText
+    if (positionId) {
+      const n = Number(positionId)
+      if (!Number.isNaN(n) && n > 0) body.positionId = n
+    }
+    if (deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+      body.applicationDeadline = `${deadline}T23:59:59`
+    }
     try {
-      await createClubAdminVacancy(clubId, {
-        title: titleText,
-        description: description.trim() || '—',
-      })
+      await createClubAdminVacancy(clubId, body)
     } catch (err) {
       alert(err?.message || 'Could not publish vacancy.')
       return
