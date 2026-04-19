@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRegisteredEvents } from '../contexts/RegisteredEventsContext'
-import { getEventById } from '../data/clubEventsData'
+import { fetchEvent, fetchMyEventRegistrations } from '../api/clubApi'
+import { mapEventFromApi } from '../api/clubMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubVacancies.css'
 import './MyRegisteredEvents.css'
@@ -67,14 +68,58 @@ const MyRegisteredEvents = () => {
   const navigate = useNavigate()
   const { getRegisteredIds } = useRegisteredEvents()
   const [activeTab, setActiveTab] = useState('upcoming')
+  const [apiEvents, setApiEvents] = useState([])
 
-  const registeredIds = getRegisteredIds()
-  const events = useMemo(() => {
-    return registeredIds
-      .map((id) => getEventById(id))
-      .filter(Boolean)
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-  }, [registeredIds])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const raw = await fetchMyEventRegistrations()
+        const items = raw?.items ?? raw ?? []
+        const list = Array.isArray(items) ? items : []
+        const loaded = await Promise.all(
+          list.map(async (row) => {
+            const eid = row.eventId ?? row.event?.id
+            if (!eid) return null
+            try {
+              const ev = await fetchEvent(eid)
+              return mapEventFromApi(ev)
+            } catch {
+              return mapEventFromApi({
+                id: eid,
+                name: row.eventName ?? row.title ?? 'Event',
+                startTime: row.startTime,
+                location: row.location ?? '',
+                clubName: row.clubName ?? '',
+              })
+            }
+          })
+        )
+        const merged = loaded.filter(Boolean)
+        const seen = new Set(merged.map((e) => String(e.id)))
+        const ctxIds = getRegisteredIds()
+        for (const eid of ctxIds) {
+          if (seen.has(String(eid))) continue
+          try {
+            const ev = await fetchEvent(eid)
+            const m = mapEventFromApi(ev)
+            if (m) merged.push(m)
+          } catch {
+            /* skip */
+          }
+        }
+        if (!cancelled) setApiEvents(merged)
+      } catch {
+        if (!cancelled) setApiEvents([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const events = useMemo(
+    () => [...apiEvents].sort((a, b) => new Date(a.date) - new Date(b.date)),
+    [apiEvents]
+  )
 
   const upcomingCount = events.length
   const handleEventClick = (eventId) => navigate(`/clubs/events/${eventId}`)

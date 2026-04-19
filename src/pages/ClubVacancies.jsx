@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mockVacancies } from '../data/clubVacanciesData'
+import { fetchVacancies } from '../api/clubApi'
+import { mapVacancyFromApi } from '../api/clubMappers'
 import { getSavedVacancyIds, setSavedVacancyIds } from '../utils/savedVacanciesCookie'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubVacancies.css'
@@ -70,7 +71,6 @@ const CATEGORY_ICONS = {
 const getCategoryStyle = (category) => CATEGORY_ICONS[category] || CATEGORY_ICONS.Technology
 
 const POSITIONS_PER_PAGE = 6
-const TOTAL_PAGES = Math.ceil(mockVacancies.length / POSITIONS_PER_PAGE) || 1
 
 const ClubVacancies = () => {
   const navigate = useNavigate()
@@ -83,14 +83,36 @@ const ClubVacancies = () => {
   const [savedIds, setSavedIds] = useState(() => new Set(getSavedVacancyIds()))
   const [searchOpen, setSearchOpen] = useState(false)
   const searchInputRef = useRef(null)
+  const [vacancies, setVacancies] = useState([])
+  const [listLoading, setListLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setListLoading(true)
+      try {
+        const data = await fetchVacancies({ search: search.trim() || undefined, limit: 60 })
+        const items = data?.items ?? []
+        if (!cancelled) {
+          setVacancies(items.map((row) => mapVacancyFromApi(row)).filter(Boolean))
+        }
+      } catch {
+        if (!cancelled) setVacancies([])
+      } finally {
+        if (!cancelled) setListLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [search])
+
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus()
   }, [searchOpen])
 
   const categories = useMemo(() => {
-    const set = new Set(mockVacancies.map((v) => v.categoryTag || v.category.toUpperCase()))
+    const set = new Set(vacancies.map((v) => v.categoryTag || String(v.category).toUpperCase()))
     return Array.from(set).sort()
-  }, [])
+  }, [vacancies])
 
   const toggleSave = useCallback((e, vacancyId) => {
     e.preventDefault()
@@ -105,7 +127,7 @@ const ClubVacancies = () => {
   }, [])
 
   const filteredVacancies = useMemo(() => {
-    let list = mockVacancies
+    let list = vacancies
     if (savedOnlyFilter) {
       list = list.filter((v) => savedIds.has(v.id))
     }

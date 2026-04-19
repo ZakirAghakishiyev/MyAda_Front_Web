@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { mockClubEvents } from '../data/clubEventsData'
-import { mockMemberships } from '../data/clubsData'
+import { fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
+import { mapEventFromApi } from '../api/clubMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubEvents.css'
 
@@ -70,21 +70,47 @@ const ClubEvents = () => {
   const [viewMode, setViewMode] = useState('grid')
   const [search, setSearch] = useState('')
   const [clubFilter, setClubFilter] = useState('all') // 'all' | 'myClubs'
-  const selectedClubId = Number.parseInt(searchParams.get('club') || '', 10)
-  const hasSelectedClub = Number.isInteger(selectedClubId)
+  const selectedClubParam = searchParams.get('club')
+  const [events, setEvents] = useState([])
+  const [listLoading, setListLoading] = useState(true)
+  const [myClubIds, setMyClubIds] = useState(() => new Set())
 
-  const myClubIds = useMemo(
-    () => new Set(mockMemberships.filter((m) => m.status === 'Active').map((m) => m.clubId)),
-    []
-  )
+  const loadEvents = useCallback(async () => {
+    setListLoading(true)
+    try {
+      const [evRes, memRes] = await Promise.all([
+        fetchEvents({ search: search.trim() || undefined, limit: 48 }),
+        fetchMyClubMemberships().catch(() => ({ items: [] })),
+      ])
+      const items = evRes?.items ?? []
+      setEvents(items.map((row) => mapEventFromApi(row)).filter(Boolean))
+      const memItems = memRes?.items ?? memRes ?? []
+      const ids = new Set()
+      if (Array.isArray(memItems)) {
+        memItems.forEach((m) => {
+          const cid = m.clubId ?? m.club?.id
+          if (cid != null) ids.add(String(cid))
+        })
+      }
+      setMyClubIds(ids)
+    } catch {
+      setEvents([])
+    } finally {
+      setListLoading(false)
+    }
+  }, [search])
+
+  useEffect(() => {
+    loadEvents()
+  }, [loadEvents])
 
   const filteredEvents = useMemo(() => {
-    let list = mockClubEvents
-    if (hasSelectedClub) {
-      list = list.filter((e) => e.clubId === selectedClubId)
+    let list = events
+    if (selectedClubParam) {
+      list = list.filter((e) => String(e.clubId) === String(selectedClubParam))
     }
     if (clubFilter === 'myClubs') {
-      list = list.filter((e) => myClubIds.has(e.clubId))
+      list = list.filter((e) => e.clubId != null && myClubIds.has(String(e.clubId)))
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -96,14 +122,14 @@ const ClubEvents = () => {
       )
     }
     return list
-  }, [search, clubFilter, myClubIds, hasSelectedClub, selectedClubId])
+  }, [search, clubFilter, myClubIds, selectedClubParam, events])
 
   const handleEventClick = (eventId) => {
     navigate(`/clubs/events/${eventId}`)
   }
 
-  const isEventDetail = location.pathname.match(/^\/clubs\/events\/\d+$/)
-  if (isEventDetail) return null
+  const isEventDetail = location.pathname.match(/^\/clubs\/events\/[^/]+$/)
+  if (isEventDetail && !location.pathname.endsWith('/ticket')) return null
 
   return (
     <div className="ce-page">
@@ -152,7 +178,9 @@ const ClubEvents = () => {
           </button> */}
           <div className="ce-header-title">
             <h1>Club Events</h1>
-            <span className="ce-subtitle">{filteredEvents.length} events discovered</span>
+            <span className="ce-subtitle">
+              {listLoading ? 'Loading…' : `${filteredEvents.length} events discovered`}
+            </span>
           </div>
           <div className="ce-header-right">
             <div className="ce-search-wrap">

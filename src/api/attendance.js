@@ -4,7 +4,6 @@ const ATTENDANCE_API_BASE =
   import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || 'http://localhost:5008'
 
 const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{6,512}$/
-const JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 
 /**
  * @typedef {Object} AttendanceQrScanRequest
@@ -216,41 +215,25 @@ export function parseAttendanceQrPayload(rawValue) {
   const token = String(firstDefined(parsed?.token, parsed?.payload, '')).trim()
   const sessionId = toNumberOrNull(firstDefined(parsed?.sessionId, parsed?.session_id))
   const roundCount = toNumberOrNull(firstDefined(parsed?.roundCount, parsed?.activationId, parsed?.round_count))
-  const instructorJwt = String(firstDefined(parsed?.instructorJwt, parsed?.instructorToken, '') || '').trim()
+  const instructorId = String(firstDefined(parsed?.instructorId, parsed?.instructor_id, '') || '').trim()
 
   return {
     token,
     qrContext: {
       sessionId,
       roundCount,
-      instructorJwt: instructorJwt || null,
+      instructorId: instructorId || null,
     },
     rawValue: value,
   }
 }
 
-function getCookie(name) {
-  if (typeof document === 'undefined') return null
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`))
-  return match ? decodeURIComponent(match[1]) : null
-}
-
-function getInstructorJwtFromCookies() {
-  const candidates = ['accessToken', 'jwt', 'token', 'instructorJwt', 'instructorToken']
-  for (const name of candidates) {
-    const value = String(getCookie(name) || '').trim()
-    if (value && JWT_PATTERN.test(value)) return value
-  }
-  return ''
-}
-
-function buildAttendanceQrPayload({ token, sessionId, roundCount }) {
+function buildAttendanceQrPayload({ token, sessionId, roundCount, instructorId }) {
   return JSON.stringify({
     token,
     sessionId: sessionId == null ? null : String(sessionId),
     roundCount: Number.isFinite(Number(roundCount)) ? Number(roundCount) : null,
-    instructorJwt: getInstructorJwtFromCookies() || null,
+    instructorId: String(instructorId ?? '').trim() || null,
   })
 }
 
@@ -625,6 +608,7 @@ export async function getQRPayload({ instructorId, sessionId, roundCount }) {
       token,
       sessionId: normalizedSessionId,
       roundCount: resolvedRoundCount,
+      instructorId: normalizedInstructorId,
     }),
     token,
     expiresAt: firstDefined(data?.expiresAt, data?.expires_at, null),

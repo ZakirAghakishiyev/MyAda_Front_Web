@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { fetchMyClubMemberships, fetchMyMembershipApplications, fetchMyVacancyApplications } from '../api/clubApi'
 import { mockMemberships } from '../data/clubsData'
 import { getClubById } from '../data/clubsData'
 import adaLogo from '../assets/ada-logo.png'
@@ -152,26 +153,83 @@ const statusIcon = (status) => {
   return <IconX />
 }
 
+const mapApiAppStatus = (s) => {
+  const x = String(s ?? '')
+  if (/pending/i.test(x)) return 'Under Review'
+  if (/approv/i.test(x)) return 'Accepted'
+  if (/reject/i.test(x)) return 'Declined'
+  return x || 'Submitted'
+}
+
 const MyMemberships = () => {
   const navigate = useNavigate()
   const [tab, setTab] = useState('active')
+  const [membershipRows, setMembershipRows] = useState(mockMemberships)
   const [applications, setApplications] = useState(ALL_APPLICATIONS)
   const [slots, setSlots] = useState(MOCK_INTERVIEW_SLOTS)
   const [selectedAppId, setSelectedAppId] = useState(null)
   const [selectedInterviewDate, setSelectedInterviewDate] = useState('')
   const [draftSlotId, setDraftSlotId] = useState(null)
 
-  const filtered = useMemo(() => {
-    if (tab === 'active') return mockMemberships.filter((m) => m.status === 'Active')
-    if (tab === 'pending') return mockMemberships.filter((m) => m.status === 'Pending')
-    if (tab === 'declined') return mockMemberships.filter((m) => m.status === 'Declined')
-    if (tab === 'applied') return []
-    return mockMemberships
-  }, [tab])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [m, ma, va] = await Promise.all([
+          fetchMyClubMemberships(),
+          fetchMyMembershipApplications(),
+          fetchMyVacancyApplications(),
+        ])
+        if (cancelled) return
+        const mItems = m?.items ?? m ?? []
+        if (Array.isArray(mItems) && mItems.length > 0) {
+          setMembershipRows(
+            mItems.map((row) => ({
+              clubId: row.clubId ?? row.club?.id ?? 0,
+              clubName: String(row.clubName ?? row.club?.name ?? 'Club'),
+              memberSince: row.memberSince ?? (row.joinedAt ? new Date(row.joinedAt).toLocaleDateString() : '—'),
+              role: row.role ?? 'Member',
+              status: String(row.status ?? row.membershipStatus ?? 'Active'),
+            }))
+          )
+        }
+        const maItems = ma?.items ?? ma ?? []
+        const vaItems = va?.items ?? va ?? []
+        const memApps = (Array.isArray(maItems) ? maItems : []).map((row, index) => ({
+          id: String(row.applicationId ?? row.id ?? `MEM-${index}`),
+          position: 'Membership Application',
+          clubName: String(row.clubName ?? row.club?.name ?? '—'),
+          status: mapApiAppStatus(row.status),
+          applicationType: 'membership',
+          appliedOn: row.submittedAt ? String(row.submittedAt).slice(0, 10) : '2024-03-01',
+        }))
+        const vacApps = (Array.isArray(vaItems) ? vaItems : []).map((row, index) => ({
+          id: String(row.applicationId ?? row.id ?? `APP-${index}`),
+          position: String(row.position ?? row.vacancyTitle ?? row.title ?? 'Role'),
+          clubName: String(row.clubName ?? '—'),
+          status: mapApiAppStatus(row.status),
+          applicationType: 'vacancy',
+          appliedOn: row.submittedAt ? String(row.submittedAt).slice(0, 10) : '2024-03-01',
+        }))
+        if (memApps.length || vacApps.length) setApplications([...vacApps, ...memApps])
+      } catch {
+        /* keep mock */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
-  const activeCount = mockMemberships.filter((m) => m.status === 'Active').length
-  const pendingCount = mockMemberships.filter((m) => m.status === 'Pending').length
-  const declinedCount = mockMemberships.filter((m) => m.status === 'Declined').length
+  const filtered = useMemo(() => {
+    if (tab === 'active') return membershipRows.filter((m) => m.status === 'Active')
+    if (tab === 'pending') return membershipRows.filter((m) => m.status === 'Pending')
+    if (tab === 'declined') return membershipRows.filter((m) => m.status === 'Declined')
+    if (tab === 'applied') return []
+    return membershipRows
+  }, [tab, membershipRows])
+
+  const activeCount = membershipRows.filter((m) => m.status === 'Active').length
+  const pendingCount = membershipRows.filter((m) => m.status === 'Pending').length
+  const declinedCount = membershipRows.filter((m) => m.status === 'Declined').length
   const appliedCount = applications.length
 
   const selectedApp = useMemo(

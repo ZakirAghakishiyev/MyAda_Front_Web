@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mockClubs } from '../data/clubsData'
+import { fetchCategories, fetchClubs } from '../api/clubApi'
+import { mapClubFromApi } from '../api/clubMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubsList.css'
 
@@ -35,24 +36,28 @@ const IconChevron = () => (
   </svg>
 )
 
-const CLUB_CATEGORIES_URL =
-  import.meta.env.VITE_CLUB_CATEGORIES_URL ?? 'http://51.20.193.29:5000/club/api/v1/categories'
-
 const ClubsList = () => {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [apiCategories, setApiCategories] = useState([])
+  const [clubs, setClubs] = useState([])
+  const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState(null)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const limit = 24
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(CLUB_CATEGORIES_URL)
-        if (!res.ok) throw new Error(String(res.status))
-        const data = await res.json()
-        if (!cancelled && Array.isArray(data)) {
-          setApiCategories(data.map((row) => ({ id: row.id, name: String(row.name ?? '') })).filter((c) => c.name))
+        const data = await fetchCategories()
+        const rows = Array.isArray(data) ? data : data?.items ?? []
+        if (!cancelled && Array.isArray(rows)) {
+          setApiCategories(
+            rows.map((row) => ({ id: row.id, name: String(row.name ?? '') })).filter((c) => c.name)
+          )
         }
       } catch {
         if (!cancelled) setApiCategories([])
@@ -61,20 +66,39 @@ const ClubsList = () => {
     return () => { cancelled = true }
   }, [])
 
-  const filteredClubs = useMemo(() => {
-    let list = mockClubs
-    if (category !== 'All') list = list.filter((c) => c.category === category)
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.category.toLowerCase().includes(q) ||
-          c.tags.some((t) => t.toLowerCase().includes(q))
-      )
+  const loadClubs = useCallback(async () => {
+    setListLoading(true)
+    setListError(null)
+    try {
+      const data = await fetchClubs({
+        search: search.trim() || undefined,
+        category: category !== 'All' ? category : undefined,
+        page,
+        limit,
+      })
+      const items = data?.items ?? []
+      const mapped = items.map((row) => mapClubFromApi(row)).filter(Boolean)
+      setClubs((prev) => (page === 1 ? mapped : [...prev, ...mapped]))
+      setTotal(Number(data?.total) || items.length)
+    } catch (e) {
+      setClubs([])
+      setTotal(0)
+      setListError(e?.message || 'Could not load clubs.')
+    } finally {
+      setListLoading(false)
     }
-    return list
+  }, [search, category, page, limit])
+
+  useEffect(() => {
+    loadClubs()
+  }, [loadClubs])
+
+  useEffect(() => {
+    setPage(1)
   }, [search, category])
+
+  const filteredClubs = clubs
+  const hasMore = page * limit < total
 
   return (
     <div className="clubs-page">
@@ -148,7 +172,23 @@ const ClubsList = () => {
           </select>
         </div>
 
+        {listError && (
+          <p className="clubs-empty" role="alert">
+            {listError}
+            {' '}
+            <button type="button" className="clubs-card-cta" onClick={() => loadClubs()}>
+              Retry
+            </button>
+          </p>
+        )}
+        {listLoading && page === 1 && !listError && (
+          <p className="clubs-empty">Loading clubs…</p>
+        )}
+
         <div className="clubs-grid">
+          {!listLoading && !listError && filteredClubs.length === 0 ? (
+            <p className="clubs-empty">No clubs match your search.</p>
+          ) : null}
           {filteredClubs.length > 0 ? (
             filteredClubs.map((club) => (
               <article
@@ -190,10 +230,20 @@ const ClubsList = () => {
                 </div>
               </article>
             ))
-          ) : (
-            <p className="clubs-empty">No clubs match your search.</p>
-          )}
+          ) : null}
         </div>
+        {hasMore && !listError && (
+          <div className="clubs-search-row" style={{ justifyContent: 'center', marginTop: 16 }}>
+            <button
+              type="button"
+              className="clubs-card-cta"
+              disabled={listLoading}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              {listLoading && page > 1 ? 'Loading…' : 'Load more'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import { getClubById } from '../../data/clubsData'
+import { fetchClub, patchClubAdminProfile } from '../../api/clubApi'
+import { mapClubFromApi } from '../../api/clubMappers'
+import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconUpload = () => (
@@ -203,10 +204,8 @@ const fileToDataUrl = (file) =>
   })
 
 export default function ClubAdminProfile() {
-  const location = useLocation()
-  const searchParams = new URLSearchParams(location.search)
-  const clubIdParam = searchParams.get('club')
-  const activeClub = getClubById(clubIdParam || '1')
+  const clubId = useClubAdminClubId()
+  const [activeClub, setActiveClub] = useState(null)
 
   const initialProfile = useMemo(() => {
     if (!activeClub) {
@@ -240,9 +239,25 @@ export default function ClubAdminProfile() {
   const [bgPreview, setBgPreview] = useState('')
   const [focusAreas, setFocusAreas] = useState([])
   const [iconPickerFor, setIconPickerFor] = useState(null)
+  const [savingProfile, setSavingProfile] = useState(false)
 
   const logoInputRef = useRef(null)
   const bgInputRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const raw = await fetchClub(clubId)
+        if (cancelled) return
+        const mapped = mapClubFromApi(raw)
+        if (mapped) setActiveClub(mapped)
+      } catch {
+        if (!cancelled) setActiveClub(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [clubId])
 
   useEffect(() => {
     setProfile(initialProfile)
@@ -334,7 +349,7 @@ export default function ClubAdminProfile() {
     setIconPickerFor(null)
   }
 
-  const askForChange = () => {
+  const askForChange = async () => {
     if (!activeClub) return
     if (hasUnsavedSocialLinks) {
       alert('Please save social media link changes before asking for change.')
@@ -358,9 +373,25 @@ export default function ClubAdminProfile() {
       if (!payload.socialLinks[k]) delete payload.socialLinks[k]
     })
 
-    // TODO: integrate with backend workflow when available.
-    console.log('Club profile change request:', payload)
-    alert('Changes confirmed.')
+    const formData = new FormData()
+    if (payload.requestedLogo && logoFile) formData.append('logoFile', logoFile)
+    if (payload.requestedBackgroundImage && bgFile) formData.append('backgroundFile', bgFile)
+    if (Object.keys(payload.socialLinks).length) {
+      formData.append('socialLinks', JSON.stringify(payload.socialLinks))
+    }
+    if (payload.focusAreas.length) {
+      formData.append('focusAreasJson', JSON.stringify(payload.focusAreas))
+    }
+    setSavingProfile(true)
+    try {
+      await patchClubAdminProfile(clubId, formData)
+      alert('Profile update request submitted.')
+    } catch (e) {
+      alert(e?.message || 'Could not submit profile changes.')
+      return
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
   const saveSocialLinks = () => {
@@ -582,8 +613,8 @@ export default function ClubAdminProfile() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-            <button type="button" className="club-admin-btn-primary" onClick={askForChange}>
-              Ask for Change
+            <button type="button" className="club-admin-btn-primary" onClick={askForChange} disabled={savingProfile}>
+              {savingProfile ? 'Submitting…' : 'Ask for Change'}
             </button>
           </div>
         </div>

@@ -107,13 +107,13 @@ const AppContent = () => {
     '/support-dispatcher/assign-task',
     '/support-dispatcher/history'
   ]
-  const isClubDetailRoute = location.pathname.match(/^\/clubs\/\d+$/)
+  const isClubDetailRoute = location.pathname.match(/^\/clubs\/[^/]+$/)
   const isProposeClubRoute = location.pathname === '/clubs/propose'
-  const isJoinClubRoute = location.pathname.match(/^\/clubs\/\d+\/join$/)
-  const isVacancyDetailRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+$/)
-  const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+\/apply$/)
-  const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/\d+$/)
-  const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/\d+\/ticket$/)
+  const isJoinClubRoute = location.pathname.match(/^\/clubs\/[^/]+\/join$/)
+  const isVacancyDetailRoute = location.pathname.match(/^\/clubs\/vacancies\/[^/]+$/)
+  const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/[^/]+\/apply$/)
+  const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/[^/]+$/)
+  const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/[^/]+\/ticket$/)
   const isStudentServicesEventDetailRoute = location.pathname.match(/^\/student-services\/events\/[^/]+$/)
   const isItemDetailRoute = location.pathname.match(/^\/lost-and-found\/item\/\d+$/)
   const isAdminItemDetailRoute = location.pathname.match(/^\/admin\/lost-and-found\/item\/\d+$/)

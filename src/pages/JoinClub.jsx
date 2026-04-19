@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getClubById } from '../data/clubsData'
+import { fetchClub, submitClubJoinApplication } from '../api/clubApi'
+import { mapClubFromApi } from '../api/clubMappers'
 import './JoinClub.css'
 
 const IconBack = () => (
@@ -17,20 +18,52 @@ const IconUploadDoc = () => (
 const JoinClub = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const club = getClubById(id)
+  const [club, setClub] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const [letterOfPurpose, setLetterOfPurpose] = useState('')
   const [portfolioLinks, setPortfolioLinks] = useState('')
   const [portfolioFiles, setPortfolioFiles] = useState([])
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
-  const canSubmit = letterOfPurpose.trim().length > 0
+  const canSubmit = letterOfPurpose.trim().length > 0 && !submitting
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!id) return
+      try {
+        const raw = await fetchClub(id)
+        if (!cancelled) setClub(mapClubFromApi(raw))
+      } catch (e) {
+        if (!cancelled) {
+          setClub(null)
+          setLoadError(e?.message || 'Could not load club.')
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
 
   const handleBack = () => navigate(-1)
 
-  const handleSubmit = () => {
-    if (!canSubmit) return
-    // Placeholder – submit logic would go here
-    navigate(-1)
+  const handleSubmit = async () => {
+    if (!canSubmit || !id) return
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      const fd = new FormData()
+      fd.append('letterOfPurpose', letterOfPurpose.trim())
+      if (portfolioLinks.trim()) fd.append('portfolioLinks', portfolioLinks.trim())
+      portfolioFiles.forEach((file) => fd.append('portfolioFiles', file))
+      await submitClubJoinApplication(id, fd)
+      navigate(`/clubs/${id}`)
+    } catch (e) {
+      setSubmitError(e?.message || 'Submission failed.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleFileChange = (e) => {
@@ -38,11 +71,11 @@ const JoinClub = () => {
     setPortfolioFiles(files)
   }
 
-  if (!club) {
+  if (loadError || !club) {
     return (
       <div className="join-club-overlay" onClick={() => navigate(-1)}>
         <div className="join-club-popup" onClick={(e) => e.stopPropagation()}>
-          <p>Club not found.</p>
+          <p>{loadError || 'Club not found.'}</p>
           <button type="button" className="join-club-back-btn" onClick={() => navigate(-1)}>
             Back
           </button>
@@ -119,6 +152,11 @@ const JoinClub = () => {
             </div>
           </div>
 
+          {submitError && (
+            <p className="join-club-upload-hint" style={{ color: '#b91c1c' }} role="alert">
+              {submitError}
+            </p>
+          )}
           <div className="join-club-actions">
             <button
               type="button"
@@ -126,7 +164,7 @@ const JoinClub = () => {
               onClick={handleSubmit}
               disabled={!canSubmit}
             >
-              Submit Application
+              {submitting ? 'Submitting…' : 'Submit Application'}
             </button>
           </div>
         </div>

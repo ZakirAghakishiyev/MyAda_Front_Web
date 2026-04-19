@@ -21,16 +21,18 @@ export default function SchedulingUserIdBar() {
       <input
         id="scheduling-user-id"
         className="sched-ms-user-bar-input"
-        type="number"
-        min={1}
-        placeholder="e.g. 41"
+        type="text"
+        inputMode="text"
+        autoComplete="off"
+        spellCheck={false}
+        placeholder="Auth UUID or numeric id (e.g. 00000000-0000-0000-0000-000000000041)"
         value={value}
         onChange={(e) => persist(e.target.value)}
         onBlur={() => setSchedulingUserId(value)}
       />
       <p className="sched-ms-user-bar-hint">
-        Sent as <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> for preferences, session edits, and publish. Stored for this
-        browser session.
+        Sent as <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> for preferences, session edits, and publish. If your JWT
+        already carries a valid instructor id, you can leave this empty. Value is stored for this browser session only.
       </p>
     </div>
   )

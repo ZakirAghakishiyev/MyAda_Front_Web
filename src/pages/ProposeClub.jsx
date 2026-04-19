@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { submitClubProposal } from '../api/clubApi'
 import adaLogo from '../assets/ada-logo.png'
 import './ProposeClub.css'
 
@@ -121,6 +122,7 @@ const ProposeClub = () => {
   const [commitment, setCommitment] = useState('')
   const [logoFile, setLogoFile] = useState(null)
   const [constitutionFile, setConstitutionFile] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     const draft = getDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY)
@@ -185,11 +187,36 @@ const ProposeClub = () => {
     (step === 3 && canContinueStep3) ||
     (step === 4 && canContinueStep4)
 
-  const handleContinue = () => {
-    if (step < STEPS) setStep((s) => s + 1)
-    else {
+  const handleContinue = async () => {
+    if (step < STEPS) {
+      setStep((s) => s + 1)
+      return
+    }
+    if (!logoFile || !constitutionFile || !clubName.trim()) return
+    setSubmitting(true)
+    try {
+      const fd = new FormData()
+      fd.append('name', clubName.trim())
+      const description = [
+        shortDesc && `Summary: ${shortDesc}`,
+        uniqueDesc && `Uniqueness: ${uniqueDesc}`,
+        goals && `Goals: ${goals}`,
+        activities && `Activities: ${activities}`,
+        alignment && `Mission alignment: ${alignment}`,
+        vision && `Vision: ${vision}`,
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+      fd.append('description', description.slice(0, 12000))
+      fd.append('logoFile', logoFile)
+      fd.append('constitutionFile', constitutionFile)
+      await submitClubProposal(fd)
       clearDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY)
       navigate('/clubs')
+    } catch (e) {
+      alert(e?.message || 'Could not submit proposal. Please sign in and try again.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -489,8 +516,8 @@ const ProposeClub = () => {
               <div className="propose-actions propose-actions--footer">
                 <button type="button" className="propose-btn-secondary" onClick={handleBack}><IconBack /> Back to Previous Step</button>
                 <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
-                <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue}>
-                  Submit Registration <IconChevronRight />
+                <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue || submitting}>
+                  {submitting ? 'Submitting…' : 'Submit Registration'} <IconChevronRight />
                 </button>
               </div>
             </div>

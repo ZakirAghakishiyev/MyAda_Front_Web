@@ -260,9 +260,9 @@ const ClubAdminApplicationDetail = ({
               <div className="club-admin-detail-buttons">
                 <button type="button" className="club-admin-btn-primary" onClick={handleApprove}><IconCheck /> Approve</button>
                 <button type="button" className="club-admin-btn-danger" onClick={handleDisapprove}><IconX /> Reject</button>
-                {isJob && (
-                  <button type="button" className="club-admin-btn-secondary" onClick={() => onCallForInterview?.(app.id, type)}><IconCalendar /> Call for interview</button>
-                )}
+                <button type="button" className="club-admin-btn-secondary" onClick={() => onCallForInterview?.(app.id, type)}>
+                  <IconCalendar /> {isJob ? 'Call for interview' : 'Request changes'}
+                </button>
               </div>
             )}
             <div className="club-admin-detail-note-section">

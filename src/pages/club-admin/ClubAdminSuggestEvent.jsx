@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { proposeClubAdminEvent } from '../../api/clubApi'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const STEPS = 4
@@ -66,6 +68,8 @@ const clearDraftCookie = (key) => {
 }
 
 const ClubAdminSuggestEvent = () => {
+  const clubId = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
   const navigate = useNavigate()
   const [step, setStep] = useState(4)
   const [eventName, setEventName] = useState('')
@@ -134,9 +138,31 @@ const ClubAdminSuggestEvent = () => {
     alert('Draft saved for this event proposal. It will be restored next time you open this screen from this browser.')
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    try {
+      await proposeClubAdminEvent(clubId, {
+        name: eventName.trim() || 'Event proposal',
+        dateTime,
+        duration,
+        attendance,
+        venue,
+        description,
+        objectives,
+        subEvents,
+        logistics: {
+          avSetup,
+          security,
+          catering,
+          cleaning,
+          otherNeeds,
+        },
+      })
+    } catch (err) {
+      alert(err?.message || 'Could not submit event proposal.')
+      return
+    }
     clearDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY)
-    navigate('/club-admin')
+    navigate(`/club-admin${clubQs}`)
   }
 
   const addSubEvent = () => {
@@ -179,9 +205,9 @@ const ClubAdminSuggestEvent = () => {
 
       <div className="club-admin-content">
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Home</Link>
+          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Home</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Events</Link>
+          <Link to={`/club-admin/events${clubQs}`} style={{ color: '#64748b' }}>Events</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>New Proposal</span>
         </nav>

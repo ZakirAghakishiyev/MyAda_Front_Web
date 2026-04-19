@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getVacancyById } from '../data/clubVacanciesData'
+import { fetchVacancy } from '../api/clubApi'
+import { mapVacancyFromApi } from '../api/clubMappers'
 import { getSavedVacancyIds, setSavedVacancyIds } from '../utils/savedVacanciesCookie'
 import './VacancyDetail.css'
 
@@ -47,20 +48,40 @@ const BenefitIcons = { chart: IconChart, certificate: IconCertificate, network: 
 const VacancyDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const vacancy = getVacancyById(id)
+  const [vacancy, setVacancy] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const vacancyId = vacancy ? vacancy.id : null
   const [saved, setSaved] = useState(() => (vacancyId != null ? getSavedVacancyIds().includes(vacancyId) : false))
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!id) return
+      try {
+        const raw = await fetchVacancy(id)
+        if (cancelled) return
+        setVacancy(mapVacancyFromApi(raw))
+        setLoadError(null)
+      } catch (e) {
+        if (!cancelled) {
+          setVacancy(null)
+          setLoadError(e?.message || 'Failed to load vacancy.')
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
 
   useEffect(() => {
     if (vacancyId == null) return
     setSaved(getSavedVacancyIds().includes(vacancyId))
   }, [vacancyId])
 
-  if (!vacancy) {
+  if (loadError || !vacancy) {
     return (
       <div className="vacancy-detail-overlay" onClick={() => navigate(-1)}>
         <div className="vacancy-detail-page vacancy-detail-page--narrow" onClick={(e) => e.stopPropagation()}>
-          <p>Vacancy not found.</p>
+          <p>{loadError || 'Vacancy not found.'}</p>
           <button type="button" className="vacancy-detail-back-btn" onClick={() => navigate(-1)}>Back</button>
         </div>
       </div>

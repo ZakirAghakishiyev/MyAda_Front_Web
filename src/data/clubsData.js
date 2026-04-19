@@ -264,6 +264,7 @@ export const mockMemberships = [
 ]
 
 export function getClubById(id) {
-  const numId = parseInt(id, 10)
-  return mockClubs.find((c) => c.id === numId) || null
+  if (id == null) return null
+  const wantedId = String(id)
+  return mockClubs.find((c) => String(c.id) === wantedId) || null
 }

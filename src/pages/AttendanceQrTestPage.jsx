@@ -6,7 +6,6 @@ import {
   resolveAuthenticatedStudentId,
   scanAttendanceQrCode,
 } from '../api/attendance'
-import { getAccessToken } from '../auth'
 import './AttendanceQrTestPage.css'
 
 const QR_REFRESH_INTERVAL_MS = 5_000
@@ -62,14 +61,13 @@ export default function AttendanceQrTestPage() {
   }, [studentIdOverride])
 
   const staticQrPayload = useMemo(() => {
-    const instructorJwt = getAccessToken() || null
     return JSON.stringify({
       token: 'ADA_STATIC_TEST_TOKEN',
       sessionId: String(sessionId || 'static-session-1'),
       roundCount: Number.isFinite(Number(roundCount)) ? Number(roundCount) : 1,
-      instructorJwt,
+      instructorId: String(instructorId || '').trim() || null,
     })
-  }, [roundCount, sessionId])
+  }, [instructorId, roundCount, sessionId])
 
   const refreshQrToken = useCallback(async () => {
     setTokenError('')
@@ -174,7 +172,7 @@ export default function AttendanceQrTestPage() {
             <h2>1. Live QR to scan</h2>
             <p className="attendance-qr-test__hint">
               Static test mode: QR payload is generated locally and includes `token`, `sessionId`,
-              `roundCount`, and the logged-in JWT access token.
+              `roundCount`, and `instructorId`.
             </p>
 
             <label className="attendance-qr-test__field">

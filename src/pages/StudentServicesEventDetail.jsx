@@ -1,5 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { getStudentServicesEvent } from '../api/clubApi'
+import { mapEventFromApi } from '../api/clubMappers'
 import './EventDetail.css'
 
 const IconBack = () => (
@@ -48,13 +50,71 @@ const StudentServicesEventDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const location = useLocation()
-  const event = location.state?.event ?? null
+  const [event, setEvent] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const fromState = location.state?.event
+    if (fromState && String(fromState.id) === String(id)) {
+      setEvent(fromState)
+      setLoading(false)
+      return () => { cancelled = true }
+    }
+    if (!id) {
+      setLoading(false)
+      return () => { cancelled = true }
+    }
+    setLoading(true)
+    ;(async () => {
+      try {
+        const raw = await getStudentServicesEvent(id)
+        const m = mapEventFromApi(raw)
+        if (cancelled) return
+        if (!m) {
+          setEvent(null)
+          return
+        }
+        setEvent({
+          id: m.id,
+          title: m.title,
+          date: m.date,
+          time: m.time,
+          club: m.clubName,
+          venue: m.location,
+          durationHours: 2,
+          description: m.description,
+          subEvents: (m.subEvents || []).map((s) => ({
+            title: s.title,
+            startTime: s.startTime,
+            endTime: s.endTime,
+          })),
+          image: m.image,
+        })
+      } catch {
+        if (!cancelled) setEvent(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id, location.state])
 
   const handleBack = () => {
     navigate('/student-services', { state: { section: 'events' } })
   }
 
-  if (!event || event.id !== id) {
+  if (loading) {
+    return (
+      <div className="ed-page">
+        <div className="ed-not-found">
+          <p>Loading event…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!event || String(event.id) !== String(id)) {
     return (
       <div className="ed-page">
         <div className="ed-not-found">

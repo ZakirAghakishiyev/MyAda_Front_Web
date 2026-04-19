@@ -1,6 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { EMPLOYEE_POSITIONS, VACANCY_CATEGORIES } from '../../data/clubAdminData'
+import { VACANCY_CATEGORIES } from '../../data/clubAdminData'
+import {
+  fetchClubAdminPositions,
+  patchClubAdminPosition,
+} from '../../api/clubApi'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconEdit = () => (
@@ -31,13 +36,43 @@ const IconX = () => (
 )
 
 const ClubAdminPositions = () => {
-  const [positions, setPositions] = useState(EMPLOYEE_POSITIONS)
+  const clubId = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
+  const [positions, setPositions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
   const [reqInput, setReqInput] = useState('')
   const [requirements, setRequirements] = useState([])
+
+  const loadPositions = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const res = await fetchClubAdminPositions(clubId)
+      const items = res?.items ?? res ?? []
+      setPositions(
+        (Array.isArray(items) ? items : []).map((p, index) => ({
+          id: p.id ?? p.positionId ?? `p-${index}`,
+          title: p.name ?? p.title ?? p.positionTitle ?? 'Position',
+          category: p.category ?? 'Other',
+          requirements: Array.isArray(p.requirements) ? p.requirements : [],
+        }))
+      )
+    } catch (e) {
+      setPositions([])
+      setLoadError(e?.message || 'Could not load positions.')
+    } finally {
+      setLoading(false)
+    }
+  }, [clubId])
+
+  useEffect(() => {
+    loadPositions()
+  }, [loadPositions])
 
   const filteredPositions = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -76,21 +111,18 @@ const ClubAdminPositions = () => {
     setRequirements((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  const saveEdit = (e) => {
+  const saveEdit = async (e) => {
     e.preventDefault()
     if (!editing || !title.trim() || !category) return
-    setPositions((prev) =>
-      prev.map((p) =>
-        p.id === editing
-          ? {
-              ...p,
-              title: title.trim(),
-              category,
-              requirements: requirements.length ? requirements : p.requirements
-            }
-          : p
-      )
-    )
+    try {
+      await patchClubAdminPosition(clubId, editing, {
+        name: title.trim(),
+      })
+      await loadPositions()
+    } catch (e) {
+      alert(e?.message || 'Could not save position changes.')
+      return
+    }
     cancelEdit()
   }
 
@@ -103,9 +135,9 @@ const ClubAdminPositions = () => {
 
         <div className="club-admin-content">
           <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-            <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+            <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
-            <Link to="/club-admin/positions" style={{ color: '#64748b' }}>Positions</Link>
+            <Link to={`/club-admin/positions${clubQs}`} style={{ color: '#64748b' }}>Positions</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
             <span style={{ color: '#0f172a', fontWeight: 600 }}>Edit Position</span>
           </nav>
@@ -208,7 +240,7 @@ const ClubAdminPositions = () => {
             />
           </div>
           <Link
-            to="/club-admin/positions/new"
+            to={`/club-admin/positions/new${clubQs}`}
             className="club-admin-btn-primary"
             style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
           >
@@ -218,8 +250,11 @@ const ClubAdminPositions = () => {
       </header>
 
       <div className="club-admin-content">
+        {loadError ? (
+          <p style={{ margin: '0 24px 16px', fontSize: 14, color: '#b91c1c' }}>{loadError}</p>
+        ) : null}
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>Positions</span>
         </nav>
@@ -241,6 +276,13 @@ const ClubAdminPositions = () => {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="club-admin-table-empty">
+                    Loading positions...
+                  </td>
+                </tr>
+              ) : null}
               {filteredPositions.map((p) => (
                 <tr key={p.id}>
                   <td>{p.title}</td>
@@ -270,9 +312,9 @@ const ClubAdminPositions = () => {
                   </td>
                 </tr>
               ))}
-              {filteredPositions.length === 0 && (
+              {!loading && filteredPositions.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="club-admin-table-empty">
+                  <td colSpan={4} className="club-admin-table-empty">
                     No positions match your search.
                   </td>
                 </tr>

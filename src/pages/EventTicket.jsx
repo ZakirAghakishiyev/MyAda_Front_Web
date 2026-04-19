@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getEventById } from '../data/clubEventsData'
+import { fetchEvent, fetchEventTicket } from '../api/clubApi'
+import { mapEventFromApi } from '../api/clubMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubVacancies.css'
 import './EventTicket.css'
@@ -60,13 +61,37 @@ const formatTimeRange = (start, end) => {
 const EventTicket = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const event = getEventById(id)
+  const [event, setEvent] = useState(null)
+  const [ticketPayload, setTicketPayload] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
-  if (!event) {
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!id) return
+      try {
+        const [rawEv, ticket] = await Promise.all([
+          fetchEvent(id),
+          fetchEventTicket(id).catch(() => null),
+        ])
+        if (cancelled) return
+        setEvent(mapEventFromApi(rawEv))
+        setTicketPayload(ticket && typeof ticket === 'object' ? ticket : null)
+      } catch (e) {
+        if (!cancelled) {
+          setEvent(null)
+          setLoadError(e?.message || 'Could not load ticket.')
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
+
+  if (loadError || !event) {
     return (
       <div className="et-page">
         <div className="et-not-found">
-          <p>Ticket not found.</p>
+          <p>{loadError || 'Ticket not found.'}</p>
           <button type="button" className="et-btn" onClick={() => navigate('/clubs/events')}>
             Back to Events
           </button>
@@ -75,8 +100,15 @@ const EventTicket = () => {
     )
   }
 
-  const ticketId = `TC-2024-${String(event.id).padStart(4, '0')}`
-  const attendeeName = 'Alex Johnson'
+  const ticketId =
+    ticketPayload?.ticketId ??
+    ticketPayload?.id ??
+    `TC-2024-${String(event.id).padStart(4, '0')}`
+  const attendeeName =
+    ticketPayload?.attendeeName ??
+    ticketPayload?.holderName ??
+    ticketPayload?.name ??
+    'Attendee'
   const qrData = encodeURIComponent(JSON.stringify({ eventId: event.id, ticketId, attendee: attendeeName }))
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`
 
