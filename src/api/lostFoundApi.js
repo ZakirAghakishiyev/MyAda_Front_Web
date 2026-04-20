@@ -1,7 +1,7 @@
 import { authFetch } from '../auth'
 
-const LOST_FOUND_API_BASE = 'http://51.20.193.29:5000/lostfound/api/lost-and-found'
-const LOST_FOUND_HOST = 'http://51.20.193.29:5000'
+const LOST_FOUND_API_BASE = 'http://13.60.31.141:5000/lostfound/api/lost-and-found'
+const LOST_FOUND_HOST = 'http://13.60.31.141:5000'
 
 function normalizeMediaUrl(value) {
   const raw = String(value || '').trim()

@@ -2,7 +2,7 @@
 
 All paths below are **relative to** `{CLUB_API_BASE}/api/v1/` unless noted.
 
-- **`CLUB_API_BASE`** defaults to **`http://localhost:5003`** (local Club Management service). Override with **`VITE_CLUB_API_BASE`** (e.g. `http://51.20.193.29:5000/club` when using the deployed gateway).
+- **`CLUB_API_BASE`** defaults to **`http://localhost:5003`** (local Club Management service). Override with **`VITE_CLUB_API_BASE`** (e.g. `http://13.60.31.141:5000/club` when using the deployed gateway).
 - **Full URL pattern:** `{CLUB_API_BASE}/api/v1/<path>`
 - **AutoWrapper:** successful JSON is unwrapped in the client when the body contains a top-level **`result`** or **`data`** field (see `unwrapApiResponse` in `clubApi.js`).
 - **User-scoped routes:** `fetchMy*` helpers call **`users/{userId}/...`**, where **`userId`** is read from the JWT (`sub`, `user_id`, or common claim aliases) via `getJwtUserId()` in `jwtRoles.js`. It must match the token subject or the API returns **403**.

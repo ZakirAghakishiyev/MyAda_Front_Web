@@ -1,6 +1,6 @@
 import { authFetch } from '../auth'
 
-const LOCATION_API_BASE = 'http://51.20.193.29:5000/location/api/v1'
+const LOCATION_API_BASE = 'http://13.60.31.141:5000/location/api/v1'
 
 async function parseResponse(res) {
   if (res.status === 204) return null
