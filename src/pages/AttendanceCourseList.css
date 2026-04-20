@@ -76,6 +76,36 @@
   margin: 0 0 16px 0;
 }
 
+.acl-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.acl-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acl-filter-field span {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.acl-filter-field select {
+  height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #1e293b;
+  background: #fff;
+}
+
 .acl-crn-list {
   list-style: none;
   padding: 0;
@@ -134,6 +164,13 @@
   grid-column: 2 / -1;
   font-size: 12px;
   color: #64748b;
+}
+
+.acl-crn-term {
+  grid-column: 2 / -1;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 600;
 }
 
 .acl-actions {

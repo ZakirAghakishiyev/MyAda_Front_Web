@@ -38,17 +38,6 @@ const IconDoublePlay = () => (
     <path d="M4 5v14l7-7zm9 0v14l7-7z" />
   </svg>
 )
-const IconCheck = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-)
-const IconGear = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-)
 const IconClose = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18" />
@@ -65,6 +54,25 @@ const IconLog = () => (
 function formatTime() {
   const d = new Date()
   return d.toTimeString().slice(0, 8)
+}
+
+function formatSessionLabel(session) {
+  const start = session?.startTime ? new Date(session.startTime) : null
+  const end = session?.endTime ? new Date(session.endTime) : null
+  const startLabel = start && !Number.isNaN(start.getTime()) ? start.toLocaleString() : String(session?.startTime || 'Unknown')
+  const endLabel = end && !Number.isNaN(end.getTime()) ? end.toLocaleString() : String(session?.endTime || 'Unknown')
+  return `${startLabel} - ${endLabel}${session?.isActive ? ' (active)' : ''}`
+}
+
+function toIsoFromLocal(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString()
+}
+
+function progressStorageKey(instructorId, lessonId, sessionId) {
+  return `attendance_progress:${String(instructorId || '')}:${String(lessonId || '')}:${String(sessionId || '')}`
 }
 
 const defaultCourse = {
@@ -85,6 +93,16 @@ export default function AttendancePortal() {
   const [sessionError, setSessionError] = useState(null)
   const [sessionLoading, setSessionLoading] = useState(false)
   const [sessionInitialized, setSessionInitialized] = useState(false)
+  const [sessionOptions, setSessionOptions] = useState([])
+  const [sessionOptionsLoading, setSessionOptionsLoading] = useState(false)
+  const [sessionOptionsError, setSessionOptionsError] = useState('')
+  const [selectedSessionId, setSelectedSessionId] = useState('')
+  const [creatingSession, setCreatingSession] = useState(false)
+  const [createSessionError, setCreateSessionError] = useState('')
+  const [createSessionStart, setCreateSessionStart] = useState('')
+  const [createSessionEnd, setCreateSessionEnd] = useState('')
+  const [createSessionTopic, setCreateSessionTopic] = useState('')
+  const [showCreateSession, setShowCreateSession] = useState(false)
 
   const [attendanceActive, setAttendanceActive] = useState(false)
   const [currentRound, setCurrentRound] = useState(0)
@@ -112,22 +130,17 @@ export default function AttendancePortal() {
   const ids = {
     instructorId: instructorId || 'demo',
     lessonId: lessonId || 'demo',
-    sessionId: sessionState?.sessionId,
+    sessionId: sessionState?.sessionId ?? (selectedSessionId ? Number(selectedSessionId) : undefined),
     attendanceSessionId: sessionState?.attendanceSessionId,
+    roundCount: currentRound,
   }
 
   const addLog = useCallback((message, highlight = false) => {
     setLogEntries((prev) => [...prev, { time: formatTime(), message, highlight }])
   }, [])
 
-  const handleInitializeSession = useCallback(async () => {
-    setSessionLoading(true)
-    setSessionError(null)
-    try {
-      const data = await attendanceApi.getSessionState({
-        instructorId,
-        lessonId,
-      })
+  const applySessionState = useCallback(
+    (data) => {
       setSessionState(data)
       setSessionClosed(Boolean(data.closed))
       setRound1Completed(Boolean(data.round1Completed))
@@ -136,13 +149,171 @@ export default function AttendancePortal() {
       setCurrentRound(Number(data.currentRound) || 0)
       setAttendanceActive(Boolean(data.currentRound))
       setSessionInitialized(true)
+    },
+    []
+  )
+
+  const persistProgress = useCallback(
+    (patch = {}) => {
+      if (!instructorId || !lessonId || !selectedSessionId) return
+      try {
+        const key = progressStorageKey(instructorId, lessonId, selectedSessionId)
+        const current = {
+          currentRound,
+          round1Completed,
+          round2Completed,
+          sessionClosed,
+          canActivate,
+          attendanceActive,
+          ...patch,
+        }
+        localStorage.setItem(key, JSON.stringify(current))
+      } catch {
+        // ignore storage failures
+      }
+    },
+    [
+      instructorId,
+      lessonId,
+      selectedSessionId,
+      currentRound,
+      round1Completed,
+      round2Completed,
+      sessionClosed,
+      canActivate,
+      attendanceActive,
+    ]
+  )
+
+  const loadSessionOptions = useCallback(async () => {
+    if (!instructorId || !lessonId || String(instructorId).toLowerCase() === 'demo') return
+    setSessionOptionsLoading(true)
+    setSessionOptionsError('')
+    try {
+      const list = await attendanceApi.getLessonSessions({ instructorId, lessonId })
+      setSessionOptions(list)
+      if (!selectedSessionId && list.length) {
+        setSelectedSessionId(String(list[0].sessionId))
+      }
+    } catch (e) {
+      setSessionOptionsError(e.message || 'Could not load sessions for this lesson.')
+      setSessionOptions([])
+    } finally {
+      setSessionOptionsLoading(false)
+    }
+  }, [instructorId, lessonId, selectedSessionId])
+
+  useEffect(() => {
+    loadSessionOptions().catch(() => {})
+  }, [loadSessionOptions])
+
+  useEffect(() => {
+    if (!instructorId || !lessonId || !selectedSessionId) return
+    const isDemo = String(instructorId).toLowerCase() === 'demo' || String(lessonId).toLowerCase() === 'demo'
+    if (isDemo) return
+
+    async function tryResume() {
+      try {
+        const data = await attendanceApi.getSessionStateForSession({
+          instructorId,
+          lessonId,
+          sessionId: Number(selectedSessionId),
+        })
+        applySessionState(data)
+        addLog(`Session ${selectedSessionId} restored.`, true)
+      } catch {
+        // Fall back to local storage snapshot if backend state is unavailable.
+        try {
+          const key = progressStorageKey(instructorId, lessonId, selectedSessionId)
+          const saved = JSON.parse(localStorage.getItem(key) || 'null')
+          if (!saved) return
+          applySessionState({
+            sessionId: Number(selectedSessionId),
+            attendanceSessionId: Number(selectedSessionId),
+            currentRound: Number(saved.currentRound) || 0,
+            round1Completed: Boolean(saved.round1Completed),
+            round2Completed: Boolean(saved.round2Completed),
+            closed: Boolean(saved.sessionClosed),
+            canActivate: Boolean(saved.canActivate),
+            totalCount: 45,
+            registeredCount: 0,
+          })
+          addLog(`Session ${selectedSessionId} restored from local progress.`, true)
+        } catch {
+          // ignore parse/storage failures
+        }
+      }
+    }
+
+    tryResume().catch(() => {})
+  }, [instructorId, lessonId, selectedSessionId, applySessionState, addLog])
+
+  const handleInitializeSession = useCallback(async () => {
+    if (!instructorId || !lessonId) return
+    setSessionLoading(true)
+    setSessionError(null)
+    try {
+      const isDemo = String(instructorId).toLowerCase() === 'demo' || String(lessonId).toLowerCase() === 'demo'
+      const data = isDemo
+        ? attendanceApi.getStaticSessionState()
+        : selectedSessionId
+          ? await attendanceApi.getSessionStateForSession({
+              instructorId,
+              lessonId,
+              sessionId: Number(selectedSessionId),
+            })
+          : await attendanceApi.getSessionState({
+              instructorId,
+              lessonId,
+            })
+      applySessionState(data)
+      persistProgress({
+        currentRound: Number(data.currentRound) || 0,
+        round1Completed: Boolean(data.round1Completed),
+        round2Completed: Boolean(data.round2Completed),
+        sessionClosed: Boolean(data.closed),
+        canActivate: Boolean(data.canActivate),
+        attendanceActive: Boolean(data.currentRound),
+      })
       addLog(`Session initialized from backend: ${lessonId || 'demo'}`, true)
     } catch (e) {
       setSessionError(e.message || 'Failed to load attendance session')
     } finally {
       setSessionLoading(false)
     }
-  }, [instructorId, lessonId, addLog])
+  }, [instructorId, lessonId, selectedSessionId, applySessionState, persistProgress, addLog])
+
+  const handleCreateSession = useCallback(async () => {
+    const startIso = toIsoFromLocal(createSessionStart)
+    const endIso = toIsoFromLocal(createSessionEnd)
+    if (!startIso || !endIso) {
+      setCreateSessionError('Select valid start and end date-time values.')
+      return
+    }
+    if (new Date(startIso) >= new Date(endIso)) {
+      setCreateSessionError('End date-time must be after start date-time.')
+      return
+    }
+    setCreatingSession(true)
+    setCreateSessionError('')
+    try {
+      const created = await attendanceApi.createLessonSession({
+        instructorId,
+        lessonId,
+        startAt: startIso,
+        endAt: endIso,
+        topic: createSessionTopic.trim() || undefined,
+      })
+      await loadSessionOptions()
+      if (created?.sessionId != null) setSelectedSessionId(String(created.sessionId))
+      setCreateSessionTopic('')
+      addLog('New session created for this lesson.', true)
+    } catch (e) {
+      setCreateSessionError(e.message || 'Could not create session.')
+    } finally {
+      setCreatingSession(false)
+    }
+  }, [createSessionStart, createSessionEnd, createSessionTopic, instructorId, lessonId, loadSessionOptions, addLog])
 
   const fetchQR = useCallback(async () => {
     if (!attendanceActive || sessionClosed) return
@@ -166,7 +337,7 @@ export default function AttendancePortal() {
     } finally {
       setQrLoading(false)
     }
-  }, [attendanceActive, sessionClosed, ids.instructorId, ids.lessonId, ids.sessionId, ids.attendanceSessionId, addLog])
+  }, [attendanceActive, sessionClosed, ids.instructorId, ids.lessonId, ids.sessionId, ids.attendanceSessionId, ids.roundCount, addLog])
 
   useEffect(() => {
     if (!attendanceActive || sessionClosed) {
@@ -238,6 +409,12 @@ export default function AttendancePortal() {
       setAttendanceActive(true)
       setCanActivate(true)
       setSessionState((s) => ({ ...(s || {}), currentRound: nextRound, closed: false, canActivate: true }))
+      persistProgress({
+        currentRound: nextRound,
+        attendanceActive: true,
+        canActivate: true,
+        sessionClosed: false,
+      })
     } catch (e) {
       setRoundActionError(e.message || 'Failed to start round')
     } finally {
@@ -257,6 +434,13 @@ export default function AttendancePortal() {
         setCurrentRound(0)
         setAttendanceActive(false)
         setSessionState((s) => ({ ...(s || {}), round1Completed: true, currentRound: 0 }))
+        persistProgress({
+          round1Completed: true,
+          currentRound: 0,
+          attendanceActive: false,
+          canActivate: true,
+          sessionClosed: false,
+        })
       } else if (currentRound === 2) {
         setRound2Completed(true)
         setCurrentRound(0)
@@ -264,6 +448,13 @@ export default function AttendancePortal() {
         setSessionClosed(true)
         setCanActivate(false)
         setSessionState((s) => ({ ...(s || {}), round2Completed: true, currentRound: 0, closed: true, canActivate: false }))
+        persistProgress({
+          round2Completed: true,
+          currentRound: 0,
+          attendanceActive: false,
+          sessionClosed: true,
+          canActivate: false,
+        })
       }
     } catch (e) {
       setRoundActionError(e.message || 'Failed to end round')
@@ -290,8 +481,14 @@ export default function AttendancePortal() {
     setCanActivate(false)
     setQrPayload(null)
     setSessionState((s) => (s ? { ...s, closed: true, canActivate: false, currentRound: 0 } : null))
+    persistProgress({
+      currentRound: 0,
+      attendanceActive: false,
+      sessionClosed: true,
+      canActivate: false,
+    })
     addLog('Session ended by instructor', true)
-  }, [sessionInitialized, addLog])
+  }, [sessionInitialized, persistProgress, addLog])
 
   return (
     <div className="attendance-portal">
@@ -302,19 +499,16 @@ export default function AttendancePortal() {
           </button>
           <nav className="ap-nav-links">
             <span className="ap-nav-link ap-nav-link--active">Dashboard</span>
+            <button
+              type="button"
+              className="ap-nav-link"
+              onClick={() => navigate(`/attendance/${encodeURIComponent(instructorId || 'demo')}`)}
+            >
+              Lessons
+            </button>
             <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/history`)}>History</button>
             <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/students`)}>Students</button>
-            <button type="button" className="ap-nav-link">Settings</button>
           </nav>
-        </div>
-        <div className="ap-nav-right">
-          <button type="button" className="ap-icon-btn" aria-label="Notifications">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-          </button>
-          <div className="ap-user">
-            <div className="ap-user-avatar" />
-            <span className="ap-user-arrow">▼</span>
-          </div>
         </div>
       </header>
 
@@ -326,20 +520,88 @@ export default function AttendancePortal() {
           <h1 className="ap-course-title">{course.title}</h1>
           <p className="ap-course-details">{course.section} • {course.room} • {course.instructor}</p>
           <div className="ap-session-actions">
-            <button type="button" className="ap-btn ap-btn--secondary">
-              <IconGear /> Session Settings
-            </button>
             <button type="button" className="ap-btn ap-btn--danger" onClick={handleEndSession} disabled={!sessionInitialized}>
               <IconClose /> End Session
             </button>
           </div>
         </section>
 
+        <section className="ap-panel">
+          <h2 className="ap-panel-title">Lesson sessions</h2>
+          <div className="ap-session-picker">
+            <label className="ap-session-field">
+              <span>Select existing session</span>
+              <select
+                value={selectedSessionId}
+                onChange={(e) => {
+                  setSelectedSessionId(e.target.value)
+                  setSessionInitialized(false)
+                }}
+                disabled={sessionOptionsLoading}
+              >
+                <option value="">{sessionOptionsLoading ? 'Loading sessions…' : 'Choose session…'}</option>
+                {sessionOptions.map((s) => (
+                  <option key={s.sessionId} value={String(s.sessionId)}>
+                    {formatSessionLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="ap-btn ap-btn--secondary"
+              onClick={() => loadSessionOptions()}
+              disabled={sessionOptionsLoading}
+            >
+              Refresh sessions
+            </button>
+          </div>
+          {sessionOptionsError ? <p className="ap-controls-error">{sessionOptionsError}</p> : null}
+
+          <div className="ap-create-session">
+            <button
+              type="button"
+              className="ap-btn ap-btn--secondary"
+              onClick={() => setShowCreateSession((v) => !v)}
+            >
+              {showCreateSession ? 'Close create session' : 'Create new session'}
+            </button>
+            {showCreateSession ? (
+              <div className="ap-create-session-body">
+                <h3>Create new session</h3>
+                <div className="ap-create-session-grid">
+                  <label className="ap-session-field">
+                    <span>Start</span>
+                    <input type="datetime-local" value={createSessionStart} onChange={(e) => setCreateSessionStart(e.target.value)} />
+                  </label>
+                  <label className="ap-session-field">
+                    <span>End</span>
+                    <input type="datetime-local" value={createSessionEnd} onChange={(e) => setCreateSessionEnd(e.target.value)} />
+                  </label>
+                  <label className="ap-session-field ap-session-field--wide">
+                    <span>Topic (optional)</span>
+                    <input type="text" value={createSessionTopic} onChange={(e) => setCreateSessionTopic(e.target.value)} />
+                  </label>
+                </div>
+                <button type="button" className="ap-btn ap-btn--primary" onClick={handleCreateSession} disabled={creatingSession}>
+                  {creatingSession ? 'Creating…' : 'Create session'}
+                </button>
+              </div>
+            ) : null}
+            {createSessionError ? <p className="ap-controls-error">{createSessionError}</p> : null}
+          </div>
+        </section>
+
         {!sessionInitialized && (
           <section className="ap-init-card">
             <h2 className="ap-init-title">Session not started</h2>
-            <p className="ap-init-text">Click below to initialize the attendance session for this lesson. After that you can start Round 1 and Round 2.</p>
-            <button type="button" className="ap-btn ap-btn--primary ap-init-btn" onClick={handleInitializeSession}>
+            <p className="ap-init-text">Select a lesson session above, then initialize attendance. After that you can start Round 1 and Round 2.</p>
+            <button
+              type="button"
+              className="ap-btn ap-btn--primary ap-init-btn"
+              onClick={handleInitializeSession}
+              disabled={!selectedSessionId && String(instructorId).toLowerCase() !== 'demo'}
+            >
               <IconPlay /> Initialize Session
             </button>
           </section>

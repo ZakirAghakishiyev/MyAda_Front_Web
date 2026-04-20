@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { getClubById, mockMemberships } from '../data/clubsData'
-import { getEventsByClubId } from '../data/clubEventsData'
+import { fetchClub, fetchClubMembers, fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
+import { mapClubFromApi, mapEventFromApi } from '../api/clubMappers'
 import adaLogo from '../assets/ada-logo.png'
 import inClassTaskPdf from '../assets/In-Class Task.pdf'
 import './ClubVacancies.css'
@@ -82,15 +82,127 @@ const formatEventDate = (dateStr) => {
 const ClubDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const club = getClubById(id)
   const [activeTab, setActiveTab] = useState('about')
-  const upcomingEvents = club ? getEventsByClubId(club.id).slice(0, 3) : []
+  const [club, setClub] = useState(null)
+  const [memberRows, setMemberRows] = useState([])
+  const [upcomingEvents, setUpcomingEvents] = useState([])
+  const [loadState, setLoadState] = useState({ loading: true, error: null })
+  const [isClubMember, setIsClubMember] = useState(false)
 
-  if (!club) {
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!id) return
+      setLoadState({ loading: true, error: null })
+      try {
+        const [rawClub, rawMembers, rawEvents, myMemberships] = await Promise.all([
+          fetchClub(id),
+          fetchClubMembers(id).catch(() => ({ items: [] })),
+          fetchEvents({ limit: 48 }).catch(() => ({ items: [] })),
+          fetchMyClubMemberships().catch(() => ({ items: [] })),
+        ])
+        if (cancelled) return
+        const mapped = mapClubFromApi(rawClub)
+        setClub(
+          mapped || {
+            id: String(id),
+            name: 'Club',
+            category: '',
+            image: null,
+            tags: [],
+            members: 0,
+            about: '',
+            officers: [],
+            announcements: [],
+            email: 'clubs@ada.edu.az',
+          }
+        )
+        const mItems = rawMembers?.items ?? rawMembers ?? []
+        setMemberRows(Array.isArray(mItems) ? mItems : [])
+        const evItems = (rawEvents?.items ?? []).map((row) => mapEventFromApi(row)).filter(Boolean)
+        const sid = String(id)
+        const filtered = evItems.filter(
+          (e) =>
+            String(e.clubId) === sid ||
+            (mapped?.name && e.clubName && e.clubName === mapped.name)
+        )
+        setUpcomingEvents((filtered.length ? filtered : evItems).slice(0, 6))
+        const memList = myMemberships?.items ?? myMemberships ?? []
+        const active = Array.isArray(memList) && memList.some((m) => {
+          const cid = m.clubId ?? m.club?.id ?? m.id
+          const st = (m.status ?? m.membershipStatus ?? '').toString().toLowerCase()
+          return String(cid) === sid && (!st || st === 'active' || st === 'approved')
+        })
+        setIsClubMember(Boolean(active))
+        setLoadState({ loading: false, error: null })
+      } catch (e) {
+        if (!cancelled) {
+          setClub(null)
+          setLoadState({ loading: false, error: e?.message || 'Failed to load club.' })
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
+
+  const focusAreas = useMemo(() => {
+    const raw = club?.focusAreas || []
+    return raw.map((area, i) =>
+      typeof area === 'string'
+        ? { title: area, description: '' }
+        : { title: area.title ?? area.name ?? `Area ${i + 1}`, description: area.description ?? '' }
+    )
+  }, [club])
+
+  const members = useMemo(() => {
+    if (!club) return []
+    if (memberRows.length > 0) {
+      return memberRows.map((m, index) => ({
+        name: m.name ?? m.fullName ?? m.studentName ?? `Member ${index + 1}`,
+        role: m.role ?? m.position ?? 'Member',
+        department: m.department ?? m.program ?? club.category,
+      }))
+    }
+    const offs = Array.isArray(club.officers) ? club.officers : []
+    if (offs.length === 0) {
+      return [
+        { name: 'Members', role: 'Roster', department: 'See club officers when available' },
+      ]
+    }
+    return offs.map((officer) => ({
+      name: officer.name ?? officer.studentName ?? 'Officer',
+      role: officer.role ?? officer.title ?? '',
+      department: club.category,
+    }))
+  }, [club, memberRows])
+
+  const officersList = useMemo(() => {
+    if (!club) return []
+    const offs = Array.isArray(club.officers) ? club.officers : []
+    if (offs.length) {
+      return offs.map((o) => ({
+        name: o.name ?? o.studentName ?? '—',
+        role: o.role ?? o.title ?? '',
+      }))
+    }
+    return [{ name: 'TBD', role: 'President' }]
+  }, [club])
+
+  if (loadState.loading) {
     return (
       <div className="club-detail-page club-detail-page--not-found">
         <div className="club-detail-container">
-          <p>Club not found.</p>
+          <p>Loading club…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadState.error || !club) {
+    return (
+      <div className="club-detail-page club-detail-page--not-found">
+        <div className="club-detail-container">
+          <p>{loadState.error || 'Club not found.'}</p>
           <button type="button" className="club-detail-btn-primary" onClick={() => navigate('/clubs')}>
             Back to Clubs
           </button>
@@ -99,21 +211,6 @@ const ClubDetail = () => {
     )
   }
 
-  const focusAreas = club.focusAreas || []
-  const members = (club.memberProfiles && club.memberProfiles.length > 0)
-    ? club.memberProfiles
-    : [
-      ...club.officers.map((officer) => ({
-        name: officer.name,
-        role: officer.role,
-        department: club.category
-      })),
-      { name: 'Student Member', role: 'Active Member', department: `${club.category} Club` },
-      { name: 'Community Volunteer', role: 'Volunteer', department: `${club.category} Club` }
-    ]
-  const isClubMember = mockMemberships.some(
-    (membership) => membership.clubId === club.id && membership.status === 'Active'
-  )
   const announcements = club.announcements || []
 
   return (
@@ -313,7 +410,7 @@ const ClubDetail = () => {
           <section className="club-detail-sidebar-block">
             <h3 className="club-detail-sidebar-title">Club Officers</h3>
             <ul className="club-detail-officers">
-              {club.officers.map((o, i) => (
+              {officersList.map((o, i) => (
                 <li key={i} className="club-detail-officer">
                   <span className="club-detail-officer-avatar" />
                   <div>

@@ -66,6 +66,11 @@ function toNumberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function normalizeRouteUserId(value) {
+  const normalized = String(value ?? '').trim()
+  return normalized || null
+}
+
 function firstDefined(...values) {
   return values.find((value) => value !== undefined && value !== null)
 }
@@ -112,7 +117,8 @@ function pickBestSession(sessions = []) {
 }
 
 export function validateAttendanceQrToken(rawValue) {
-  const token = String(rawValue ?? '').trim()
+  const parsed = parseAttendanceQrPayload(rawValue)
+  const token = String(parsed?.token || '').trim()
   if (!token) {
     throw makeAttendanceError('QR code is empty. Please scan a valid attendance QR code.', {
       code: 'INVALID_QR_EMPTY',
@@ -123,7 +129,6 @@ export function validateAttendanceQrToken(rawValue) {
     token.includes('\n') ||
     token.includes('\r') ||
     token.includes(' ') ||
-    token.startsWith('{') ||
     /^https?:\/\//i.test(token)
   ) {
     throw makeAttendanceError('QR code format is invalid. Expected a plain attendance token only.', {
@@ -140,6 +145,60 @@ export function validateAttendanceQrToken(rawValue) {
   return token
 }
 
+export function parseAttendanceQrPayload(rawValue) {
+  const value = String(rawValue ?? '').trim()
+  if (!value) {
+    throw makeAttendanceError('QR code is empty. Please scan a valid attendance QR code.', {
+      code: 'INVALID_QR_EMPTY',
+      status: 400,
+    })
+  }
+
+  if (!value.startsWith('{')) {
+    return { token: value, qrContext: null, rawValue: value }
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw makeAttendanceError('QR code format is invalid. JSON payload could not be parsed.', {
+      code: 'INVALID_QR_FORMAT',
+      status: 400,
+    })
+  }
+
+  const token = String(firstDefined(parsed?.token, parsed?.payload, '')).trim()
+  const sessionId = toNumberOrNull(firstDefined(parsed?.sessionId, parsed?.session_id))
+  const roundCount = toNumberOrNull(firstDefined(parsed?.roundCount, parsed?.activationId, parsed?.round_count))
+  const instructorId = String(firstDefined(parsed?.instructorId, parsed?.instructor_id, '') || '').trim()
+
+  return {
+    token,
+    qrContext: {
+      sessionId,
+      roundCount,
+      instructorId: instructorId || null,
+    },
+    rawValue: value,
+  }
+}
+
+function buildAttendanceQrPayload({ token, sessionId, roundCount, instructorId }) {
+  return JSON.stringify({
+    token,
+    sessionId: sessionId == null ? null : String(sessionId),
+    roundCount: Number.isFinite(Number(roundCount)) ? Number(roundCount) : null,
+    instructorId: String(instructorId ?? '').trim() || null,
+  })
+}
+
+/**
+ * Builds the exact request body expected by the attendance QR scan endpoint.
+ *
+ * @param {string} token
+ * @returns {AttendanceQrScanRequest}
+ */
 export function buildAttendanceQrScanRequest(token) {
   return { token: validateAttendanceQrToken(token) }
 }
@@ -186,10 +245,10 @@ export function resolveAuthenticatedStudentId(explicitStudentId) {
 }
 
 export async function getSessionState({ instructorId, lessonId }) {
-  const normalizedInstructorId = toNumberOrNull(instructorId)
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedLessonId = toNumberOrNull(lessonId)
   if (normalizedInstructorId == null || normalizedLessonId == null) {
-    throw makeAttendanceError('Instructor id and lesson id must be numeric to load attendance sessions.')
+    throw makeAttendanceError('Instructor id (GUID) and lesson id are required to load attendance sessions.')
   }
 
   const sessions = await attendanceRequest(
@@ -226,7 +285,7 @@ export async function getSessionState({ instructorId, lessonId }) {
     round1Completed: Boolean(firstDefined(summary?.round1Completed, summary?.firstRoundCompleted, false)),
     round2Completed: Boolean(firstDefined(summary?.round2Completed, summary?.secondRoundCompleted, false)),
     registeredCount: Number(firstDefined(summary?.presentCount, summary?.registeredCount, summary?.markedCount, 0)) || 0,
-    totalCount: Number(firstDefined(summary?.totalCount, summary?.enrolledCount, 0)) || 0,
+    totalCount: Number(firstDefined(summary?.totalStudents, summary?.totalCount, summary?.enrolledCount, 0)) || 0,
     sessionId: selectedSession.sessionId,
     attendanceSessionId: selectedSession.attendanceSessionId,
     topic: selectedSession.topic || null,
@@ -235,11 +294,181 @@ export async function getSessionState({ instructorId, lessonId }) {
   }
 }
 
+function normalizeLessonSummary(item) {
+  if (!item || typeof item !== 'object') return null
+  const lessonId = toNumberOrNull(firstDefined(item.lessonId, item.id))
+  if (lessonId == null) return null
+
+  return {
+    lessonId,
+    crn: firstDefined(item.crn, item.CRN, item.lessonCrn, ''),
+    code: firstDefined(item.code, item.courseCode, item.lessonCode, ''),
+    title: firstDefined(item.name, item.title, item.courseName, item.lessonName, ''),
+    section: firstDefined(item.section, item.group, ''),
+    instructorId: String(firstDefined(item.instructorId, item.instructor_id, item.instructorUserId, '') || ''),
+    semester: firstDefined(item.semester, ''),
+    academicYear: firstDefined(item.academicYear, item.academic_year, ''),
+  }
+}
+
+/**
+ * Load lessons for an instructor for QR attendance entry page.
+ * Tries instructor-scoped endpoint first; falls back to admin lesson list filtered by instructor id.
+ */
+export async function getInstructorLessons({ instructorId }) {
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
+  if (!normalizedInstructorId) {
+    throw makeAttendanceError('Instructor id (GUID) is required to load lessons.')
+  }
+
+  const headers = getAuthHeaders()
+  const candidates = [
+    `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/lessons`,
+    '/api/admin/lessons',
+  ]
+
+  let lastError = null
+  for (const path of candidates) {
+    try {
+      const data = await attendanceRequest(path, { headers })
+      const rows = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.result)
+            ? data.result
+            : []
+      const normalized = rows.map(normalizeLessonSummary).filter(Boolean)
+      return normalized.filter((x) => String(x.instructorId) === normalizedInstructorId)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError || makeAttendanceError('Could not load instructor lessons.')
+}
+
+function unwrapList(data) {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.items)) return data.items
+  if (Array.isArray(data?.result)) return data.result
+  return []
+}
+
+function normalizeSessionSummary(item) {
+  if (!item || typeof item !== 'object') return null
+  const sessionId = toNumberOrNull(firstDefined(item.sessionId, item.id))
+  if (sessionId == null) return null
+  return {
+    sessionId,
+    startTime: firstDefined(item.startTime, item.start_time, item.startsAt, item.date, ''),
+    endTime: firstDefined(item.endTime, item.end_time, item.endsAt, ''),
+    topic: firstDefined(item.topic, item.name, ''),
+    isActive: Boolean(firstDefined(item.isAttendanceActive, item.isActive, item.active, false)),
+  }
+}
+
+export async function getLessonSessions({ instructorId, lessonId }) {
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
+  const normalizedLessonId = toNumberOrNull(lessonId)
+  if (!normalizedInstructorId || normalizedLessonId == null) {
+    throw makeAttendanceError('Instructor id and lesson id are required to load sessions.')
+  }
+  const data = await attendanceRequest(
+    `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/lessons/${normalizedLessonId}/sessions`,
+    { headers: getAuthHeaders() }
+  )
+  return unwrapList(data).map(normalizeSessionSummary).filter(Boolean)
+}
+
+export async function getSessionStateForSession({ instructorId, lessonId, sessionId }) {
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
+  const normalizedLessonId = toNumberOrNull(lessonId)
+  const normalizedSessionId = toNumberOrNull(sessionId)
+  if (!normalizedInstructorId || normalizedLessonId == null || normalizedSessionId == null) {
+    throw makeAttendanceError('Instructor id, lesson id, and session id are required.')
+  }
+
+  const sessions = await getLessonSessions({
+    instructorId: normalizedInstructorId,
+    lessonId: normalizedLessonId,
+  })
+  const selectedSession = sessions.find((s) => s.sessionId === normalizedSessionId)
+  if (!selectedSession) throw makeAttendanceError('Selected session was not found for this lesson.')
+
+  let summary = null
+  try {
+    summary = await attendanceRequest(
+      `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/sessions/${normalizedSessionId}/attendance/summary`,
+      { headers: getAuthHeaders() }
+    )
+  } catch {
+    summary = null
+  }
+
+  return {
+    valid: true,
+    closed: Boolean(firstDefined(summary?.closed, summary?.isClosed, false)),
+    canActivate: !Boolean(firstDefined(summary?.closed, summary?.isClosed, false)),
+    currentRound: Number(firstDefined(summary?.activeRound, summary?.currentRound, 0)) || 0,
+    round1Completed: Boolean(firstDefined(summary?.round1Completed, summary?.firstRoundCompleted, false)),
+    round2Completed: Boolean(firstDefined(summary?.round2Completed, summary?.secondRoundCompleted, false)),
+    registeredCount: Number(firstDefined(summary?.presentCount, summary?.registeredCount, summary?.markedCount, 0)) || 0,
+    totalCount: Number(firstDefined(summary?.totalStudents, summary?.totalCount, summary?.enrolledCount, 0)) || 0,
+    sessionId: selectedSession.sessionId,
+    attendanceSessionId: selectedSession.sessionId,
+    topic: selectedSession.topic || null,
+    startTime: selectedSession.startTime || null,
+    endTime: selectedSession.endTime || null,
+  }
+}
+
+export async function createLessonSession({ instructorId, lessonId, startAt, endAt, topic }) {
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
+  const normalizedLessonId = toNumberOrNull(lessonId)
+  if (!normalizedInstructorId || normalizedLessonId == null) {
+    throw makeAttendanceError('Instructor id and lesson id are required to create a session.')
+  }
+  if (!startAt || !endAt) {
+    throw makeAttendanceError('startAt and endAt are required to create a session.')
+  }
+
+  const payload = {
+    startTime: startAt,
+    endTime: endAt,
+    ...(topic ? { topic } : {}),
+  }
+
+  const candidates = [
+    `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/lessons/${normalizedLessonId}/sessions`,
+    `/api/admin/lessons/${normalizedLessonId}/sessions`,
+  ]
+
+  let lastError = null
+  for (const path of candidates) {
+    try {
+      const data = await attendanceRequest(path, {
+        method: 'POST',
+        headers: getAuthHeaders(true),
+        body: JSON.stringify(payload),
+      })
+      const summary = normalizeSessionSummary(data?.result ?? data)
+      return summary || { sessionId: toNumberOrNull(data?.id) ?? null, startTime: startAt, endTime: endAt, topic: topic || '' }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError || makeAttendanceError('Could not create session.')
+}
+
+/**
+ * Activate attendance for the current session.
+ */
 export async function startRound({ instructorId, sessionId }) {
-  const normalizedInstructorId = toNumberOrNull(instructorId)
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedSessionId = toNumberOrNull(sessionId)
   if (normalizedInstructorId == null || normalizedSessionId == null) {
-    throw makeAttendanceError('Instructor id and session id are required to start attendance.')
+    throw makeAttendanceError('Instructor id (GUID) and session id are required to start attendance.')
   }
   return attendanceRequest(
     `/api/instructors/${normalizedInstructorId}/sessions/${normalizedSessionId}/attendance/activate`,
@@ -248,10 +477,10 @@ export async function startRound({ instructorId, sessionId }) {
 }
 
 export async function endRound({ instructorId, sessionId }) {
-  const normalizedInstructorId = toNumberOrNull(instructorId)
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedSessionId = toNumberOrNull(sessionId)
   if (normalizedInstructorId == null || normalizedSessionId == null) {
-    throw makeAttendanceError('Instructor id and session id are required to stop attendance.')
+    throw makeAttendanceError('Instructor id (GUID) and session id are required to stop attendance.')
   }
   return attendanceRequest(
     `/api/instructors/${normalizedInstructorId}/sessions/${normalizedSessionId}/attendance/deactivate`,
@@ -259,11 +488,14 @@ export async function endRound({ instructorId, sessionId }) {
   )
 }
 
-export async function getQRPayload({ instructorId, sessionId }) {
-  const normalizedInstructorId = toNumberOrNull(instructorId)
+/**
+ * Fetch the current server-issued QR token for the active attendance session.
+ */
+export async function getQRPayload({ instructorId, sessionId, roundCount }) {
+  const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedSessionId = toNumberOrNull(sessionId)
   if (normalizedInstructorId == null || normalizedSessionId == null) {
-    throw makeAttendanceError('Instructor id and session id are required to generate the QR token.')
+    throw makeAttendanceError('Instructor id (GUID) and session id are required to generate the QR token.')
   }
 
   const data = await attendanceRequest(
@@ -274,10 +506,20 @@ export async function getQRPayload({ instructorId, sessionId }) {
   const token = String(firstDefined(data?.token, data?.payload, data?.qrToken, data?.value, data) || '').trim()
   if (!token) throw makeAttendanceError('Attendance backend returned an empty QR token.')
 
+  const resolvedRoundCount = Number.isFinite(Number(roundCount))
+    ? Number(roundCount)
+    : toNumberOrNull(firstDefined(data?.activationId, data?.roundCount))
+
   return {
-    payload: token,
+    payload: buildAttendanceQrPayload({
+      token,
+      sessionId: normalizedSessionId,
+      roundCount: resolvedRoundCount,
+      instructorId: normalizedInstructorId,
+    }),
     token,
     expiresAt: firstDefined(data?.expiresAt, data?.expires_at, null),
+    activationId: toNumberOrNull(firstDefined(data?.activationId, data?.roundCount)),
     data,
   }
 }
@@ -292,14 +534,25 @@ export async function scanAttendanceQrCode({ studentId, scannedToken }) {
     })
   }
 
-  const requestBody = buildAttendanceQrScanRequest(scannedToken)
+  const parsedScan = parseAttendanceQrPayload(scannedToken)
+  const requestBody = buildAttendanceQrScanRequest(parsedScan.token)
+  const qrContext =
+    parsedScan.qrContext &&
+    Object.values(parsedScan.qrContext).some((value) => value !== null && value !== undefined && value !== '')
+      ? parsedScan.qrContext
+      : null
   const endpoint = `${ATTENDANCE_API_BASE}/api/students/${encodeURIComponent(resolvedStudentId)}/attendance/qr/scan`
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({
+      studentId: resolvedStudentId,
       ...requestBody,
-      deviceInfo: typeof navigator !== 'undefined' ? navigator.userAgent : 'FrontWeb attendance client',
+      ...(qrContext ? { qrContext } : {}),
+      deviceInfo:
+        typeof navigator !== 'undefined'
+          ? navigator.userAgent
+          : 'FrontWeb attendance client',
     }),
   })
 

@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRegisteredEvents } from '../contexts/RegisteredEventsContext'
-import { getEventById } from '../data/clubEventsData'
+import { fetchEvent, fetchMyEventRegistrations, registerForEvent, fetchClub } from '../api/clubApi'
+import { mapEventFromApi, mapClubFromApi } from '../api/clubMappers'
 import './EventDetail.css'
 
 const IconBack = () => (
@@ -52,14 +53,97 @@ const EventDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const { registerEvent, isRegistered } = useRegisteredEvents()
-  const event = getEventById(id)
-  const registered = isRegistered(id)
+  const [event, setEvent] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [apiRegistered, setApiRegistered] = useState(false)
+  const [registering, setRegistering] = useState(false)
+  const [hostClub, setHostClub] = useState(null)
+  const [hostClubLoading, setHostClubLoading] = useState(false)
 
-  if (!event) {
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!id) return
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const [rawEv, rawReg] = await Promise.all([
+          fetchEvent(id),
+          fetchMyEventRegistrations().catch(() => null),
+        ])
+        if (cancelled) return
+        setEvent(mapEventFromApi(rawEv))
+        const items = rawReg?.items ?? rawReg ?? []
+        const list = Array.isArray(items) ? items : []
+        const found = list.some((r) => String(r.eventId ?? r.event?.id ?? r.id) === String(id))
+        setApiRegistered(found)
+      } catch (e) {
+        if (!cancelled) {
+          setEvent(null)
+          setLoadError(e?.message || 'Failed to load event.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
+
+  useEffect(() => {
+    if (!event) {
+      setHostClub(null)
+      return
+    }
+    const raw = event.raw && typeof event.raw === 'object' ? event.raw : {}
+    const clubId = event.clubId ?? raw.clubId ?? raw.club?.id
+    if (clubId == null || clubId === '') {
+      setHostClub(null)
+      return
+    }
+    let cancelled = false
+    setHostClubLoading(true)
+    ;(async () => {
+      try {
+        const rawClub = await fetchClub(clubId)
+        if (cancelled) return
+        setHostClub(mapClubFromApi(rawClub))
+      } catch {
+        if (!cancelled) setHostClub(null)
+      } finally {
+        if (!cancelled) setHostClubLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [event])
+
+  const registered = apiRegistered || isRegistered(id)
+
+  const totalSlots = useMemo(() => {
+    if (!event) return 150
+    const cap = Number(event.seatLimit)
+    return Number.isFinite(cap) && cap > 0 ? cap : 150
+  }, [event])
+
+  const remainingSlots = useMemo(() => Math.max(0, Math.floor(totalSlots * 0.72)), [totalSlots])
+
+  if (loading) {
     return (
       <div className="ed-page">
         <div className="ed-not-found">
-          <p>Event not found.</p>
+          <p>Loading event…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError || !event) {
+    return (
+      <div className="ed-page">
+        <div className="ed-not-found">
+          <p>{loadError || 'Event not found.'}</p>
           <button type="button" className="ed-btn ed-btn--primary" onClick={() => navigate('/clubs/events')}>
             Back to Events
           </button>
@@ -70,14 +154,22 @@ const EventDetail = () => {
 
   const handleBack = () => navigate('/clubs/events')
 
-  const handleRegister = () => {
-    registerEvent(id)
-    navigate(`/clubs/events/${id}/ticket`, { state: { fromRegistration: true } })
+  const handleRegister = async () => {
+    if (registering) return
+    setRegistering(true)
+    try {
+      await registerForEvent(id)
+      registerEvent(id)
+      setApiRegistered(true)
+      navigate(`/clubs/events/${id}/ticket`, { state: { fromRegistration: true } })
+    } catch (e) {
+      alert(e?.message || 'Could not register.')
+    } finally {
+      setRegistering(false)
+    }
   }
 
   const scheduleTime = formatTimeRange(event.time, event.endTime)
-  const remainingSlots = 42
-  const totalSlots = 150
 
   return (
     <div className="ed-page">
@@ -180,9 +272,9 @@ const EventDetail = () => {
               </button>
             ) : (
               <>
-                <button type="button" className="ed-btn ed-btn--primary ed-btn--full" onClick={handleRegister}>
+                <button type="button" className="ed-btn ed-btn--primary ed-btn--full" onClick={handleRegister} disabled={registering}>
                   <IconCalendar />
-                  Register for Event
+                  {registering ? 'Registering…' : 'Register for Event'}
                 </button>
                 <button type="button" className="ed-btn ed-btn--secondary ed-btn--full">
                   Add to Calendar
@@ -194,11 +286,32 @@ const EventDetail = () => {
           <div className="ed-sidebar-card">
             <span className="ed-sidebar-label">Hosted by</span>
             <div className="ed-host">
-              <div className="ed-host-avatar">{event.clubName.charAt(0)}</div>
+              <div
+                className="ed-host-avatar"
+                style={
+                  hostClub?.image
+                    ? { backgroundImage: `url(${hostClub.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                    : undefined
+                }
+              >
+                {!hostClub?.image ? (hostClub?.name || event.clubName || 'C').charAt(0) : null}
+              </div>
               <div>
-                <strong>{event.clubName}</strong>
-                <span>2,400 members</span>
-                <span>Established 2015</span>
+                <strong>{hostClub?.name || event.clubName || 'Club'}</strong>
+                <span>
+                  {hostClubLoading
+                    ? 'Loading club…'
+                    : hostClub
+                      ? `${Number(hostClub.members) || 0} members`
+                      : '—'}
+                </span>
+                <span>
+                  {hostClub?.establishedYear
+                    ? `Established ${hostClub.establishedYear}`
+                    : hostClub?.raw?.foundedAt
+                      ? `Established ${String(hostClub.raw.foundedAt).slice(0, 4)}`
+                      : '—'}
+                </span>
               </div>
             </div>
           </div>

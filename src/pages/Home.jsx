@@ -107,7 +107,7 @@ const Home = () => {
   const qrAttendanceButtons = [
     {
       text: 'QR Attendance',
-      onClick: () => navigate('/attendance/demo')
+      onClick: () => navigate('/attendance', { state: { fromHome: true } })
     }
   ]
 

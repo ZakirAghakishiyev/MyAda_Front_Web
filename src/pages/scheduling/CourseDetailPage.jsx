@@ -6,8 +6,6 @@ import { MOCK_INSTRUCTORS, instructorNameById } from '../../data/mockInstructors
 import '../SchedulingPage.css'
 import './CoursePage.css'
 
-const UNASSIGNED_ROOM_ID = 0
-
 const SEMESTERS = [
   { value: 'Fall', label: 'Fall' },
   { value: 'Spring', label: 'Spring' },
@@ -29,6 +27,7 @@ function toInt(value) {
 }
 
 const emptyLessonForm = () => ({
+  roomId: '1',
   academicYear: String(new Date().getFullYear()),
   semester: 'Fall',
   maxCapacity: '',
@@ -197,12 +196,17 @@ const CourseDetailPage = () => {
     setLessonMessage({ type: '', text: '' })
     if (courseId == null) return
 
-    const instructorId = toInt(lessonInstructorId)
+    const instructorId = lessonInstructorId.trim()
+    const roomId = toInt(lessonForm.roomId)
     const academicYear = toInt(lessonForm.academicYear)
     const maxCapacity = toInt(lessonForm.maxCapacity)
 
-    if (instructorId == null) {
+    if (!instructorId) {
       setLessonMessage({ type: 'error', text: 'Select an instructor from the list.' })
+      return
+    }
+    if (roomId == null || roomId <= 0) {
+      setLessonMessage({ type: 'error', text: 'roomId must be a positive integer.' })
       return
     }
     if (academicYear == null || academicYear < 2000 || academicYear > 2100) {
@@ -217,7 +221,7 @@ const CourseDetailPage = () => {
     const payload = {
       courseId,
       instructorId,
-      roomId: UNASSIGNED_ROOM_ID,
+      roomId,
       academicYear,
       semester: lessonForm.semester,
       maxCapacity,
@@ -345,7 +349,7 @@ const CourseDetailPage = () => {
               </div>
 
               <div className="course-field course-field-combobox" ref={instructorComboboxRef}>
-                <span id="detail-instructor-label">Instructor</span>
+                <span id="detail-instructor-label">Instructor id (GUID)</span>
                 <div className="instructor-combobox">
                   <input
                     type="text"
@@ -415,6 +419,10 @@ const CourseDetailPage = () => {
               <label className="course-field">
                 <span>Max capacity</span>
                 <input type="number" min={0} value={lessonForm.maxCapacity} onChange={onChangeLesson('maxCapacity')} required />
+              </label>
+              <label className="course-field">
+                <span>Room id</span>
+                <input type="number" min={1} value={lessonForm.roomId} onChange={onChangeLesson('roomId')} required />
               </label>
 
               {lessonMessage.text ? (

@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { EMPLOYEE_POSITIONS } from '../../data/clubAdminData'
+import { createClubAdminVacancy, fetchClubAdminPositions } from '../../api/clubApi'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconCheck = () => (
@@ -29,20 +30,68 @@ const IconHelp = () => (
 )
 
 const ClubAdminNewVacancy = () => {
+  const clubId = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
   const navigate = useNavigate()
+  const [positions, setPositions] = useState([])
+  const [loadingPositions, setLoadingPositions] = useState(true)
   const [positionId, setPositionId] = useState('')
+  const [customTitle, setCustomTitle] = useState('')
   const [deadline, setDeadline] = useState('')
   const [description, setDescription] = useState('')
 
+  const loadPositions = useCallback(async () => {
+    setLoadingPositions(true)
+    try {
+      const res = await fetchClubAdminPositions(clubId)
+      const items = res?.items ?? res ?? []
+      setPositions(
+        (Array.isArray(items) ? items : []).map((p, index) => ({
+          id: String(p.id ?? p.positionId ?? `p-${index}`),
+          title: String(p.name ?? p.title ?? p.positionTitle ?? 'Position'),
+          requirements: Array.isArray(p.requirements) ? p.requirements : [],
+        }))
+      )
+    } catch {
+      setPositions([])
+    } finally {
+      setLoadingPositions(false)
+    }
+  }, [clubId])
+
+  useEffect(() => {
+    loadPositions()
+  }, [loadPositions])
+
   const selectedPosition = useMemo(
-    () => EMPLOYEE_POSITIONS.find((p) => String(p.id) === String(positionId)) || null,
-    [positionId]
+    () => positions.find((p) => String(p.id) === String(positionId)) || null,
+    [positions, positionId]
   )
 
-  const handlePublish = (e) => {
+  const handlePublish = async (e) => {
     e.preventDefault()
-    if (!positionId) return
-    navigate('/club-admin')
+    const titleText = (selectedPosition?.title || customTitle.trim()).trim()
+    if (!titleText) return
+    const desc = description.trim() || '—'
+    const body = {
+      description: desc,
+      publish: true,
+    }
+    if (titleText) body.title = titleText
+    if (positionId) {
+      const n = Number(positionId)
+      if (!Number.isNaN(n) && n > 0) body.positionId = n
+    }
+    if (deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+      body.applicationDeadline = `${deadline}T23:59:59`
+    }
+    try {
+      await createClubAdminVacancy(clubId, body)
+    } catch (err) {
+      alert(err?.message || 'Could not publish vacancy.')
+      return
+    }
+    navigate(`/club-admin/vacancies${clubQs}`)
   }
 
   return (
@@ -53,9 +102,9 @@ const ClubAdminNewVacancy = () => {
 
       <div className="club-admin-content">
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 20, paddingLeft: 24 }}>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
-          <Link to="/club-admin/applications" style={{ color: '#64748b' }}>Vacancies</Link>
+          <Link to={`/club-admin/vacancies${clubQs}`} style={{ color: '#64748b' }}>Vacancies</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>New Vacancy</span>
         </nav>
@@ -69,22 +118,32 @@ const ClubAdminNewVacancy = () => {
             <div style={{ flex: 1 }}>
               <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Basic Information</h3>
               <div className="club-admin-field">
-                <label>Position</label>
+                <label>Position (optional)</label>
                 <select
                   value={positionId}
                   onChange={(e) => setPositionId(e.target.value)}
                 >
-                  <option value="">Select a position</option>
-                  {EMPLOYEE_POSITIONS.map((p) => (
+                  <option value="">Select a position or enter title below</option>
+                  {positions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
                     </option>
                   ))}
                 </select>
+                {loadingPositions ? <small className="club-admin-char-limit">Loading positions...</small> : null}
+              </div>
+              <div className="club-admin-field">
+                <label>Vacancy title (if no position selected)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Design Lead"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                />
               </div>
               <div className="club-admin-form-row">
                 <div className="club-admin-field">
-                  <label>Application Deadline</label>
+                  <label>Application deadline (local only)</label>
                   <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
                 </div>
               </div>
@@ -126,7 +185,11 @@ const ClubAdminNewVacancy = () => {
             <span style={{ fontSize: 13, color: '#64748b' }}>Draft saved 2 mins ago</span>
             <div style={{ display: 'flex', gap: 10 }}>
               {/* <button type="button" className="club-admin-btn-secondary"><IconEye /> Preview</button> */}
-              <button type="submit" className="club-admin-btn-primary" disabled={!positionId}>
+              <button
+                type="submit"
+                className="club-admin-btn-primary"
+                disabled={loadingPositions || !(selectedPosition?.title || customTitle.trim())}
+              >
                 <IconUpload /> Publish Vacancy
               </button>
             </div>

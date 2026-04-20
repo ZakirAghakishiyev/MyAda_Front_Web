@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react'
-import { mockClubEmployees as initialEmployees, EMPLOYEE_POSITIONS as employeePositionsList } from '../../data/clubAdminData'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import {
+  fetchClubAdminEmployees,
+  fetchClubAdminPositions,
+  patchClubAdminEmployeesPositions,
+  deleteClubAdminEmployee,
+} from '../../api/clubApi'
+import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
-
-const mockClubEmployees = Array.isArray(initialEmployees) ? initialEmployees : []
-const EMPLOYEE_POSITION_TITLES = Array.isArray(employeePositionsList)
-  ? employeePositionsList.map((p) => (typeof p === 'string' ? p : p.title))
-  : ['Marketing Coordinator', 'Event Coordinator', 'Lead Designer', 'Content Writer', 'Treasurer', 'Outreach Lead']
 
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -15,11 +16,65 @@ const IconTrash = () => (
 )
 
 const ClubAdminEmployees = () => {
-  const [employees, setEmployees] = useState(mockClubEmployees)
+  const clubId = useClubAdminClubId()
+  const [employees, setEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [pendingChanges, setPendingChanges] = useState({})
+  const [positionOptions, setPositionOptions] = useState([])
   const [isSaving, setIsSaving] = useState(false)
   const [removeConfirm, setRemoveConfirm] = useState(null)
+
+  const loadEmployees = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const [res, posRes] = await Promise.all([
+        fetchClubAdminEmployees(clubId),
+        fetchClubAdminPositions(clubId).catch(() => ({ items: [] })),
+      ])
+      const items = res?.items ?? res ?? []
+      const posItems = posRes?.items ?? posRes ?? []
+      const positions = (Array.isArray(posItems) ? posItems : []).map((p, index) => ({
+        id: String(p.id ?? p.positionId ?? `pos-${index}`),
+        name: String(p.name ?? p.title ?? 'Position'),
+      }))
+      setPositionOptions(positions)
+      setEmployees(
+        (Array.isArray(items) ? items : []).map((e, index) => {
+          const positionId = String(
+            e.positionId ?? e.position?.id ?? positions[0]?.id ?? ''
+          )
+          const positionName =
+            (typeof e.position === 'string' ? e.position : null) ??
+            e.position?.name ??
+            positions.find((p) => p.id === positionId)?.name ??
+            '—'
+          return {
+            id: String(e.id ?? e.employeeId ?? `e-${index}`),
+            name: e.name ?? e.firstName ?? 'Employee',
+            surname: e.surname ?? e.lastName ?? '',
+            email: e.email ?? '',
+            positionId,
+            positionName,
+            department: e.department ?? '',
+            age: e.age,
+            joinedDate: e.joinedDate ?? e.joinedAt ?? '—',
+          }
+        })
+      )
+    } catch (e) {
+      setEmployees([])
+      setLoadError(e?.message || 'Could not load employees.')
+    } finally {
+      setLoading(false)
+    }
+  }, [clubId])
+
+  useEffect(() => {
+    loadEmployees()
+  }, [loadEmployees])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -28,35 +83,32 @@ const ClubAdminEmployees = () => {
       (e) =>
         `${e.name} ${e.surname}`.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q) ||
-        (e.position && e.position.toLowerCase().includes(q)) ||
+        (e.positionName && e.positionName.toLowerCase().includes(q)) ||
         (e.department && e.department.toLowerCase().includes(q))
     )
   }, [employees, search])
 
-  const handleUpdatePosition = (id, newPosition) => {
-    setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, position: newPosition } : e)))
+  const handleUpdatePosition = (id, newPositionId) => {
+    const name = positionOptions.find((p) => p.id === newPositionId)?.name ?? '—'
+    setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, positionId: newPositionId, positionName: name } : e)))
     setPendingChanges((prev) => ({
       ...prev,
-      [id]: newPosition
+      [id]: newPositionId
     }))
   }
 
   const handleConfirmPositionChanges = async () => {
-    const changes = Object.entries(pendingChanges).map(([id, position]) => ({
-      id: Number(id),
-      position
+    const changes = Object.entries(pendingChanges).map(([employeeId, positionId]) => ({
+      employeeId: String(employeeId),
+      positionId: String(positionId),
     }))
     if (!changes.length) return
     setIsSaving(true)
     try {
-      await fetch('/api/club-admin/employees/positions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ changes })
-      })
+      await patchClubAdminEmployeesPositions(clubId, { changes })
       setPendingChanges({})
     } catch (error) {
-      console.error('Failed to update employee positions', error)
+      alert(error?.message || 'Failed to update employee positions.')
     } finally {
       setIsSaving(false)
     }
@@ -66,8 +118,14 @@ const ClubAdminEmployees = () => {
     setRemoveConfirm(id)
   }
 
-  const confirmRemove = () => {
+  const confirmRemove = async () => {
     if (removeConfirm != null) {
+      try {
+        await deleteClubAdminEmployee(clubId, removeConfirm)
+      } catch (e) {
+        alert(e?.message || 'Could not remove employee.')
+        return
+      }
       setEmployees((prev) => prev.filter((e) => e.id !== removeConfirm))
       setRemoveConfirm(null)
     }
@@ -90,6 +148,9 @@ const ClubAdminEmployees = () => {
       </header>
 
       <div className="club-admin-content">
+        {loadError ? (
+          <p style={{ margin: '0 24px 20px', fontSize: 14, color: '#b91c1c' }}>{loadError}</p>
+        ) : null}
         <p style={{ margin: '0 24px 20px', fontSize: 14, color: '#64748b' }}>
           Manage club employees (filled roles). Update position or remove.
         </p>
@@ -107,6 +168,11 @@ const ClubAdminEmployees = () => {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="club-admin-table-empty">Loading employees...</td>
+                </tr>
+              ) : null}
               {filtered.map((e) => (
                 <tr key={e.id}>
                   <td>
@@ -120,16 +186,20 @@ const ClubAdminEmployees = () => {
                   </td>
                   <td>{e.age != null ? e.age : '—'}</td>
                   <td>
-                    <select
-                      className="club-admin-select-inline"
-                      value={e.position ?? ''}
-                      onChange={(ev) => handleUpdatePosition(e.id, ev.target.value)}
-                      aria-label={`Update position for ${e.name} ${e.surname}`}
-                    >
-                      {EMPLOYEE_POSITION_TITLES.map((pos) => (
-                        <option key={pos} value={pos}>{pos}</option>
-                      ))}
-                    </select>
+                    {positionOptions.length > 0 ? (
+                      <select
+                        className="club-admin-select-inline"
+                        value={e.positionId ?? ''}
+                        onChange={(ev) => handleUpdatePosition(e.id, ev.target.value)}
+                        aria-label={`Update position for ${e.name} ${e.surname}`}
+                      >
+                        {positionOptions.map((pos) => (
+                          <option key={pos.id} value={pos.id}>{pos.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ fontSize: 13, color: '#64748b' }}>{e.positionName}</span>
+                    )}
                   </td>
                   <td>{e.joinedDate ?? '—'}</td>
                   <td>
@@ -147,7 +217,7 @@ const ClubAdminEmployees = () => {
             </tbody>
           </table>
           </div>
-          {filtered.length === 0 && (
+          {!loading && filtered.length === 0 && (
             <p className="club-admin-table-empty">No employees found.</p>
           )}
           {Object.keys(pendingChanges).length > 0 && (

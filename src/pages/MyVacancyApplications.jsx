@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import {
+  fetchMyVacancyApplications,
+  fetchApplicationInterviewSlots,
+  selectInterviewSlot,
+} from '../api/clubApi'
+import {
+  mapMeVacancyStatusToDisplay,
+  mapInterviewSlotForStudent,
+  normalizeInterviewSlotsResponse,
+} from '../api/clubApplicationMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './MyVacancyApplications.css'
-
-const IconBack = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
 
 const IconBriefcase = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -60,73 +64,18 @@ const IconBell = () => (
   </svg>
 )
 
-const MOCK_APPLICATIONS = [
-  {
-    id: 'APP-001',
-    position: 'Media & Content Creator',
-    clubName: 'Campus Media Club',
-    status: 'Under Review',
-    appliedOn: '2024-03-01'
-  },
-  {
-    id: 'APP-002',
-    position: 'Finance Officer',
-    clubName: 'Business Leaders Society',
-    status: 'Submitted',
-    appliedOn: '2024-02-25'
-  },
-  {
-    id: 'APP-003',
-    position: 'Events Coordinator',
-    clubName: 'Student Activities Board',
-    status: 'Accepted',
-    appliedOn: '2024-02-10'
-  },
-  {
-    id: 'APP-004',
-    position: 'Marketing Coordinator',
-    clubName: 'Campus Media Club',
-    status: 'Called for Interview',
-    appliedOn: '2024-03-03'
-  },
-  {
-    id: 'APP-005',
-    position: 'Marketing Coordinator',
-    clubName: 'Campus Media Club',
-    status: 'Called for Interview',
-    appliedOn: '2024-03-02'
+function mapMeRowToApplication(row, index) {
+  const submitted = row.submittedAt ? String(row.submittedAt) : ''
+  const appliedOn = submitted ? submitted.slice(0, 10) : ''
+  return {
+    id: String(row.applicationId ?? row.id ?? `app-${index}`),
+    vacancyId: row.vacancyId != null ? String(row.vacancyId) : '',
+    position: String(row.vacancyTitle ?? row.title ?? row.position ?? 'Role'),
+    clubName: String(row.clubName ?? '—'),
+    status: mapMeVacancyStatusToDisplay(row.status),
+    appliedOn,
   }
-]
-
-const MOCK_INTERVIEW_SLOTS = [
-  {
-    id: 'SLOT-1',
-    clubName: 'Campus Media Club',
-    position: 'Marketing Coordinator',
-    date: '2026-04-20',
-    startTime: '15:00',
-    endTime: '15:20',
-    bookedByApplicationId: null
-  },
-  {
-    id: 'SLOT-2',
-    clubName: 'Campus Media Club',
-    position: 'Marketing Coordinator',
-    date: '2026-04-20',
-    startTime: '15:20',
-    endTime: '15:40',
-    bookedByApplicationId: 'APP-999'
-  },
-  {
-    id: 'SLOT-3',
-    clubName: 'Campus Media Club',
-    position: 'Marketing Coordinator',
-    date: '2026-04-20',
-    startTime: '15:40',
-    endTime: '16:00',
-    bookedByApplicationId: null
-  }
-]
+}
 
 const formatDate = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00')
@@ -139,6 +88,7 @@ const statusPillClass = (status) => {
   if (status === 'Called for Interview') return 'mva-status-pill--interview'
   if (status === 'Under Review') return 'mva-status-pill--review'
   if (status === 'Submitted') return 'mva-status-pill--submitted'
+  if (status === 'Declined') return 'mva-status-pill--other'
   return 'mva-status-pill--other'
 }
 
@@ -147,17 +97,73 @@ const statusIcon = (status) => {
   if (status === 'Interview Scheduled' || status === 'Called for Interview') return <IconCalendar />
   if (status === 'Under Review') return <IconHourglass />
   if (status === 'Submitted') return <IconClock />
+  if (status === 'Declined') return <IconX />
   return <IconX />
 }
 
 const MyVacancyApplications = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const [applications, setApplications] = useState(MOCK_APPLICATIONS)
-  const [slots, setSlots] = useState(MOCK_INTERVIEW_SLOTS)
+  const [applications, setApplications] = useState([])
+  const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState('')
+  const [modalSlots, setModalSlots] = useState([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
+  const [choosingSlot, setChoosingSlot] = useState(false)
   const [selectedAppId, setSelectedAppId] = useState(null)
   const [selectedInterviewDate, setSelectedInterviewDate] = useState('')
   const [draftSlotId, setDraftSlotId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setListLoading(true)
+      setListError('')
+      try {
+        const raw = await fetchMyVacancyApplications({ page: 1, limit: 50 })
+        const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : []
+        if (cancelled) return
+        setApplications(items.map(mapMeRowToApplication))
+      } catch (e) {
+        if (!cancelled) {
+          setApplications([])
+          setListError(e?.message || 'Could not load your applications.')
+        }
+      } finally {
+        if (!cancelled) setListLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedAppId) {
+      setModalSlots([])
+      setSlotsError('')
+      return
+    }
+    let cancelled = false
+    setSlotsLoading(true)
+    setSlotsError('')
+    setDraftSlotId(null)
+    ;(async () => {
+      try {
+        const raw = await fetchApplicationInterviewSlots(selectedAppId)
+        const list = normalizeInterviewSlotsResponse(raw)
+        if (cancelled) return
+        setModalSlots(list.map((s, i) => mapInterviewSlotForStudent(s, i)).filter(Boolean))
+      } catch (e) {
+        if (!cancelled) {
+          setModalSlots([])
+          setSlotsError(e?.message || 'Could not load interview slots.')
+        }
+      } finally {
+        if (!cancelled) setSlotsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedAppId])
 
   const selectedApp = useMemo(
     () => applications.find((app) => app.id === selectedAppId) || null,
@@ -166,12 +172,8 @@ const MyVacancyApplications = () => {
 
   const availableSlotsForSelected = useMemo(() => {
     if (!selectedApp) return []
-    return slots.filter(
-      (slot) =>
-        slot.clubName === selectedApp.clubName &&
-        slot.position === selectedApp.position
-    )
-  }, [selectedApp, slots])
+    return modalSlots
+  }, [selectedApp, modalSlots])
 
   const availableDatesForSelected = useMemo(
     () => [...new Set(availableSlotsForSelected.map((slot) => slot.date))].sort(),
@@ -198,7 +200,7 @@ const MyVacancyApplications = () => {
   }, [selectedApp, availableDatesForSelected, selectedInterviewDate])
 
   const handleOpenInterviewPicker = (app) => {
-    if (app.status !== 'Called for Interview' && app.status !== 'Interview Scheduled') return
+    if (app.status !== 'Called for Interview') return
     setSelectedAppId(app.id)
   }
 
@@ -206,8 +208,7 @@ const MyVacancyApplications = () => {
     if (!location.state?.openInterviewPicker) return
     if (selectedAppId) return
 
-    const target = applications.find((app) => app.status === 'Called for Interview') ||
-      applications.find((app) => app.status === 'Interview Scheduled')
+    const target = applications.find((app) => app.status === 'Called for Interview')
 
     if (target) {
       setSelectedAppId(target.id)
@@ -220,39 +221,25 @@ const MyVacancyApplications = () => {
     setDraftSlotId(null)
   }
 
-  const handleChooseSlot = (slotId) => {
-    if (!selectedApp) return
-
-    setSlots((prevSlots) => {
-      const target = prevSlots.find((slot) => slot.id === slotId)
-      if (!target || (target.bookedByApplicationId && target.bookedByApplicationId !== selectedApp.id)) {
-        return prevSlots
-      }
-      return prevSlots.map((slot) => {
-        if (slot.id === slotId) return { ...slot, bookedByApplicationId: selectedApp.id }
-        if (slot.bookedByApplicationId === selectedApp.id) return { ...slot, bookedByApplicationId: null }
-        return slot
-      })
-    })
-
-    setApplications((prev) =>
-      prev.map((app) =>
-        app.id === selectedApp.id
-          ? { ...app, status: 'Interview Scheduled', interviewSlotId: slotId }
-          : app
+  const handleChooseSlot = async (slotId) => {
+    if (!selectedApp || !slotId) return
+    setChoosingSlot(true)
+    setSlotsError('')
+    try {
+      await selectInterviewSlot(selectedApp.id, slotId)
+      setApplications((prev) =>
+        prev.map((app) =>
+          app.id === selectedApp.id ? { ...app, status: 'Interview Scheduled' } : app
+        )
       )
-    )
-    setSelectedAppId(null)
-    setDraftSlotId(null)
-  }
-
-  useEffect(() => {
-    if (!selectedApp) {
+      setSelectedAppId(null)
       setDraftSlotId(null)
-      return
+    } catch (e) {
+      setSlotsError(e?.message || 'Could not reserve this slot.')
+    } finally {
+      setChoosingSlot(false)
     }
-    setDraftSlotId(selectedApp.interviewSlotId || null)
-  }, [selectedApp])
+  }
 
   return (
     <div className="mva-page">
@@ -323,15 +310,24 @@ const MyVacancyApplications = () => {
           Track the status of the club vacancies you&apos;ve applied to across campus.
         </p>
 
+        {listError && (
+          <p className="mva-empty" role="alert" style={{ marginBottom: 12 }}>
+            {listError}
+          </p>
+        )}
+        {listLoading && (
+          <p className="mva-empty">Loading your applications…</p>
+        )}
+
         <div className="mva-list">
-          {applications.map((app) => (
+          {!listLoading && applications.map((app) => (
             <article
               key={app.id}
-              className={`mva-card ${(app.status === 'Called for Interview' || app.status === 'Interview Scheduled') ? 'mva-card--clickable' : ''}`}
+              className={`mva-card ${app.status === 'Called for Interview' ? 'mva-card--clickable' : ''}`}
               onClick={() => handleOpenInterviewPicker(app)}
               onKeyDown={(e) => e.key === 'Enter' && handleOpenInterviewPicker(app)}
-              role={(app.status === 'Called for Interview' || app.status === 'Interview Scheduled') ? 'button' : undefined}
-              tabIndex={(app.status === 'Called for Interview' || app.status === 'Interview Scheduled') ? 0 : undefined}
+              role={app.status === 'Called for Interview' ? 'button' : undefined}
+              tabIndex={app.status === 'Called for Interview' ? 0 : undefined}
             >
               <div className="mva-card-icon">
                 <IconBriefcase />
@@ -348,18 +344,21 @@ const MyVacancyApplications = () => {
                 <div className="mva-card-meta">
                   <span>
                     <IconClock />
-                    Applied on {formatDate(app.appliedOn)}
+                    Applied on {app.appliedOn ? formatDate(app.appliedOn) : '—'}
                   </span>
                   <span className="mva-card-id">Application ID: {app.id}</span>
                   {app.status === 'Called for Interview' && (
                     <span className="mva-card-link">Click to choose interview slot</span>
+                  )}
+                  {app.status === 'Interview Scheduled' && (
+                    <span className="mva-card-link">Interview time confirmed</span>
                   )}
                 </div>
               </div>
             </article>
           ))}
 
-          {applications.length === 0 && (
+          {!listLoading && applications.length === 0 && !listError && (
             <p className="mva-empty">
               You haven&apos;t applied to any club vacancies yet. Start by browsing open roles.
             </p>
@@ -377,7 +376,13 @@ const MyVacancyApplications = () => {
             <p className="mva-modal-subtitle">
               {selectedApp.position} at {selectedApp.clubName}
             </p>
-            {availableDatesForSelected.length > 0 && (
+            {slotsError && (
+              <p className="mva-empty" role="alert" style={{ marginBottom: 8 }}>{slotsError}</p>
+            )}
+            {slotsLoading && (
+              <p className="mva-empty">Loading available slots…</p>
+            )}
+            {!slotsLoading && availableDatesForSelected.length > 0 && (
               <div className="mva-date-pills">
                 {availableDatesForSelected.map((date) => (
                   <button
@@ -392,11 +397,11 @@ const MyVacancyApplications = () => {
               </div>
             )}
             <div className="mva-slot-list">
-              {availableSlotsForSelected.length === 0 && (
+              {!slotsLoading && availableSlotsForSelected.length === 0 && !slotsError && (
                 <p className="mva-empty">No interview slots have been published by admin yet.</p>
               )}
-              {visibleSlots.map((slot) => {
-                const takenByAnother = Boolean(slot.bookedByApplicationId && slot.bookedByApplicationId !== selectedApp.id)
+              {!slotsLoading && visibleSlots.map((slot) => {
+                const takenByAnother = Boolean(slot.takenByAnother)
                 const selectedInDraft = draftSlotId === slot.id
                 return (
                   <div
@@ -429,10 +434,10 @@ const MyVacancyApplications = () => {
               <button
                 type="button"
                 className="mva-btn mva-btn--primary"
-                disabled={!draftSlotId}
+                disabled={!draftSlotId || choosingSlot || slotsLoading}
                 onClick={() => draftSlotId && handleChooseSlot(draftSlotId)}
               >
-                Choose
+                {choosingSlot ? 'Saving…' : 'Choose'}
               </button>
             </div>
           </div>

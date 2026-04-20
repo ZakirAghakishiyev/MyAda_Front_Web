@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getVacancyById } from '../data/clubVacanciesData'
+import { fetchVacancy, submitVacancyApplication } from '../api/clubApi'
+import { mapVacancyFromApi } from '../api/clubMappers'
 import './ApplyVacancy.css'
 
 const IconBack = () => (
@@ -39,27 +40,72 @@ const IconTrophy = () => (
   </svg>
 )
 
-const MIN_WORDS = 100
+function clubApplyErrorMessage(err) {
+  const b = err?.body
+  if (typeof b === 'string') return b
+  if (b && typeof b === 'object') {
+    if (b.message) return String(b.message)
+    if (b.title) return String(b.title)
+    if (b.detail) return String(b.detail)
+    if (b.errors && typeof b.errors === 'object') {
+      const vals = Object.values(b.errors).flat().filter(Boolean)
+      if (vals.length) return String(vals[0])
+    }
+  }
+  return err?.message || 'Application failed.'
+}
 
 const ApplyVacancy = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const vacancy = getVacancyById(id)
+  const [vacancy, setVacancy] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const [purpose, setPurpose] = useState('')
   const [cvFile, setCvFile] = useState(null)
   const [dragOver, setDragOver] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
-  const wordCount = purpose.trim() ? purpose.trim().split(/\s+/).length : 0
-  const purposeValid = wordCount >= MIN_WORDS
-  const canSubmit = purposeValid && cvFile
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!id) return
+      try {
+        const raw = await fetchVacancy(id)
+        if (!cancelled) setVacancy(mapVacancyFromApi(raw))
+      } catch (e) {
+        if (!cancelled) {
+          setVacancy(null)
+          setLoadError(e?.message || 'Could not load vacancy.')
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
+
+  const purposeTrimmed = purpose.trim()
+  const purposeValid = purposeTrimmed.length > 0
+  const canSubmit = purposeValid && !submitting
 
   const handleBack = () => navigate(-1)
   const handleBackToRole = () => navigate(`/clubs/vacancies/${id}`)
 
-  const handleSubmit = () => {
-    if (!canSubmit) return
-    navigate(-1)
+  const handleSubmit = async () => {
+    if (!canSubmit || !id) return
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      const fd = new FormData()
+      fd.append('purposeOfApplication', purposeTrimmed)
+      if (cvFile) fd.append('cvFile', cvFile)
+      await submitVacancyApplication(id, fd)
+      navigate(`/clubs/vacancies/${id}`)
+    } catch (e) {
+      setSubmitError(clubApplyErrorMessage(e))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleDrop = (e) => {
@@ -76,11 +122,11 @@ const ApplyVacancy = () => {
 
   const handleDragLeave = () => setDragOver(false)
 
-  if (!vacancy) {
+  if (loadError || !vacancy) {
     return (
       <div className="apply-vacancy-overlay" onClick={() => navigate(-1)}>
         <div className="apply-vacancy-page apply-vacancy-page--narrow" onClick={(e) => e.stopPropagation()}>
-          <p>Vacancy not found.</p>
+          <p>{loadError || 'Vacancy not found.'}</p>
           <button type="button" className="apply-vacancy-back-btn" onClick={() => navigate(-1)}>Back</button>
         </div>
       </div>
@@ -130,14 +176,17 @@ const ApplyVacancy = () => {
                 aria-required="true"
               />
               <span className={`apply-vacancy-wordcount ${purposeValid ? 'apply-vacancy-wordcount--ok' : ''}`}>
-                MINIMUM {MIN_WORDS} WORDS
+                Required — describe your motivation and fit (non-empty text).
               </span>
             </div>
 
+            {submitError && (
+              <p className="apply-vacancy-hint" style={{ color: '#b91c1c' }} role="alert">{submitError}</p>
+            )}
             <div className="apply-vacancy-field">
               <div className="apply-vacancy-field-head">
                 <label className="apply-vacancy-label">CV / Resume Upload</label>
-                <span className="apply-vacancy-required-badge">Required</span>
+                <span className="apply-vacancy-required-badge">Optional</span>
               </div>
               <label
                 className={`apply-vacancy-upload ${dragOver ? 'apply-vacancy-upload--drag' : ''}`}
@@ -173,7 +222,7 @@ const ApplyVacancy = () => {
                 onClick={handleSubmit}
                 disabled={!canSubmit}
               >
-                Submit Application
+                {submitting ? 'Submitting…' : 'Submit Application'}
                 <IconArrowRight />
               </button>
               <button type="button" className="apply-vacancy-back-link" onClick={handleBackToRole}>

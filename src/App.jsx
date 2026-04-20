@@ -1,5 +1,6 @@
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Outlet } from 'react-router-dom'
+import { RequireAuth, RequireStudentServices, RequireClubAdminPortal } from './auth/RouteGuards'
 import { FilterProvider } from './contexts/FilterContext'
 import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
 import { RegisteredEventsProvider } from './contexts/RegisteredEventsContext'
@@ -36,6 +37,7 @@ import AttendanceStudents from './pages/AttendanceStudents'
 import AttendanceHistory from './pages/AttendanceHistory'
 import AttendanceStudentScanner from './pages/AttendanceStudentScanner'
 import AttendanceQrTestPage from './pages/AttendanceQrTestPage'
+import AttendanceEntryGate from './pages/AttendanceEntryGate'
 import StaffPortalHistory from './pages/StaffPortalHistory'
 import StaffTicketDetail from './pages/StaffTicketDetail'
 import ComingSoonPage from './pages/ComingSoonPage'
@@ -110,13 +112,13 @@ const AppContent = () => {
     '/support-dispatcher/assign-task',
     '/support-dispatcher/history'
   ]
-  const isClubDetailRoute = location.pathname.match(/^\/clubs\/\d+$/)
+  const isClubDetailRoute = location.pathname.match(/^\/clubs\/[^/]+$/)
   const isProposeClubRoute = location.pathname === '/clubs/propose'
-  const isJoinClubRoute = location.pathname.match(/^\/clubs\/\d+\/join$/)
-  const isVacancyDetailRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+$/)
-  const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/\d+\/apply$/)
-  const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/\d+$/)
-  const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/\d+\/ticket$/)
+  const isJoinClubRoute = location.pathname.match(/^\/clubs\/[^/]+\/join$/)
+  const isVacancyDetailRoute = location.pathname.match(/^\/clubs\/vacancies\/[^/]+$/)
+  const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/[^/]+\/apply$/)
+  const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/[^/]+$/)
+  const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/[^/]+\/ticket$/)
   const isStudentServicesEventDetailRoute = location.pathname.match(/^\/student-services\/events\/[^/]+$/)
   const isItemDetailRoute = location.pathname.match(/^\/lost-and-found\/item\/\d+$/)
   const isAdminItemDetailRoute = location.pathname.match(/^\/admin\/lost-and-found\/item\/\d+$/)
@@ -156,43 +158,88 @@ const AppContent = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/student-services" element={<StudentServices />} />
-          <Route path="/student-services/events/:id" element={<StudentServicesEventDetail />} />
-          <Route path="/clubs" element={<ClubsList />} />
-          <Route path="/clubs/notifications" element={<ClubNotifications />} />
-          <Route path="/clubs/my-memberships" element={<MyMemberships />} />
-          <Route path="/clubs/vacancies" element={<ClubVacancies />} />
-          <Route path="/clubs/vacancies/my-applications" element={<MyVacancyApplications />} />
-          <Route path="/clubs/events/my-registrations" element={<MyRegisteredEvents />} />
-          <Route path="/clubs/events/:id/ticket" element={<EventTicket />} />
-          <Route path="/clubs/events/:id" element={
-            <>
-              <ClubEvents />
-              <EventDetail />
-            </>
-          } />
-          <Route path="/clubs/events" element={<ClubEvents />} />
-          <Route path="/clubs/vacancies/:id/apply" element={
-            <>
-              <ClubVacancies />
-              <ApplyVacancy />
-            </>
-          } />
-          <Route path="/clubs/vacancies/:id" element={
-            <>
-              <ClubVacancies />
-              <VacancyDetail />
-            </>
-          } />
-          <Route path="/clubs/propose" element={<ProposeClub />} />
-          <Route path="/clubs/:id/join" element={
-            <>
-              <ClubDetail />
-              <JoinClub />
-            </>
-          } />
-          <Route path="/clubs/:id" element={<ClubDetail />} />
-          <Route path="/club-admin" element={<ClubAdminLayout />}>
+          <Route
+            path="/student-services"
+            element={
+              <RequireStudentServices>
+                <StudentServices />
+              </RequireStudentServices>
+            }
+          />
+          <Route
+            path="/student-services/events/:id"
+            element={
+              <RequireStudentServices>
+                <StudentServicesEventDetail />
+              </RequireStudentServices>
+            }
+          />
+          <Route path="/clubs" element={<RequireAuth />}>
+            <Route index element={<ClubsList />} />
+            <Route path="notifications" element={<ClubNotifications />} />
+            <Route path="my-memberships" element={<MyMemberships />} />
+            <Route path="vacancies" element={<Outlet />}>
+              <Route index element={<ClubVacancies />} />
+              <Route path="my-applications" element={<MyVacancyApplications />} />
+              <Route path=":id" element={<Outlet />}>
+                <Route
+                  index
+                  element={
+                    <>
+                      <ClubVacancies />
+                      <VacancyDetail />
+                    </>
+                  }
+                />
+                <Route
+                  path="apply"
+                  element={
+                    <>
+                      <ClubVacancies />
+                      <ApplyVacancy />
+                    </>
+                  }
+                />
+              </Route>
+            </Route>
+            <Route path="events" element={<Outlet />}>
+              <Route index element={<ClubEvents />} />
+              <Route path="my-registrations" element={<MyRegisteredEvents />} />
+              <Route path=":id" element={<Outlet />}>
+                <Route
+                  index
+                  element={
+                    <>
+                      <ClubEvents />
+                      <EventDetail />
+                    </>
+                  }
+                />
+                <Route path="ticket" element={<EventTicket />} />
+              </Route>
+            </Route>
+            <Route path="propose" element={<ProposeClub />} />
+            <Route path=":id" element={<Outlet />}>
+              <Route
+                path="join"
+                element={
+                  <>
+                    <ClubDetail />
+                    <JoinClub />
+                  </>
+                }
+              />
+              <Route index element={<ClubDetail />} />
+            </Route>
+          </Route>
+          <Route
+            path="/club-admin"
+            element={
+              <RequireClubAdminPortal>
+                <ClubAdminLayout />
+              </RequireClubAdminPortal>
+            }
+          >
             <Route index element={<ClubAdminDashboard />} />
             <Route path="applications" element={<ClubAdminApplications />} />
             <Route path="interview-times" element={<ClubAdminInterviewTimes />} />
@@ -301,7 +348,7 @@ const AppContent = () => {
             <Route path="history" element={<StaffPortalHistory />} />
             <Route path="ticket/:id" element={<StaffTicketDetail />} />
           </Route>
-          <Route path="/attendance" element={<Navigate to="/attendance/demo" replace />} />
+          <Route path="/attendance" element={<AttendanceEntryGate />} />
           <Route path="/attendance/student/scan" element={<AttendanceStudentScanner />} />
           <Route path="/attendance/test" element={<AttendanceQrTestPage />} />
           <Route path="/attendance/:instructorId" element={<AttendanceCourseList />} />

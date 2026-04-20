@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { fetchMyClubNotifications, markClubNotificationRead } from '../api/clubApi'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubNotifications.css'
 
@@ -94,22 +95,99 @@ const NOTIFICATIONS = [
   }
 ]
 
+function mapApiNotificationType(t) {
+  const s = String(t || '').toLowerCase()
+  if (s.includes('proposal') || s.includes('club_proposal')) return 'proposals'
+  if (s.includes('member')) return 'membership'
+  if (s.includes('vacanc') || s.includes('job')) return 'vacancies'
+  if (s.includes('event')) return 'events'
+  return 'membership'
+}
+
 const ClubNotifications = () => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('all')
   const [showRevisionComments, setShowRevisionComments] = useState(false)
+  const [apiItems, setApiItems] = useState([])
 
-  const tabCounts = useMemo(() => {
-    const base = { all: NOTIFICATIONS.length, proposals: 0, membership: 0, vacancies: 0, events: 0 }
-    NOTIFICATIONS.forEach((n) => {
-      base[n.type] += 1
-    })
-    return base
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await fetchMyClubNotifications('all')
+        const rows = Array.isArray(data) ? data : data?.items ?? []
+        if (!cancelled) setApiItems(Array.isArray(rows) ? rows : [])
+      } catch {
+        if (!cancelled) setApiItems([])
+      }
+    })()
+    return () => { cancelled = true }
   }, [])
 
-  const isVisible = (id, type) => {
+  const displayNotifications = apiItems.length > 0
+    ? apiItems.map((row, i) => {
+        const id = String(row.id ?? row.notificationId ?? `n-${i}`)
+        const type = mapApiNotificationType(row.type ?? row.category ?? row.channel)
+        return {
+          id,
+          type,
+          pillClass: 'cn-pill--blue',
+          pillLabel: String(row.category ?? row.type ?? 'Notification'),
+          time: row.createdAt ? new Date(row.createdAt).toLocaleString() : row.time ?? '',
+          title: String(row.title ?? row.subject ?? row.message ?? 'Notification'),
+          body: String(row.body ?? row.description ?? row.message ?? ''),
+          read: Boolean(row.read ?? row.isRead),
+          raw: row,
+        }
+      })
+    : NOTIFICATIONS.map((n) => ({
+        id: n.id,
+        type: n.type,
+        pillClass: n.pillClass,
+        pillLabel: n.pillLabel,
+        time: n.time,
+        title: n.id === 'proposal-approved'
+          ? 'Your proposal for ADA Robotics has been approved!'
+          : n.id === 'proposal-revision'
+            ? 'Revision required for your Photography Club proposal'
+            : n.id === 'membership-approved'
+              ? 'You are now a member of the Photography Club'
+              : n.id === 'vacancy-interview'
+                ? 'Interview scheduled for Media & Content Creator role'
+                : 'Event reminder',
+        body: '',
+        read: true,
+        raw: null,
+      }))
+
+  const tabCounts = useMemo(() => {
+    const base = { all: displayNotifications.length, proposals: 0, membership: 0, vacancies: 0, events: 0 }
+    displayNotifications.forEach((n) => {
+      if (base[n.type] != null) base[n.type] += 1
+    })
+    return base
+  }, [displayNotifications])
+
+  const isVisible = (type) => {
     if (activeTab === 'all') return true
+    if (type === 'all') return false
     return activeTab === type
+  }
+
+  const handleMarkRead = async (n) => {
+    if (!n?.raw || n.read) return
+    const nid = n.raw.id ?? n.raw.notificationId
+    if (!nid) return
+    try {
+      await markClubNotificationRead(nid)
+      setApiItems((prev) =>
+        prev.map((row) =>
+          String(row.id ?? row.notificationId) === String(nid) ? { ...row, read: true, isRead: true } : row
+        )
+      )
+    } catch {
+      /* ignore */
+    }
   }
 
   return (
@@ -176,130 +254,72 @@ const ClubNotifications = () => {
           </div>
 
           <div className="cn-list">
-            {isVisible('proposal-approved', 'proposals') && (
-            <article className="cn-card cn-card--primary">
-              <header className="cn-card-header">
-                <span className="cn-pill cn-pill--blue">Club Proposals</span>
-                <span className="cn-time">2 hours ago</span>
-              </header>
-              <h2 className="cn-card-title">Your proposal for ADA Robotics has been approved!</h2>
-              <p className="cn-card-body">
-                Great news – your club proposal has successfully completed all reviews. You can now start configuring your club dashboard, create roles, and schedule your first events.
-              </p>
-              <div className="cn-card-actions">
-                <button type="button" className="cn-btn cn-btn--primary" onClick={() => navigate('/club-admin')}>
-                  <IconCheck />
-                  Launch Club Dashboard
-                </button>
-              </div>
-            </article>
+            {displayNotifications.filter((n) => isVisible(n.type)).length === 0 && (
+              <p className="cn-card-body" style={{ padding: '24px 0' }}>No notifications in this tab.</p>
             )}
-
-            {isVisible('proposal-revision', 'proposals') && (
-            <article className="cn-card cn-card--warning">
-              <header className="cn-card-header">
-                <span className="cn-pill cn-pill--amber">Club Proposals</span>
-                <span className="cn-time">5 hours ago</span>
-              </header>
-              <h2 className="cn-card-title">Revision required for your Photography Club proposal</h2>
-              <p className="cn-card-body">
-                The student life office reviewed your submission and requested some clarifications about your club&apos;s mission, executive team, and planned activities. Please update the highlighted sections and resubmit.
-              </p>
-              <div className="cn-card-actions">
-                <button type="button" className="cn-btn cn-btn--outline" onClick={() => navigate('/clubs/propose')}>
-                  <IconAlert />
-                  Review Feedback &amp; Edit
-                </button>
-                <button
-                  type="button"
-                  className="cn-btn cn-btn--ghost"
-                  onClick={() => setShowRevisionComments((open) => !open)}
-                >
-                  View Comments
-                </button>
-              </div>
-              {showRevisionComments && (
-                <div className="cn-comments">
-                  <div className="cn-comments-header">Feedback from Student Life Office</div>
-                  <ul className="cn-comments-list">
-                    <li>Clarify the club&apos;s long‑term mission and how it differs from existing photography initiatives.</li>
-                    <li>Specify at least three concrete activities you plan to organize in the first semester.</li>
-                    <li>Update the executive team section with final roles and responsibilities.</li>
-                    <li>Describe how new members will be onboarded and how often the club plans to meet.</li>
-                  </ul>
+            {displayNotifications.filter((n) => isVisible(n.type)).map((n) => (
+              <article
+                key={n.id}
+                className={`cn-card ${!n.read && apiItems.length ? 'cn-card--primary' : ''}`}
+              >
+                <header className="cn-card-header">
+                  <span className={`cn-pill ${n.pillClass || 'cn-pill--blue'}`}>{n.pillLabel}</span>
+                  <span className="cn-time">{n.time}</span>
+                </header>
+                <h2 className="cn-card-title">{n.title}</h2>
+                {n.body ? <p className="cn-card-body">{n.body}</p> : null}
+                <div className="cn-card-actions">
+                  {!n.read && apiItems.length > 0 && (
+                    <button type="button" className="cn-btn cn-btn--outline" onClick={() => handleMarkRead(n)}>
+                      Mark as read
+                    </button>
+                  )}
+                  {n.type === 'events' && (
+                    <button type="button" className="cn-btn cn-btn--outline" onClick={() => navigate('/clubs/events/my-registrations')}>
+                      <IconCalendar />
+                      My Registrations
+                    </button>
+                  )}
+                  {n.type === 'vacancies' && (
+                    <button
+                      type="button"
+                      className="cn-btn cn-btn--primary"
+                      onClick={() => navigate('/clubs/vacancies/my-applications')}
+                    >
+                      My applications
+                    </button>
+                  )}
+                  {n.type === 'membership' && (
+                    <button type="button" className="cn-btn cn-btn--primary" onClick={() => navigate('/clubs/my-memberships')}>
+                      My clubs
+                    </button>
+                  )}
+                  {n.type === 'proposals' && apiItems.length === 0 && n.id === 'proposal-revision' && (
+                    <>
+                      <button type="button" className="cn-btn cn-btn--outline" onClick={() => navigate('/clubs/propose')}>
+                        <IconAlert />
+                        Review feedback
+                      </button>
+                      <button
+                        type="button"
+                        className="cn-btn cn-btn--ghost"
+                        onClick={() => setShowRevisionComments((open) => !open)}
+                      >
+                        View comments
+                      </button>
+                    </>
+                  )}
                 </div>
-              )}
-            </article>
-            )}
-
-            {isVisible('membership-approved', 'membership') && (
-            <article className="cn-card">
-              <header className="cn-card-header">
-                <span className="cn-pill cn-pill--green">Membership Applications</span>
-                <span className="cn-time">5 hours ago</span>
-              </header>
-              <h2 className="cn-card-title">You are now a member of the Photography Club</h2>
-              <p className="cn-card-body">
-                Your membership application has been approved by the club executive team. Welcome aboard – check the club dashboard for upcoming meetings and events.
-              </p>
-              <div className="cn-card-actions">
-                <button type="button" className="cn-btn cn-btn--primary" onClick={() => navigate('/clubs/my-memberships')}>
-                  View Club Page
-                </button>
-              </div>
-            </article>
-            )}
-
-            {isVisible('vacancy-interview', 'vacancies') && (
-            <article className="cn-card">
-              <header className="cn-card-header">
-                <span className="cn-pill cn-pill--purple">Vacancy Applications</span>
-                <span className="cn-time">Yesterday, 4:30 PM</span>
-              </header>
-              <h2 className="cn-card-title">You&apos;re invited to interview for Event Coordinator</h2>
-              <p className="cn-card-body">
-                The Debate Society would like to schedule an interview with you for the Event Coordinator position. Please confirm your time slot or propose an alternative.
-              </p>
-              <div className="cn-card-actions">
-                <button
-                  type="button"
-                  className="cn-btn cn-btn--primary"
-                  onClick={() => navigate('/clubs/vacancies/my-applications', { state: { openInterviewPicker: true } })}
-                >
-                  Confirm Interview Slot
-                </button>
-                <button type="button" className="cn-btn cn-btn--ghost">
-                  Reschedule
-                </button>
-              </div>
-            </article>
-            )}
-
-            {isVisible('event-reminder', 'events') && (
-            <article className="cn-card">
-              <header className="cn-card-header">
-                <span className="cn-pill cn-pill--indigo">Events</span>
-                <span className="cn-time">Today, 6:00 PM</span>
-              </header>
-              <h2 className="cn-card-title">Reminder: Jazz Ensemble live session starts in 2 hours</h2>
-              <p className="cn-card-body">
-                Don&apos;t forget your registration for tonight&apos;s Jazz Ensemble session hosted by the Music Society. Your QR ticket is available under My Registrations.
-              </p>
-              <div className="cn-card-actions">
-                <button type="button" className="cn-btn cn-btn--outline" onClick={() => navigate('/clubs/events/my-registrations')}>
-                  <IconCalendar />
-                  Open My Registrations
-                </button>
-                <button type="button" className="cn-btn cn-btn--ghost" onClick={() => navigate('/clubs/events')}>
-                  Browse More Events
-                </button>
-              </div>
-            </article>
-            )}
-
-            <button type="button" className="cn-load-more">
-              Load older notifications
-            </button>
+                {n.id === 'proposal-revision' && showRevisionComments && apiItems.length === 0 && (
+                  <div className="cn-comments">
+                    <div className="cn-comments-header">Sample feedback</div>
+                    <ul className="cn-comments-list">
+                      <li>Update mission and planned activities in your proposal.</li>
+                    </ul>
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
         </section>
       </div>

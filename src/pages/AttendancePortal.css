@@ -315,6 +315,61 @@
   color: #94a3b8;
 }
 
+.ap-session-picker {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.ap-session-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.ap-session-field span {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.ap-session-field select,
+.ap-session-field input {
+  height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-family: inherit;
+}
+
+.ap-create-session {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.ap-create-session-body {
+  margin-top: 10px;
+}
+
+.ap-create-session h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #334155;
+}
+
+.ap-create-session-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ap-session-field--wide {
+  grid-column: 1 / -1;
+}
+
 /* Session Progress */
 .ap-progress-steps {
   display: flex;

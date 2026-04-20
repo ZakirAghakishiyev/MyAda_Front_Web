@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { mockClubAdminStats, mockClubAdminActivity } from '../../data/clubAdminData'
+import { fetchClubAdminDashboard, fetchClubAdminApplications } from '../../api/clubApi'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -36,7 +37,65 @@ const statusDotClass = (status) => {
 }
 
 const ClubAdminDashboard = () => {
-  const s = mockClubAdminStats
+  const clubId = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
+  const [stats, setStats] = useState({
+    activeMembers: 0,
+    membersChange: 0,
+    openVacancies: 0,
+    vacanciesChange: 0,
+    newApplications: 0,
+    applicationsChange: 0,
+    upcomingEvents: 0,
+    eventsStatus: 'N/A',
+  })
+  const [activity, setActivity] = useState([])
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoadError('')
+      try {
+        const [d, apps] = await Promise.all([
+          fetchClubAdminDashboard(clubId),
+          fetchClubAdminApplications(clubId).catch(() => ({ items: [] })),
+        ])
+        if (cancelled || !d || typeof d !== 'object') return
+        const st = d.stats && typeof d.stats === 'object' ? d.stats : d
+        setStats((prev) => ({
+          activeMembers: st.activeMembers ?? d.activeMembers ?? d.members ?? prev.activeMembers,
+          membersChange: st.membersChange ?? d.membersChange ?? prev.membersChange,
+          openVacancies: st.openVacancies ?? d.openVacancies ?? d.vacancies ?? prev.openVacancies,
+          vacanciesChange: st.vacanciesChange ?? d.vacanciesChange ?? prev.vacanciesChange,
+          newApplications: st.newApplications ?? d.newApplications ?? d.applications ?? prev.newApplications,
+          applicationsChange: st.applicationsChange ?? d.applicationsChange ?? prev.applicationsChange,
+          upcomingEvents: st.upcomingEvents ?? d.upcomingEvents ?? d.events ?? prev.upcomingEvents,
+          eventsStatus: st.eventsStatus ?? d.eventsStatus ?? prev.eventsStatus,
+        }))
+        const appItems = apps?.items ?? apps ?? []
+        if (Array.isArray(appItems) && appItems.length) {
+          setActivity(
+            appItems.slice(0, 8).map((row, idx) => ({
+              id: row.id ?? row.applicationId ?? idx + 1,
+              studentName: row.applicantName ?? row.studentName ?? 'Applicant',
+              actionType: row.applicationType === 'job' ? 'Job application' : row.applicationType === 'membership' ? 'Membership' : 'Application',
+              roleOrEvent: row.roleType ?? row.vacancyTitle ?? row.position ?? '—',
+              status: row.status ?? 'Pending Review',
+              timestamp: row.submittedAt
+                ? new Date(row.submittedAt).toLocaleString()
+                : 'Recently',
+            }))
+          )
+        }
+      } catch (e) {
+        if (!cancelled) setLoadError(e?.message || 'Could not load dashboard data.')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [clubId])
+
+  const s = stats
   return (
     <>
       <header className="club-admin-header">
@@ -86,10 +145,13 @@ const ClubAdminDashboard = () => {
       </div>
 
       <div className="club-admin-content">
+        {loadError ? (
+          <p style={{ margin: '0 0 12px', fontSize: 14, color: '#b91c1c' }}>{loadError}</p>
+        ) : null}
         <div className="club-admin-card">
           <div className="club-admin-card-head">
             <h2 className="club-admin-card-title">Recent Activity Feed</h2>
-            <Link to="/club-admin/applications" className="club-admin-card-link">View all reports</Link>
+            <Link to={`/club-admin/applications${clubQs}`} className="club-admin-card-link">View all reports</Link>
           </div>
           <div className="club-admin-table-wrap">
           <table className="club-admin-table">
@@ -104,7 +166,7 @@ const ClubAdminDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {mockClubAdminActivity.map((row) => (
+              {activity.map((row) => (
                 <tr key={row.id}>
                   <td>{row.studentName}</td>
                   <td>{row.actionType}</td>
@@ -117,10 +179,15 @@ const ClubAdminDashboard = () => {
                   </td>
                   <td>{row.timestamp}</td>
                   <td>
-                    <Link to="/club-admin/applications" className="club-admin-card-link">Review</Link>
+                    <Link to={`/club-admin/applications${clubQs}`} className="club-admin-card-link">Review</Link>
                   </td>
                 </tr>
               ))}
+              {activity.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="club-admin-table-empty">No recent activity.</td>
+                </tr>
+              )}
             </tbody>
           </table>
           </div>

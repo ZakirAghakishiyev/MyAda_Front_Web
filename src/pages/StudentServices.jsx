@@ -1,9 +1,65 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import {
+  fetchStudentServicesClubProposals,
+  fetchStudentServicesEventProposals,
+  fetchStudentServicesClubs,
+  fetchStudentServicesEvents,
+  fetchStudentServicesProposalRequirements,
+  approveStudentServicesClubProposal,
+  rejectStudentServicesClubProposal,
+  requestRevisionStudentServicesClubProposal,
+  approveStudentServicesEventProposal,
+  rejectStudentServicesEventProposal,
+  requestRevisionStudentServicesEventProposal,
+  createStudentServicesEvent,
+  fetchStudentServicesClubMembers,
+  fetchStudentServicesClubEmployees,
+  patchStudentServicesClub,
+  approveStudentServicesClubProfileImage,
+  deleteStudentServicesClubMember,
+  createStudentServicesClubEmployee,
+  patchStudentServicesClubEmployee,
+} from '../api/clubApi'
+import {
+  mapStudentServicesClubProposal,
+  mapStudentServicesEventProposal,
+  mapStudentServicesDirectoryClub,
+  mapStudentServicesApprovedEvent,
+} from '../api/clubMappers'
 import { mockClubMembers as initialMembers, mockClubEmployees as initialEmployees, MEMBER_POSITIONS as MEMBER_POSITIONS_LIST, EMPLOYEE_POSITIONS as EMPLOYEE_POSITIONS_LIST } from '../data/clubAdminData'
 import adaLogo from '../assets/ada-logo.png'
 import './StudentServices.css'
 import './club-admin/ClubAdmin.css'
+
+function mapSsMemberRow(row, index) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    id: row.id ?? row.memberId ?? `ss-m-${index}`,
+    name: String(row.name ?? row.firstName ?? '—'),
+    surname: String(row.surname ?? row.lastName ?? ''),
+    email: String(row.email ?? ''),
+    studentId: row.studentId != null ? String(row.studentId) : undefined,
+    position: String(row.position ?? row.role ?? 'Member'),
+    joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
+    age: row.age != null ? Number(row.age) : null,
+  }
+}
+
+function mapSsEmployeeRow(row, index) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    id: row.id ?? row.employeeId ?? `ss-e-${index}`,
+    name: String(row.name ?? row.firstName ?? '—'),
+    surname: String(row.surname ?? row.lastName ?? ''),
+    email: String(row.email ?? ''),
+    position: String(row.position ?? row.positionName ?? row.role ?? '—'),
+    department: row.department != null ? String(row.department) : '',
+    studentId: row.studentId != null ? String(row.studentId) : undefined,
+    joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
+    age: row.age != null ? Number(row.age) : null,
+  }
+}
 
 const ADD_EVENT_DRAFT_COOKIE_KEY = 'student_services_add_event_draft'
 
@@ -643,6 +699,52 @@ const StudentServices = () => {
   const [addEventClub, setAddEventClub] = useState('Student Services')
   const addEventPosterInputRef = React.useRef(null)
 
+  const refreshStudentServicesFromApi = useCallback(async () => {
+    try {
+      const [rawProposals, rawEventProposals, rawClubs, rawEvents, rawReq] = await Promise.all([
+        fetchStudentServicesClubProposals().catch(() => null),
+        fetchStudentServicesEventProposals().catch(() => null),
+        fetchStudentServicesClubs({ limit: 100 }).catch(() => null),
+        fetchStudentServicesEvents().catch(() => null),
+        fetchStudentServicesProposalRequirements().catch(() => null),
+      ])
+      const cpItems = rawProposals?.items ?? rawProposals ?? []
+      if (Array.isArray(cpItems) && cpItems.length > 0) {
+        const mapped = cpItems.map((p, i) => mapStudentServicesClubProposal(p, i)).filter(Boolean)
+        setClubProposals(mapped)
+        setSelectedProposalId((prev) => prev || mapped[0]?.id || '')
+      }
+      const epItems = rawEventProposals?.items ?? rawEventProposals ?? []
+      if (Array.isArray(epItems) && epItems.length > 0) {
+        const mappedEv = epItems.map((p, i) => mapStudentServicesEventProposal(p, i)).filter(Boolean)
+        setEventProposals(mappedEv)
+        setSelectedEventId((prev) => prev || mappedEv[0]?.id || '')
+      }
+      const dirItems = rawClubs?.items ?? rawClubs ?? []
+      if (Array.isArray(dirItems) && dirItems.length > 0) {
+        setDirectoryClubs(dirItems.map((c) => mapStudentServicesDirectoryClub(c)).filter(Boolean))
+      }
+      const evItems = rawEvents?.items ?? rawEvents ?? []
+      if (Array.isArray(evItems) && evItems.length > 0) {
+        setApprovedEvents(evItems.map((e) => mapStudentServicesApprovedEvent(e)).filter(Boolean))
+      }
+      if (rawReq && typeof rawReq === 'object') {
+        const reqs = rawReq.requirements ?? rawReq.items
+        if (Array.isArray(reqs)) setRequirementsList(reqs.map(String))
+        if (rawReq.deadline) {
+          const d = new Date(rawReq.deadline)
+          if (!Number.isNaN(d.getTime())) setRequirementsDeadline(d.toISOString().slice(0, 10))
+        }
+      }
+    } catch {
+      /* keep mock seed data */
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshStudentServicesFromApi()
+  }, [refreshStudentServicesFromApi])
+
   useEffect(() => {
     if (!addEventOpen) return
     const draft = getDraftCookie(ADD_EVENT_DRAFT_COOKIE_KEY)
@@ -865,26 +967,36 @@ const StudentServices = () => {
     setAddEventSubEvents((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const submitAddEvent = (e) => {
+  const submitAddEvent = async (e) => {
     e.preventDefault()
     if (!addEventName.trim()) return
     const dateIso = addEventDate || new Date().toISOString().slice(0, 10)
-    const imageUrl = addEventPosterFile ? URL.createObjectURL(addEventPosterFile) : null
-    const newEvent = {
-      id: `ss-${Date.now()}`,
-      title: addEventName.trim(),
-      date: dateIso,
-      club: addEventClub.trim() || 'Student Services',
-      venue: addEventVenue,
-      capacity: Number(addEventAttendance) || 0,
-      durationHours: Number(addEventDuration) || 0,
-      description: addEventDescription.trim() || '',
-      subEvents: addEventSubEvents,
-      image: imageUrl,
+    const timePart = addEventTime?.trim() || '10:00'
+    const [hh, mm] = timePart.split(':').map((x) => Number.parseInt(x, 10) || 0)
+    const start = new Date(`${dateIso}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`)
+    const durH = Number(addEventDuration) || 3
+    const end = new Date(start.getTime() + durH * 3600 * 1000)
+    try {
+      await createStudentServicesEvent({
+        name: addEventName.trim(),
+        description: [addEventDescription, addEventObjectives].filter(Boolean).join('\n\n') || '—',
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        location: addEventVenue || 'TBD',
+        seatLimit: Number(addEventAttendance) || 30,
+        requirements: addEventAvSetup ? 'AV setup requested' : '',
+        prerequisites: '',
+        notes: [addEventOtherNeeds, addEventSecurity ? 'Security' : '', addEventCatering ? 'Catering' : '']
+          .filter(Boolean)
+          .join('; '),
+      })
+    } catch (err) {
+      alert(err?.message || 'Could not create event.')
+      return
     }
-    setApprovedEvents((prev) => [newEvent, ...prev])
     clearDraftCookie(ADD_EVENT_DRAFT_COOKIE_KEY)
     closeAddEvent()
+    refreshStudentServicesFromApi()
   }
 
   const handleSaveAddEventDraft = () => {
@@ -967,16 +1079,33 @@ const StudentServices = () => {
     )
   }, [clubEmployees, clubEmployeeSearch])
 
-  const handleSaveClubSettings = () => {
+  const handleSaveClubSettings = async () => {
     if (!selectedDirectoryClub) return
+    const cid = selectedDirectoryClub.id
+    const name = clubEditName.trim() || selectedDirectoryClub.name
+    const status = clubEditStatus || selectedDirectoryClub.status
+    const rawDesc =
+      selectedDirectoryClub.raw && typeof selectedDirectoryClub.raw === 'object'
+        ? selectedDirectoryClub.raw.description
+        : null
+    try {
+      await patchStudentServicesClub(cid, {
+        name,
+        description: rawDesc != null ? String(rawDesc) : name,
+        status,
+      })
+    } catch (e) {
+      alert(e?.message || 'Could not save club.')
+      return
+    }
     const updateClub = (profileImageUrl) => {
       setDirectoryClubs((prev) =>
         prev.map((c) =>
           c.id === selectedDirectoryClub.id
             ? {
                 ...c,
-                name: clubEditName.trim() || c.name,
-                status: clubEditStatus || c.status,
+                name,
+                status,
                 ...(profileImageUrl != null && { profileImageUrl }),
               }
             : c
@@ -992,13 +1121,19 @@ const StudentServices = () => {
     } else {
       updateClub(selectedDirectoryClub.profileImageUrl)
     }
+    refreshStudentServicesFromApi()
   }
 
-  const handleApproveProposedClubImage = () => {
+  const handleApproveProposedClubImage = async () => {
     if (!selectedDirectoryClub || !selectedDirectoryClub.proposedProfileImageUrl) return
     const ok = window.confirm('Approve this proposed club logo?')
     if (!ok) return
-
+    try {
+      await approveStudentServicesClubProfileImage(selectedDirectoryClub.id)
+    } catch (e) {
+      alert(e?.message || 'Could not approve image.')
+      return
+    }
     setDirectoryClubs((prev) =>
       prev.map((c) =>
         c.id === selectedDirectoryClub.id
@@ -1011,20 +1146,32 @@ const StudentServices = () => {
       )
     )
     alert('Proposed logo approved.')
+    refreshStudentServicesFromApi()
   }
 
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     const id = addEmployeeId.trim()
     const position = addEmployeePosition && addEmployeePosition !== 'Select position' ? addEmployeePosition : null
-    if (!id || !position) return
-    const nextId = Math.max(0, ...clubEmployees.map((e) => e.id)) + 1
-    setClubEmployees((prev) => [
-      ...prev,
-      { id: nextId, name: 'New', surname: 'Employee', email: `${id}@university.edu`, position, studentId: id, joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), age: null },
-    ])
+    if (!id || !position || !selectedDirectoryClub) return
+    try {
+      await createStudentServicesClubEmployee(selectedDirectoryClub.id, {
+        studentId: id,
+        position,
+      })
+    } catch (e) {
+      alert(e?.message || 'Could not add employee.')
+      return
+    }
     setAddEmployeeOpen(false)
     setAddEmployeeId('')
     setAddEmployeePosition('')
+    try {
+      const rawE = await fetchStudentServicesClubEmployees(selectedDirectoryClub.id)
+      const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
+      setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+    } catch {
+      /* ignore */
+    }
   }
 
   const handleEmployeePositionChange = (employeeId, newPosition, currentPosition) => {
@@ -1036,11 +1183,23 @@ const StudentServices = () => {
     }
   }
 
-  const handleConfirmEmployeePosition = (employeeId) => {
+  const handleConfirmEmployeePosition = async (employeeId) => {
     const newPosition = pendingEmployeePosition[employeeId]
-    if (newPosition == null) return
+    if (newPosition == null || !selectedDirectoryClub) return
+    try {
+      await patchStudentServicesClubEmployee(selectedDirectoryClub.id, String(employeeId), {
+        position: newPosition,
+      })
+    } catch (e) {
+      alert(e?.message || 'Could not update position.')
+      return
+    }
     setClubEmployees((prev) => prev.map((emp) => (emp.id === employeeId ? { ...emp, position: newPosition } : emp)))
-    setPendingEmployeePosition((prev) => { const next = { ...prev }; delete next[employeeId]; return next })
+    setPendingEmployeePosition((prev) => {
+      const next = { ...prev }
+      delete next[employeeId]
+      return next
+    })
   }
 
   const renderCommandClubDetail = (backLabel = 'Back to Master Directory') => {
@@ -1145,7 +1304,23 @@ const StudentServices = () => {
                     <div className="club-admin-popup-body"><p>Are you sure you want to remove this member from the club?</p></div>
                     <div className="club-admin-popup-footer">
                       <button type="button" className="club-admin-btn-secondary" onClick={() => setRemoveMemberId(null)}>Cancel</button>
-                      <button type="button" className="club-admin-btn-danger" onClick={() => { setClubMembers((prev) => prev.filter((x) => x.id !== removeMemberId)); setRemoveMemberId(null) }}>Remove</button>
+                      <button
+                        type="button"
+                        className="club-admin-btn-danger"
+                        onClick={async () => {
+                          if (removeMemberId == null || !selectedDirectoryClub) return
+                          try {
+                            await deleteStudentServicesClubMember(selectedDirectoryClub.id, String(removeMemberId))
+                          } catch (e) {
+                            alert(e?.message || 'Could not remove member.')
+                            return
+                          }
+                          setClubMembers((prev) => prev.filter((x) => x.id !== removeMemberId))
+                          setRemoveMemberId(null)
+                        }}
+                      >
+                        Remove
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1498,28 +1673,55 @@ const StudentServices = () => {
   }
   const selectedProposal = clubProposals.find((p) => p.id === selectedProposalId)
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!rejectModal.reason.trim()) return
+    const sel = clubProposals.find((p) => p.id === selectedProposalId)
+    const pid = sel?.proposalId ?? sel?.id
+    try {
+      if (pid) await rejectStudentServicesClubProposal(pid, rejectModal.reason.trim())
+    } catch (e) {
+      alert(e?.message || 'Reject failed.')
+      return
+    }
     const remaining = clubProposals.filter((p) => p.id !== selectedProposalId)
     setClubProposals(remaining)
     setSelectedProposalId(remaining[0]?.id ?? '')
     setRejectModal({ open: false, reason: '' })
+    refreshStudentServicesFromApi()
   }
 
-  const handleRequestRevision = () => {
+  const handleRequestRevision = async () => {
     if (!revisionModal.changes.trim()) return
+    const sel = clubProposals.find((p) => p.id === selectedProposalId)
+    const pid = sel?.proposalId ?? sel?.id
+    try {
+      if (pid) await requestRevisionStudentServicesClubProposal(pid, revisionModal.changes.trim())
+    } catch (e) {
+      alert(e?.message || 'Request failed.')
+      return
+    }
     setClubProposals((prev) =>
       prev.map((p) => (p.id === selectedProposalId ? { ...p, status: 'under_revision' } : p))
     )
     setRevisionModal({ open: false, changes: '' })
+    refreshStudentServicesFromApi()
   }
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedProposalId) return
     if (!window.confirm('Are you sure you want to approve this club proposal?')) return
+    const sel = clubProposals.find((p) => p.id === selectedProposalId)
+    const pid = sel?.proposalId ?? sel?.id
+    try {
+      if (pid) await approveStudentServicesClubProposal(pid)
+    } catch (e) {
+      alert(e?.message || 'Approve failed.')
+      return
+    }
     const remaining = clubProposals.filter((p) => p.id !== selectedProposalId)
     setClubProposals(remaining)
     setSelectedProposalId(remaining[0]?.id ?? '')
+    refreshStudentServicesFromApi()
   }
 
   const filterEventProposals = (list) => {
@@ -1536,28 +1738,60 @@ const StudentServices = () => {
   const selectedEvent = eventProposals.find((e) => e.id === selectedEventId)
   const pendingEventCount = eventProposals.length
 
-  const handleEventReject = () => {
+  const handleEventReject = async () => {
     if (!eventRejectModal.reason.trim()) return
+    const sel = eventProposals.find((e) => e.id === selectedEventId)
+    const pid = sel?.proposalId ?? sel?.id
+    try {
+      if (pid) await rejectStudentServicesEventProposal(pid, eventRejectModal.reason.trim())
+    } catch (e) {
+      alert(e?.message || 'Reject failed.')
+      return
+    }
     const remaining = eventProposals.filter((e) => e.id !== selectedEventId)
     setEventProposals(remaining)
     setSelectedEventId(remaining[0]?.id ?? '')
     setEventRejectModal({ open: false, reason: '' })
+    refreshStudentServicesFromApi()
   }
 
-  const handleEventRequestRevision = () => {
+  const handleEventRequestRevision = async () => {
     if (!eventRevisionModal.changes.trim()) return
+    const sel = eventProposals.find((e) => e.id === selectedEventId)
+    const pid = sel?.proposalId ?? sel?.id
+    try {
+      if (pid) await requestRevisionStudentServicesEventProposal(pid, eventRevisionModal.changes.trim())
+    } catch (e) {
+      alert(e?.message || 'Request failed.')
+      return
+    }
     setEventProposals((prev) =>
       prev.map((e) => (e.id === selectedEventId ? { ...e, status: 'UNDER REVISION' } : e))
     )
     setEventRevisionModal({ open: false, changes: '' })
+    refreshStudentServicesFromApi()
   }
 
-  const handleEventApprove = () => {
+  const handleEventApprove = async () => {
     if (!selectedEventId) return
     if (!window.confirm('Are you sure you want to approve this event proposal?')) return
+    const sel = eventProposals.find((e) => e.id === selectedEventId)
+    const pid = sel?.proposalId ?? sel?.id
+    const assignments = (eventRoomAssignments || []).map((a, idx) => ({
+      subEventIndex: idx,
+      buildingId: a.buildingId ?? 'B1',
+      roomId: a.roomId ?? 'R101',
+    }))
+    try {
+      if (pid) await approveStudentServicesEventProposal(pid, assignments.length ? assignments : [{ subEventIndex: 0, buildingId: 'B1', roomId: 'R101' }])
+    } catch (e) {
+      alert(e?.message || 'Approve failed.')
+      return
+    }
     const remaining = eventProposals.filter((e) => e.id !== selectedEventId)
     setEventProposals(remaining)
     setSelectedEventId(remaining[0]?.id ?? '')
+    refreshStudentServicesFromApi()
   }
 
   useEffect(() => {
@@ -1585,6 +1819,33 @@ const StudentServices = () => {
       setClubEditStatus(club.status)
     }
   }, [directorySelectedClubId, directoryClubs])
+
+  useEffect(() => {
+    if (!directorySelectedClubId) return
+    let cancelled = false
+    const clubId = directorySelectedClubId
+    ;(async () => {
+      try {
+        const [rawM, rawE] = await Promise.all([
+          fetchStudentServicesClubMembers(clubId).catch(() => ({ items: [] })),
+          fetchStudentServicesClubEmployees(clubId).catch(() => ({ items: [] })),
+        ])
+        if (cancelled) return
+        const mItems = Array.isArray(rawM?.items) ? rawM.items : Array.isArray(rawM) ? rawM : []
+        const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
+        setClubMembers(mItems.map(mapSsMemberRow).filter(Boolean))
+        setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+      } catch {
+        if (!cancelled) {
+          setClubMembers([])
+          setClubEmployees([])
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [directorySelectedClubId])
 
   const setEventRoomAssignmentAt = (index, buildingId, roomId) => {
     setEventRoomAssignments((prev) => {

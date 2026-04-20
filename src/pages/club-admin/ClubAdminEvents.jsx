@@ -1,7 +1,14 @@
-import React, { useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { mockClubEvents } from '../../data/clubEventsData'
-import { getClubById } from '../../data/clubsData'
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  fetchClubAdminEvents,
+  patchClubAdminEvent,
+  fetchClubAdminEventAttendees,
+  patchClubAdminEventAttendee,
+  deleteClubAdminEventAttendee,
+} from '../../api/clubApi'
+import { mapEventFromApi } from '../../api/clubMappers'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -103,19 +110,31 @@ const generateMockAttendees = (event) => {
 }
 
 const ClubAdminEvents = () => {
-  const location = useLocation()
-  const searchParams = new URLSearchParams(location.search)
-  const clubIdParam = searchParams.get('club')
-  const activeClub = clubIdParam ? getClubById(clubIdParam) : null
+  const clubIdParam = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
-  const initialEvents = useMemo(() => {
-    if (activeClub) {
-      return mockClubEvents.filter((e) => e.clubId === activeClub.id)
+  const loadEvents = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const data = await fetchClubAdminEvents(clubIdParam)
+      const items = data?.items ?? data ?? []
+      const arr = Array.isArray(items) ? items : []
+      setEvents(arr.map((row) => mapEventFromApi(row)).filter(Boolean))
+    } catch (e) {
+      setEvents([])
+      setLoadError(e?.message || 'Could not load events.')
+    } finally {
+      setLoading(false)
     }
-    return mockClubEvents
-  }, [activeClub])
+  }, [clubIdParam])
 
-  const [events, setEvents] = useState(initialEvents)
+  useEffect(() => {
+    loadEvents()
+  }, [loadEvents])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [editingEvent, setEditingEvent] = useState(null)
@@ -136,13 +155,7 @@ const ClubAdminEvents = () => {
   const [posterFile, setPosterFile] = useState(null)
   const posterInputRef = useRef(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [attendeesByEvent, setAttendeesByEvent] = useState(() => {
-    const map = {}
-    initialEvents.forEach((ev) => {
-      map[ev.id] = generateMockAttendees(ev)
-    })
-    return map
-  })
+  const [attendeesByEvent, setAttendeesByEvent] = useState({})
   const [attendeesEventId, setAttendeesEventId] = useState(null)
 
   const filteredEvents = useMemo(() => {
@@ -253,10 +266,19 @@ const ClubAdminEvents = () => {
     }
 
     try {
-      await fetch('/api/student-services/club-events/edit-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      await patchClubAdminEvent(clubIdParam, editingEvent.id, {
+        name: payload.title,
+        description: payload.description,
+        startTime: payload.date && payload.time ? `${payload.date}T${payload.time}:00` : undefined,
+        endTime: payload.date && payload.time && payload.duration
+          ? (() => {
+              const start = new Date(`${payload.date}T${payload.time}:00`)
+              const hours = Number(payload.duration) || 1
+              return new Date(start.getTime() + hours * 3600 * 1000).toISOString()
+            })()
+          : undefined,
+        location: payload.location,
+        seatLimit: payload.capacity ? Number(payload.capacity) : undefined,
       })
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -288,22 +310,45 @@ const ClubAdminEvents = () => {
 
   const attendeesForSelectedEvent = attendeesEvent ? (attendeesByEvent[attendeesEvent.id] || []) : []
 
-  const toggleAttendeeEntered = (eventId, attendeeId) => {
-    setAttendeesByEvent((prev) => ({
-      ...prev,
-      [eventId]: (prev[eventId] || []).map((a) =>
-        a.id === attendeeId ? { ...a, entered: !a.entered } : a
-      ),
-    }))
+  const loadAttendees = useCallback(async (eventId) => {
+    try {
+      const res = await fetchClubAdminEventAttendees(clubIdParam, eventId)
+      const items = res?.items ?? res ?? []
+      const arr = Array.isArray(items) ? items : []
+      setAttendeesByEvent((prev) => ({
+        ...prev,
+        [eventId]: arr.map((a, index) => ({
+          id: String(a.id ?? a.attendeeId ?? `${eventId}-att-${index}`),
+          fullName: a.fullName ?? a.name ?? 'Attendee',
+          studentId: a.studentId ?? '—',
+          entered: Boolean(a.entered ?? a.checkedIn ?? false),
+        })),
+      }))
+    } catch {
+      setAttendeesByEvent((prev) => ({ ...prev, [eventId]: [] }))
+    }
+  }, [clubIdParam])
+
+  const toggleAttendeeEntered = async (eventId, attendeeId) => {
+    const attendee = (attendeesByEvent[eventId] || []).find((a) => String(a.id) === String(attendeeId))
+    if (!attendee) return
+    try {
+      await patchClubAdminEventAttendee(clubIdParam, eventId, attendeeId, { entered: !attendee.entered })
+      await loadAttendees(eventId)
+    } catch (e) {
+      alert(e?.message || 'Could not update attendee status.')
+    }
   }
 
-  const removeAttendee = (eventId, attendeeId) => {
+  const removeAttendee = async (eventId, attendeeId) => {
     const ok = window.confirm('Remove this attendee from the event?')
     if (!ok) return
-    setAttendeesByEvent((prev) => ({
-      ...prev,
-      [eventId]: (prev[eventId] || []).filter((a) => a.id !== attendeeId),
-    }))
+    try {
+      await deleteClubAdminEventAttendee(clubIdParam, eventId, attendeeId)
+      await loadAttendees(eventId)
+    } catch (e) {
+      alert(e?.message || 'Could not remove attendee.')
+    }
   }
 
   if (editingEvent) {
@@ -315,9 +360,9 @@ const ClubAdminEvents = () => {
 
         <div className="club-admin-content">
           <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-            <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+            <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
-            <Link to="/club-admin/events" style={{ color: '#64748b' }}>Events</Link>
+            <Link to={`/club-admin/events${clubQs}`} style={{ color: '#64748b' }}>Events</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
             <span style={{ color: '#0f172a', fontWeight: 600 }}>Edit Event</span>
           </nav>
@@ -576,7 +621,7 @@ const ClubAdminEvents = () => {
 
         <div className="club-admin-content">
           <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-            <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+            <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
             <button
               type="button"
@@ -684,7 +729,7 @@ const ClubAdminEvents = () => {
             />
           </div>
           <Link
-            to="/club-admin/events/propose"
+            to={`/club-admin/events/propose${clubQs}`}
             className="club-admin-btn-primary"
             style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
           >
@@ -694,8 +739,11 @@ const ClubAdminEvents = () => {
       </header>
 
       <div className="club-admin-content">
+        {loadError ? (
+          <p style={{ margin: '0 24px 16px', fontSize: 14, color: '#b91c1c' }}>{loadError}</p>
+        ) : null}
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>Events</span>
         </nav>
@@ -770,6 +818,11 @@ const ClubAdminEvents = () => {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="club-admin-table-empty">Loading events...</td>
+                </tr>
+              ) : null}
               {filteredEvents.map((e) => {
                 const isUpcoming = !e.date || e.date >= today
                 const eventAttendees = attendeesByEvent[e.id] || []
@@ -788,7 +841,10 @@ const ClubAdminEvents = () => {
                       <button
                         type="button"
                         className="club-admin-btn-secondary"
-                        onClick={() => setAttendeesEventId(e.id)}
+                        onClick={async () => {
+                          setAttendeesEventId(e.id)
+                          await loadAttendees(e.id)
+                        }}
                       >
                         {eventAttendees.length}
                       </button>
@@ -805,7 +861,7 @@ const ClubAdminEvents = () => {
                   </tr>
                 )
               })}
-              {filteredEvents.length === 0 && (
+              {!loading && filteredEvents.length === 0 && (
                 <tr>
                   <td colSpan={7} className="club-admin-table-empty">
                     No events match your filters.

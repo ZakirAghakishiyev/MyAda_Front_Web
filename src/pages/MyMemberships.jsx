@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mockMemberships } from '../data/clubsData'
-import { getClubById } from '../data/clubsData'
+import { fetchMyClubMemberships, fetchMyMembershipApplications, fetchMyVacancyApplications, fetchClub } from '../api/clubApi'
+import { mapClubFromApi } from '../api/clubMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubsList.css'
 import './MyMemberships.css'
@@ -69,67 +69,6 @@ const IconX = () => (
   </svg>
 )
 
-const MOCK_VACANCY_APPLICATIONS = [
-  {
-    id: 'APP-001',
-    position: 'Media & Content Creator',
-    clubName: 'Campus Media Club',
-    status: 'Under Review'
-  },
-  {
-    id: 'APP-002',
-    position: 'Finance Officer',
-    clubName: 'Business Leaders Society',
-    status: 'Submitted'
-  },
-  {
-    id: 'APP-003',
-    position: 'Events Coordinator',
-    clubName: 'Student Activities Board',
-    status: 'Accepted'
-  },
-  {
-    id: 'APP-004',
-    position: 'Marketing Coordinator',
-    clubName: 'Campus Media Club',
-    status: 'Called for Interview'
-  }
-]
-
-const MOCK_MEMBERSHIP_APPLICATIONS = [
-  {
-    id: 'MEM-001',
-    position: 'Membership Application',
-    clubName: 'ADA Digital Entertainment Club',
-    status: 'Submitted'
-  },
-  {
-    id: 'MEM-002',
-    position: 'Membership Application',
-    clubName: 'Business Society',
-    status: 'Under Review'
-  }
-]
-
-const ALL_APPLICATIONS = [
-  ...MOCK_VACANCY_APPLICATIONS.map((app, index) => ({
-    ...app,
-    applicationType: 'vacancy',
-    appliedOn: ['2024-03-01', '2024-02-25', '2024-02-10', '2024-03-03'][index] || '2024-03-01'
-  })),
-  ...MOCK_MEMBERSHIP_APPLICATIONS.map((app, index) => ({
-    ...app,
-    applicationType: 'membership',
-    appliedOn: ['2024-03-05', '2024-03-02'][index] || '2024-03-01'
-  }))
-]
-
-const MOCK_INTERVIEW_SLOTS = [
-  { id: 'SLOT-1', clubName: 'Campus Media Club', position: 'Marketing Coordinator', date: '2026-04-20', startTime: '15:00', endTime: '15:20', bookedByApplicationId: null },
-  { id: 'SLOT-2', clubName: 'Campus Media Club', position: 'Marketing Coordinator', date: '2026-04-20', startTime: '15:20', endTime: '15:40', bookedByApplicationId: 'APP-999' },
-  { id: 'SLOT-3', clubName: 'Campus Media Club', position: 'Marketing Coordinator', date: '2026-04-20', startTime: '15:40', endTime: '16:00', bookedByApplicationId: null }
-]
-
 const formatDate = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -152,26 +91,127 @@ const statusIcon = (status) => {
   return <IconX />
 }
 
+const mapApiAppStatus = (s) => {
+  const x = String(s ?? '')
+  if (/pending/i.test(x)) return 'Under Review'
+  if (/approv/i.test(x)) return 'Accepted'
+  if (/reject/i.test(x)) return 'Declined'
+  return x || 'Submitted'
+}
+
+function normalizeMembershipStatus(s) {
+  const x = String(s ?? '').toLowerCase()
+  if (!x || x === 'active' || x === 'approved') return 'Active'
+  if (x.includes('pending') || x.includes('review')) return 'Pending'
+  if (x.includes('declin') || x.includes('reject')) return 'Declined'
+  return s ? String(s) : 'Active'
+}
+
 const MyMemberships = () => {
   const navigate = useNavigate()
   const [tab, setTab] = useState('active')
-  const [applications, setApplications] = useState(ALL_APPLICATIONS)
-  const [slots, setSlots] = useState(MOCK_INTERVIEW_SLOTS)
+  const [membershipRows, setMembershipRows] = useState([])
+  const [applications, setApplications] = useState([])
+  const [slots, setSlots] = useState([])
+  const [clubMetaById, setClubMetaById] = useState({})
+  const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState('')
   const [selectedAppId, setSelectedAppId] = useState(null)
   const [selectedInterviewDate, setSelectedInterviewDate] = useState('')
   const [draftSlotId, setDraftSlotId] = useState(null)
 
-  const filtered = useMemo(() => {
-    if (tab === 'active') return mockMemberships.filter((m) => m.status === 'Active')
-    if (tab === 'pending') return mockMemberships.filter((m) => m.status === 'Pending')
-    if (tab === 'declined') return mockMemberships.filter((m) => m.status === 'Declined')
-    if (tab === 'applied') return []
-    return mockMemberships
-  }, [tab])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setListLoading(true)
+      setListError('')
+      try {
+        const [m, ma, va] = await Promise.all([
+          fetchMyClubMemberships(),
+          fetchMyMembershipApplications(),
+          fetchMyVacancyApplications(),
+        ])
+        if (cancelled) return
+        const mItems = Array.isArray(m?.items) ? m.items : Array.isArray(m) ? m : []
+        setMembershipRows(
+          mItems.map((row) => ({
+            clubId: row.clubId ?? row.club?.id ?? '',
+            clubName: String(row.clubName ?? row.club?.name ?? 'Club'),
+            memberSince: row.memberSince ?? (row.joinedAt ? new Date(row.joinedAt).toLocaleDateString() : '—'),
+            role: row.role ?? 'Member',
+            status: normalizeMembershipStatus(row.status ?? row.membershipStatus),
+          }))
+        )
+        const maItems = Array.isArray(ma?.items) ? ma.items : Array.isArray(ma) ? ma : []
+        const vaItems = Array.isArray(va?.items) ? va.items : Array.isArray(va) ? va : []
+        const memApps = maItems.map((row, index) => ({
+          id: String(row.applicationId ?? row.id ?? `MEM-${index}`),
+          position: 'Membership Application',
+          clubName: String(row.clubName ?? row.club?.name ?? '—'),
+          status: mapApiAppStatus(row.status),
+          applicationType: 'membership',
+          appliedOn: row.submittedAt ? String(row.submittedAt).slice(0, 10) : '',
+        }))
+        const vacApps = vaItems.map((row, index) => ({
+          id: String(row.applicationId ?? row.id ?? `APP-${index}`),
+          position: String(row.position ?? row.vacancyTitle ?? row.title ?? 'Role'),
+          clubName: String(row.clubName ?? '—'),
+          status: mapApiAppStatus(row.status),
+          applicationType: 'vacancy',
+          appliedOn: row.submittedAt ? String(row.submittedAt).slice(0, 10) : '',
+        }))
+        setApplications([...vacApps, ...memApps])
+      } catch (e) {
+        if (!cancelled) {
+          setListError(e?.message || 'Could not load memberships or applications.')
+          setMembershipRows([])
+          setApplications([])
+        }
+      } finally {
+        if (!cancelled) setListLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
-  const activeCount = mockMemberships.filter((m) => m.status === 'Active').length
-  const pendingCount = mockMemberships.filter((m) => m.status === 'Pending').length
-  const declinedCount = mockMemberships.filter((m) => m.status === 'Declined').length
+  useEffect(() => {
+    const ids = [...new Set(membershipRows.map((r) => r.clubId).filter((id) => id !== '' && id != null))]
+    if (!ids.length) {
+      setClubMetaById({})
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const entries = await Promise.all(
+        ids.map(async (cid) => {
+          try {
+            const raw = await fetchClub(cid)
+            const mapped = mapClubFromApi(raw)
+            return [String(cid), mapped]
+          } catch {
+            return [String(cid), null]
+          }
+        })
+      )
+      if (cancelled) return
+      setClubMetaById(Object.fromEntries(entries))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [membershipRows])
+
+  const filtered = useMemo(() => {
+    if (tab === 'active') return membershipRows.filter((m) => m.status === 'Active')
+    if (tab === 'pending') return membershipRows.filter((m) => m.status === 'Pending')
+    if (tab === 'declined') return membershipRows.filter((m) => m.status === 'Declined')
+    if (tab === 'applied') return []
+    return membershipRows
+  }, [tab, membershipRows])
+
+  const activeCount = membershipRows.filter((m) => m.status === 'Active').length
+  const pendingCount = membershipRows.filter((m) => m.status === 'Pending').length
+  const declinedCount = membershipRows.filter((m) => m.status === 'Declined').length
   const appliedCount = applications.length
 
   const selectedApp = useMemo(
@@ -362,7 +402,14 @@ const MyMemberships = () => {
           </button>
         </div>
 
-        {tab === 'applied' ? (
+        {listError && (
+          <p className="clubs-empty" role="alert" style={{ margin: '12px 0' }}>
+            {listError}
+          </p>
+        )}
+        {listLoading && <p className="clubs-empty">Loading your clubs and applications…</p>}
+
+        {!listLoading && tab === 'applied' ? (
           <section className="mm-applications-section" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
             <div className="mva-list">
               {applications.map((app) => (
@@ -389,7 +436,7 @@ const MyMemberships = () => {
                     <div className="mva-card-meta">
                       <span>
                         <IconClock />
-                        Applied on {formatDate(app.appliedOn)}
+                        Applied on {app.appliedOn ? formatDate(app.appliedOn) : '—'}
                       </span>
                       <span className="mva-card-id">Application ID: {app.id}</span>
                       <span className="mva-card-id">{app.applicationType === 'vacancy' ? 'Vacancy' : 'Membership'}</span>
@@ -400,20 +447,24 @@ const MyMemberships = () => {
                   </div>
                 </article>
               ))}
+              {applications.length === 0 && (
+                <p className="clubs-empty" style={{ padding: '16px 0' }}>No applications yet.</p>
+              )}
             </div>
           </section>
         ) : (
           <div className="clubs-grid">
             {filtered.length > 0 ? (
               filtered.map((m) => {
-                const club = getClubById(m.clubId)
+                const club = clubMetaById[String(m.clubId)] ?? null
                 const roleLabel = m.role && m.memberSince ? `${m.role} · Since ${m.memberSince}` : m.memberSince ? `Member since ${m.memberSince}` : m.role || 'Member'
+                const canOpen = Boolean(m.clubId)
                 return (
                   <article
-                    key={`${m.clubId}-${m.status}`}
+                    key={`${m.clubId}-${m.status}-${m.role}`}
                     className="clubs-card"
-                    onClick={() => club && navigate(`/clubs/${m.clubId}`)}
-                    onKeyDown={(e) => club && e.key === 'Enter' && navigate(`/clubs/${m.clubId}`)}
+                    onClick={() => canOpen && navigate(`/clubs/${m.clubId}`)}
+                    onKeyDown={(e) => canOpen && e.key === 'Enter' && navigate(`/clubs/${m.clubId}`)}
                     role="button"
                     tabIndex={0}
                   >
@@ -422,7 +473,7 @@ const MyMemberships = () => {
                       style={club?.image ? { backgroundImage: `url(${club.image})` } : undefined}
                     >
                       <span className="clubs-card-tag">{club?.category ?? 'Club'}</span>
-                      <span className={`mm-card-status-badge mm-card-status-badge--${m.status.toLowerCase()}`}>
+                      <span className={`mm-card-status-badge mm-card-status-badge--${String(m.status).toLowerCase().replace(/\s+/g, '-')}`}>
                         {m.status}
                       </span>
                     </div>
@@ -442,7 +493,7 @@ const MyMemberships = () => {
                           className="clubs-card-cta"
                           onClick={(e) => {
                             e.stopPropagation()
-                            if (club) navigate(`/clubs/${m.clubId}`)
+                            if (canOpen) navigate(`/clubs/${m.clubId}`)
                           }}
                         >
                           View Details

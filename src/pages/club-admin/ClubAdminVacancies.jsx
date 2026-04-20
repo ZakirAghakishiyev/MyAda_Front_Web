@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { mockVacancies } from '../../data/clubVacanciesData'
+import { fetchClubAdminVacancies, patchClubAdminVacancy, patchClubAdminVacancyStatus } from '../../api/clubApi'
+import { mapVacancyFromApi } from '../../api/clubMappers'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -18,16 +20,56 @@ const IconEdit = () => (
 )
 
 const ClubAdminVacancies = () => {
+  const clubId = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [vacancies, setVacancies] = useState(
-    mockVacancies.map((v) => ({
-      status: 'Active',
-      ...v,
-      status: v.status || 'Active'
-    }))
-  )
+  const [vacancies, setVacancies] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  const loadVacancies = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const apiStatus = statusFilter === 'all' ? undefined : statusFilter
+      const data = await fetchClubAdminVacancies(clubId, {
+        ...(apiStatus ? { status: apiStatus } : {}),
+        page: 1,
+        limit: 100,
+      })
+      const items = data?.items ?? data ?? []
+      const arr = Array.isArray(items) ? items : []
+      setVacancies(
+        arr.map((row) => {
+          const m = mapVacancyFromApi({
+            ...row,
+            id: row.id ?? row.vacancyId,
+            title: row.title,
+            clubName: row.clubName,
+            isActive: row.isActive,
+            status: row.status,
+          })
+          if (!m) return null
+          const inactive =
+            row.isActive === false ||
+            /^inactive$/i.test(String(row.status ?? '')) ||
+            m.isActive === false
+          return { ...m, status: inactive ? 'Inactive' : 'Active' }
+        }).filter(Boolean)
+      )
+    } catch (e) {
+      setVacancies([])
+      setLoadError(e?.message || 'Could not load vacancies.')
+    } finally {
+      setLoading(false)
+    }
+  }, [clubId, statusFilter])
+
+  useEffect(() => {
+    loadVacancies()
+  }, [loadVacancies])
   const [editingVacancy, setEditingVacancy] = useState(null)
   const [roleTitle, setRoleTitle] = useState('')
   const [deadline, setDeadline] = useState('')
@@ -58,11 +100,8 @@ const ClubAdminVacancies = () => {
     if (categoryFilter) {
       list = list.filter((v) => (v.categoryTag || v.category) === categoryFilter)
     }
-    if (statusFilter !== 'all') {
-      list = list.filter((v) => v.status === (statusFilter === 'active' ? 'Active' : 'Inactive'))
-    }
     return list
-  }, [vacancies, search, categoryFilter, statusFilter])
+  }, [vacancies, search, categoryFilter])
 
   const handleRowStatusChange = (id, value) => {
     setPendingStatus((prev) => {
@@ -77,7 +116,15 @@ const ClubAdminVacancies = () => {
     })
   }
 
-  const confirmRowStatus = (id) => {
+  const confirmRowStatus = async (id) => {
+    const val = pendingStatus[id]
+    if (!val) return
+    try {
+      await patchClubAdminVacancyStatus(clubId, id, val === 'Active' ? 'active' : 'inactive')
+    } catch (e) {
+      alert(e?.message || 'Could not update status.')
+      return
+    }
     setVacancies((prev) => {
       const next = prev.map((v) =>
         v.id === id && pendingStatus[id] ? { ...v, status: pendingStatus[id] } : v
@@ -89,6 +136,7 @@ const ClubAdminVacancies = () => {
       delete clone[id]
       return clone
     })
+    loadVacancies()
   }
 
   const startEditing = (vacancy) => {
@@ -119,9 +167,18 @@ const ClubAdminVacancies = () => {
     setRequirements((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!editingVacancy) return
+    try {
+      await patchClubAdminVacancy(clubId, editingVacancy.id, {
+        title: roleTitle.trim(),
+        description: description.trim(),
+      })
+    } catch (err) {
+      alert(err?.message || 'Save failed.')
+      return
+    }
     setVacancies((prev) =>
       prev.map((v) => {
         if (v.id !== editingVacancy.id) return v
@@ -130,6 +187,7 @@ const ClubAdminVacancies = () => {
           : v.aboutRole
         return {
           ...v,
+          position: roleTitle.trim() || v.position,
           deadline: deadline || v.deadline,
           aboutRole: newAboutRole,
           requirements: requirements && requirements.length > 0 ? requirements : v.requirements
@@ -137,6 +195,7 @@ const ClubAdminVacancies = () => {
       })
     )
     setEditingVacancy(null)
+    loadVacancies()
   }
 
   if (editingVacancy) {
@@ -148,9 +207,9 @@ const ClubAdminVacancies = () => {
 
         <div className="club-admin-content">
           <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 20, paddingLeft: 24 }}>
-            <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+            <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
-            <Link to="/club-admin/vacancies" style={{ color: '#64748b' }}>Vacancies</Link>
+            <Link to={`/club-admin/vacancies${clubQs}`} style={{ color: '#64748b' }}>Vacancies</Link>
             <span style={{ margin: '0 8px' }}>&gt;</span>
             <span style={{ color: '#0f172a', fontWeight: 600 }}>Edit Vacancy</span>
           </nav>
@@ -169,16 +228,11 @@ const ClubAdminVacancies = () => {
               <div style={{ flex: 1 }}>
                 <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Basic Information</h3>
                 <div className="club-admin-field">
-                  <label>Role Title (fixed)</label>
+                  <label>Role title</label>
                   <input
                     type="text"
                     value={roleTitle}
-                    disabled
-                    style={{
-                      backgroundColor: '#f1f5f9',
-                      color: '#94a3b8',
-                      cursor: 'not-allowed'
-                    }}
+                    onChange={(e) => setRoleTitle(e.target.value)}
                   />
                 </div>
                 <div className="club-admin-form-row">
@@ -266,7 +320,7 @@ const ClubAdminVacancies = () => {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-              <span style={{ fontSize: 13, color: '#64748b' }}>Changes are not persisted to a backend and are for demo purposes.</span>
+              <span style={{ fontSize: 13, color: '#64748b' }}>Changes are saved directly to backend.</span>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button type="button" className="club-admin-btn-secondary" onClick={cancelEditing}>
                   Cancel
@@ -297,15 +351,18 @@ const ClubAdminVacancies = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Link to="/club-admin/vacancies/new" className="club-admin-btn-primary" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          <Link to={`/club-admin/vacancies/new${clubQs}`} className="club-admin-btn-primary" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
             + Announce vacancy
           </Link>
         </div>
       </header>
 
       <div className="club-admin-content">
+        {loadError ? (
+          <p style={{ margin: '0 24px 20px', fontSize: 14, color: '#b91c1c' }}>{loadError}</p>
+        ) : null}
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>Vacancies</span>
         </nav>
@@ -400,6 +457,13 @@ const ClubAdminVacancies = () => {
               </tr>
             </thead>
             <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
+                    Loading vacancies...
+                  </td>
+                </tr>
+              ) : null}
               {filteredVacancies.map((v) => {
                 const currentStatus = pendingStatus[v.id] || v.status
                 const hasPendingChange = pendingStatus[v.id] && pendingStatus[v.id] !== v.status
@@ -443,9 +507,9 @@ const ClubAdminVacancies = () => {
                   </tr>
                 )
               })}
-              {filteredVacancies.length === 0 && (
+              {!loading && filteredVacancies.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
                     No vacancies match your filters.
                   </td>
                 </tr>

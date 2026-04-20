@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { VACANCY_CATEGORIES } from '../../data/clubAdminData'
+import { createClubAdminPosition } from '../../api/clubApi'
+import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
 const IconTag = () => (
@@ -17,6 +19,8 @@ const IconCheck = () => (
 )
 
 const ClubAdminNewPosition = () => {
+  const clubId = useClubAdminClubId()
+  const clubQs = useClubAdminSearch()
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
@@ -26,12 +30,19 @@ const ClubAdminNewPosition = () => {
     'Enthusiasm for university events and student life.'
   ])
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault()
     const trimmed = title.trim()
     if (!trimmed || !category) return
-    // In this mock UI we don’t persist to backend – just redirect to positions list.
-    navigate('/club-admin/positions')
+    try {
+      await createClubAdminPosition(clubId, {
+        name: trimmed,
+      })
+    } catch (err) {
+      alert(err?.message || 'Could not create position.')
+      return
+    }
+    navigate(`/club-admin/positions${clubQs}`)
   }
 
   const addRequirement = () => {
@@ -53,9 +64,9 @@ const ClubAdminNewPosition = () => {
 
       <div className="club-admin-content">
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 20, paddingLeft: 24 }}>
-          <Link to="/club-admin" style={{ color: '#64748b' }}>Dashboard</Link>
+          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Dashboard</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
-          <Link to="/club-admin/positions" style={{ color: '#64748b' }}>Positions</Link>
+          <Link to={`/club-admin/positions${clubQs}`} style={{ color: '#64748b' }}>Positions</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>Create Position</span>
         </nav>
@@ -131,7 +142,7 @@ const ClubAdminNewPosition = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
             <span style={{ fontSize: 13, color: '#64748b' }}>This will add a reusable position to your club.</span>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" className="club-admin-btn-secondary" onClick={() => navigate('/club-admin/positions')}>
+              <button type="button" className="club-admin-btn-secondary" onClick={() => navigate(`/club-admin/positions${clubQs}`)}>
                 Cancel
               </button>
               <button type="submit" className="club-admin-btn-primary" disabled={!title.trim() || !category}>

@@ -10,8 +10,9 @@ import {
   schedulingPatchSession,
   schedulingPublish,
 } from '../api/schedulingMsApi'
+import { SCHEDULING_API_BASE, SCHEDULING_DEV_USER_ID_HEADER } from '../api/schedulingConfig'
 import { instructorNameById } from '../data/mockInstructors'
-import { getSchedulingUserId } from '../utils/schedulingUserId'
+import { getEffectiveSchedulingInstructorId } from '../utils/schedulingInstructorId'
 import './SchedulingPage.css'
 import './scheduling/schedulingMs.css'
 
@@ -63,9 +64,39 @@ function timeslotsForRoom(options, roomId) {
 }
 
 function instructorDisplayName(instructorUserId) {
-  const id = Number(instructorUserId)
-  if (!Number.isFinite(id)) return '—'
-  return instructorNameById(id)
+  if (instructorUserId == null || instructorUserId === '') return '—'
+  return instructorNameById(instructorUserId)
+}
+
+/**
+ * Show room as building + number when the API splits them (e.g. B + 101 → B101).
+ * If `room_name` is already a short code like B102, it is returned unchanged.
+ */
+function formatScheduleRoomLabel(row) {
+  if (!row || typeof row !== 'object') return '—'
+  const rawName = String(row.room_name ?? row.roomName ?? '').trim()
+  const building = String(
+    row.building_code ??
+      row.buildingCode ??
+      (typeof row.building === 'string' ? row.building : row.building?.code ?? row.building?.name) ??
+      row.building_name ??
+      row.buildingName ??
+      ''
+  ).trim()
+  const roomNum = String(row.room_number ?? row.roomNumber ?? '').trim()
+
+  if (building && roomNum) {
+    return `${building}${roomNum}`
+  }
+  if (rawName && /^[A-Za-z]{1,10}\d/.test(rawName)) {
+    return rawName
+  }
+  if (building && rawName && /^\d+$/.test(rawName)) {
+    return `${building}${rawName}`
+  }
+  if (rawName) return rawName
+  if (row.room_id != null) return String(row.room_id)
+  return '—'
 }
 
 function statusPillClass(status) {
@@ -146,9 +177,8 @@ const SchedulingPage = () => {
     async (runId) => {
       const rid = Number(runId)
       const instRaw = instructorFilter.trim()
-      const inst = instRaw === '' ? undefined : Number.parseInt(instRaw, 10)
       const q = { day: dayFilter || undefined }
-      if (inst !== undefined && Number.isFinite(inst)) q.instructor_user_id = inst
+      if (instRaw) q.instructor_user_id = instRaw
       const sess = await schedulingGetSessions(rid, q)
       setSessions(sess)
     },
@@ -227,9 +257,9 @@ const SchedulingPage = () => {
     setPublishMsg('')
     setPublishMsgTone(null)
     setPublishResult(null)
-    const uid = getSchedulingUserId()
+    const uid = getEffectiveSchedulingInstructorId()
     if (!uid) {
-      setPublishMsg('Set Instructor user ID in the bar above.')
+      setPublishMsg('Sign in as an instructor or set Instructor user ID in the bar above (UUID or numeric).')
       setPublishMsgTone('error')
       return
     }
@@ -348,7 +378,7 @@ const SchedulingPage = () => {
 
         <h1>Scheduling</h1>
         <p className="scheduling-muted">
-          Scheduling microservice at <span className="sched-ms-code">http://13.60.31.141:5000/api/v1</span>. Generate a
+          Scheduling microservice at <span className="sched-ms-code">{SCHEDULING_API_BASE}</span>. Generate a
           run, inspect sessions, patch placements, then publish when ready. Publish sends{' '}
           <span className="sched-ms-code">from_date</span> / <span className="sched-ms-code">to_date</span> (and optional{' '}
           <span className="sched-ms-code">topic</span>) to bulk-generate Attendance sessions per lesson.
@@ -361,8 +391,9 @@ const SchedulingPage = () => {
         <section className="sched-ms-section">
           <h2>Generate schedule</h2>
           <p className="scheduling-muted" style={{ marginTop: 0 }}>
-            POST <span className="sched-ms-code">/schedules/generate</span> — no <span className="sched-ms-code">X-User-Id</span>{' '}
-            required.
+            POST <span className="sched-ms-code">/schedules/generate</span> — no{' '}
+            <span className="sched-ms-code">{SCHEDULING_DEV_USER_ID_HEADER}</span> required. Body uses string fields, e.g.{' '}
+            <span className="sched-ms-code">{'{ "academic_year": "2026", "semester": "Fall" }'}</span>. If you see 422, read the error text: it is often a dependency issue (for example no rooms from the Location service), not invalid JSON.
           </p>
           <div className="sched-ms-form-grid">
             <label className="sched-ms-field">
@@ -509,7 +540,8 @@ const SchedulingPage = () => {
             ) : null}
             {!canPublish && runDetail.status !== 'published' ? (
               <p className="scheduling-muted" style={{ fontSize: 13 }}>
-                Publish is only allowed when status is <code>completed</code> and <code>X-User-Id</code> is set.
+                Publish is only allowed when status is <code>completed</code> and{' '}
+                <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> is set.
               </p>
             ) : null}
           </section>
@@ -536,10 +568,12 @@ const SchedulingPage = () => {
                 <label className="sched-ms-field">
                   <span>instructor_user_id</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="text"
+                    autoComplete="off"
                     value={instructorFilter}
                     onChange={(e) => setInstructorFilter(e.target.value)}
-                    placeholder="Optional"
+                    placeholder="UUID or numeric — optional"
                   />
                 </label>
               </div>
@@ -565,7 +599,7 @@ const SchedulingPage = () => {
                           {s.course_code} {s.course_title ? `— ${s.course_title}` : ''}
                         </td>
                         <td>{instructorDisplayName(s.instructor_user_id)}</td>
-                        <td>{s.room_name || '—'}</td>
+                        <td>{formatScheduleRoomLabel(s)}</td>
                         <td>{s.day}</td>
                         <td>
                           {s.start_time}–{s.end_time}
@@ -656,7 +690,7 @@ const SchedulingPage = () => {
                       <option value="">Choose a room…</option>
                       {modalEligibleRooms.map((r) => (
                         <option key={r.room_id} value={String(r.room_id)}>
-                          {r.room_name}
+                          {formatScheduleRoomLabel(r)}
                           {r.capacity != null ? ` (capacity ${r.capacity})` : ''}
                         </option>
                       ))}
