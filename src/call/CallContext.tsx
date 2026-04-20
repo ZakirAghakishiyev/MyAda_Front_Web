@@ -102,6 +102,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const iceConfigurationRef = useRef<IceConfigurationPayload | null>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const pcCreateInFlightRef = useRef<Promise<RTCPeerConnection> | null>(null)
+  const pcInstanceCounterRef = useRef(0)
   const statsTimerRef = useRef<number | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const remoteStreamRef = useRef<MediaStream | null>(null)
@@ -199,6 +200,27 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   )
 
+  const logSenderDiagnostics = useCallback((pc: RTCPeerConnection, reason: string, pcInstanceId: number) => {
+    const senders = pc.getSenders()
+    const simplifiedSenders = senders.map((s) => ({
+      kind: s.track?.kind ?? null,
+      enabled: s.track?.enabled ?? null,
+      muted: s.track?.muted ?? null,
+      readyState: s.track?.readyState ?? null,
+      id: s.track?.id ?? null,
+    }))
+    dbg('SENDERS', { reason, pcInstanceId, senders: simplifiedSenders, senderCount: senders.length })
+    const audioSender = senders.find((s) => s.track?.kind === 'audio')
+    dbg('SENDER TRACK', {
+      reason,
+      pcInstanceId,
+      enabled: audioSender?.track?.enabled ?? null,
+      muted: audioSender?.track?.muted ?? null,
+      readyState: audioSender?.track?.readyState ?? null,
+      id: audioSender?.track?.id ?? null,
+    })
+  }, [])
+
   const resolveIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
     const token = getAccessToken()
     const endpoint = ICE_SERVERS_ENDPOINT
@@ -251,8 +273,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const ensurePeerConnection = useCallback(async () => {
-    if (pcRef.current) return pcRef.current
-    if (pcCreateInFlightRef.current) return pcCreateInFlightRef.current
+    if (pcRef.current) {
+      dbg('PC INSTANCE', { reuse: true, status: 'existing', pc: pcRef.current })
+      return pcRef.current
+    }
+    if (pcCreateInFlightRef.current) {
+      dbg('PC INSTANCE', { reuse: true, status: 'create-in-flight' })
+      return pcCreateInFlightRef.current
+    }
 
     pcCreateInFlightRef.current = (async () => {
       const iceServers = await resolveIceServers()
@@ -260,9 +288,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(`ICE configuration is empty. Verify ${ICE_SERVERS_ENDPOINT} returns TURN/STUN servers.`)
       }
 
+      const pcInstanceId = ++pcInstanceCounterRef.current
       const pc = new RTCPeerConnection({ iceServers })
       pcRef.current = pc
+      dbg('PC INSTANCE', { reuse: false, status: 'created', pcInstanceId, pc })
       dbg('PeerConnectionCreated', {
+        pcInstanceId,
         iceServers: iceServers.map((s) => s.urls),
       })
 
@@ -280,6 +311,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }))
         )
         local.getTracks().forEach((track) => pc.addTrack(track, local))
+        dbg('AddedLocalTracks', {
+          pcInstanceId,
+          tracks: local.getTracks().map((t) => ({
+            id: t.id,
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState,
+          })),
+        })
+        logSenderDiagnostics(pc, 'after-addTrack', pcInstanceId)
 
         if (!remoteStreamRef.current) {
           remoteStreamRef.current = new MediaStream()
@@ -315,6 +357,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return
           }
           dbg('SendIceCandidate', {
+            pcInstanceId,
             to: targetConnectionId,
             sdpMid: e.candidate.sdpMid,
             sdpMLineIndex: e.candidate.sdpMLineIndex,
@@ -330,17 +373,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             )
           } catch (err) {
             dbg('SendIceCandidateFailed', {
+              pcInstanceId,
               to: targetConnectionId,
               message: String((err as Error)?.message || err),
             })
           }
         }
-        pc.onconnectionstatechange = () =>
-          dbg('ConnectionStateChanged', { connectionState: pc.connectionState })
+        pc.onconnectionstatechange = () => {
+          dbg('ConnectionStateChanged', { pcInstanceId, connectionState: pc.connectionState })
+          logSenderDiagnostics(pc, 'onconnectionstatechange', pcInstanceId)
+        }
         pc.oniceconnectionstatechange = () =>
-          dbg('IceConnectionStateChanged', { iceConnectionState: pc.iceConnectionState })
+          dbg('IceConnectionStateChanged', { pcInstanceId, iceConnectionState: pc.iceConnectionState })
         pc.onsignalingstatechange = () =>
-          dbg('SignalingStateChanged', { signalingState: pc.signalingState })
+          dbg('SignalingStateChanged', { pcInstanceId, signalingState: pc.signalingState })
 
         if (statsTimerRef.current) {
           window.clearInterval(statsTimerRef.current)
@@ -353,12 +399,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
               reports.forEach((r) => {
                 if (r.type === 'outbound-rtp' && (r as any).kind === 'audio') {
                   dbg('stats.outboundAudio', {
+                    pcInstanceId,
                     bytesSent: (r as any).bytesSent ?? null,
                     packetsSent: (r as any).packetsSent ?? null,
                   })
                 }
                 if (r.type === 'inbound-rtp' && (r as any).kind === 'audio') {
                   dbg('stats.inboundAudio', {
+                    pcInstanceId,
                     bytesReceived: (r as any).bytesReceived ?? null,
                     packetsReceived: (r as any).packetsReceived ?? null,
                     packetsLost: (r as any).packetsLost ?? null,
@@ -367,7 +415,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               })
             } catch (err) {
-              dbg('stats.error', String((err as Error)?.message || err))
+              dbg('stats.error', { pcInstanceId, message: String((err as Error)?.message || err) })
             }
           }, 2000)
         }
@@ -389,7 +437,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       pcCreateInFlightRef.current = null
     }
-  }, [resolveIceServers])
+  }, [logSenderDiagnostics, resolveIceServers])
 
   const cleanupPeer = useCallback(() => {
     if (statsTimerRef.current) {
