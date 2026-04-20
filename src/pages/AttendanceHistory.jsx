@@ -12,7 +12,6 @@ import './AttendanceStudents.css'
 import './AttendanceHistory.css'
 
 const STATUS_ORDER = ['late', 'absent', 'present', 'excused']
-
 function getAttendanceRate(sessionId) {
   const students = getStudentsForSession(sessionId)
   const total = students.length
@@ -64,7 +63,6 @@ export default function AttendanceHistory() {
     })
     setSaveMessage('Attendance status updated locally.')
   }
-
   return (
     <div className="attendance-portal">
       <header className="ap-navbar">

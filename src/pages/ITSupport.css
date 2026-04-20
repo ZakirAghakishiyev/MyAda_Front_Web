@@ -315,6 +315,23 @@
   text-decoration: none;
 }
 
+.it-support-callhub-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button.it-support-hotline {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  align-items: center;
+}
+
+.it-support-hotline--secondary {
+  background: #93c5fd;
+  color: #0f172a;
+}
 .it-support-info-title {
   display: flex;
   align-items: center;

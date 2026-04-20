@@ -10,7 +10,6 @@ import './AttendancePortal.css'
 import './AttendanceStudents.css'
 
 const STATUS_ORDER = ['late', 'absent', 'present', 'excused']
-
 const statusLabel = (status) => {
   switch (status) {
     case 'present': return { text: 'PRESENT', className: 'ap-student-status--present' }
@@ -53,7 +52,6 @@ export default function AttendanceStudents() {
     })
     setSaveMessage('Attendance status updated locally.')
   }
-
   return (
     <div className="attendance-portal">
       <header className="ap-navbar">

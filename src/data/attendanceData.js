@@ -37,7 +37,6 @@ export function saveManualAttendanceStatus({ sessionId, studentId, status }) {
   writeStatusOverrides(overrides)
   return { sessionId, studentId, status, savedAt: new Date().toISOString() }
 }
-
 export const PAST_SESSIONS_BY_CRN = {
   '10101': [
     { id: 's1', date: '2024-03-01', startTime: '09:00', endTime: '10:30' },
