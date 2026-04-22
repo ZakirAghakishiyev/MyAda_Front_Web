@@ -120,7 +120,8 @@ const ClubAdminVacancies = () => {
     const val = pendingStatus[id]
     if (!val) return
     try {
-      await patchClubAdminVacancyStatus(clubId, id, val === 'Active' ? 'active' : 'inactive')
+      // Backend expects { status: "draft" | "published"/"active" | "inactive" }.
+      await patchClubAdminVacancyStatus(clubId, id, val === 'Active' ? 'published' : 'inactive')
     } catch (e) {
       alert(e?.message || 'Could not update status.')
       return
@@ -170,11 +171,15 @@ const ClubAdminVacancies = () => {
   const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!editingVacancy) return
+    const body = {
+      title: roleTitle.trim(),
+      description: description.trim(),
+    }
+    if (deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+      body.applicationDeadline = `${deadline}T23:59:59Z`
+    }
     try {
-      await patchClubAdminVacancy(clubId, editingVacancy.id, {
-        title: roleTitle.trim(),
-        description: description.trim(),
-      })
+      await patchClubAdminVacancy(clubId, editingVacancy.id, body)
     } catch (err) {
       alert(err?.message || 'Save failed.')
       return

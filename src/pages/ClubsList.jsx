@@ -48,6 +48,12 @@ const ClubsList = () => {
   const [total, setTotal] = useState(0)
   const limit = 24
 
+  const isInactiveClubStatus = useCallback((status) => {
+    const v = String(status ?? '').trim().toLowerCase()
+    if (!v) return false
+    return v === 'inactive' || v === 'archived' || v === '3' || v === 'disabled'
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -77,7 +83,10 @@ const ClubsList = () => {
         limit,
       })
       const items = data?.items ?? []
-      const mapped = items.map((row) => mapClubFromApi(row)).filter(Boolean)
+      const mapped = items
+        .map((row) => mapClubFromApi(row))
+        .filter(Boolean)
+        .filter((club) => !isInactiveClubStatus(club.status) && !isInactiveClubStatus(club.raw?.status))
       setClubs((prev) => (page === 1 ? mapped : [...prev, ...mapped]))
       setTotal(Number(data?.total) || items.length)
     } catch (e) {

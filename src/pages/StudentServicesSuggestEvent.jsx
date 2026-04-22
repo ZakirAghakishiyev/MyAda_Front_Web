@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { proposeClubAdminEvent } from '../../api/clubApi'
-import { getBuildings, getRoomsByBuildingId } from '../../api/locationApi'
-import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
-import './ClubAdmin.css'
+import { submitStudentServicesEventProposal } from '../api/clubApi'
+import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
+import './club-admin/ClubAdmin.css'
 
 const STEPS = 4
 const IconInfo = () => (
@@ -33,7 +32,7 @@ const IconTrash = () => (
   </svg>
 )
 
-const SUGGEST_EVENT_DRAFT_COOKIE_KEY = 'club_admin_suggest_event_draft'
+const SUGGEST_EVENT_DRAFT_COOKIE_KEY = 'student_services_suggest_event_draft'
 
 const setDraftCookie = (key, value, days = 7) => {
   if (typeof document === 'undefined') return
@@ -66,7 +65,6 @@ const clearDraftCookie = (key) => {
   document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
 }
 
-/** Start datetime string from calendar + clock (local `YYYY-MM-DDTHH:mm:ss`, no UTC shift). */
 function composeProposalStartDateTime(eventDate, eventTime) {
   const d = String(eventDate ?? '').trim()
   if (!d) return ''
@@ -104,9 +102,7 @@ function roomNameFor(r) {
   return String(r.name ?? r.number ?? r.roomNumber ?? r.title ?? r.code ?? '').trim()
 }
 
-const ClubAdminSuggestEvent = () => {
-  const clubId = useClubAdminClubId()
-  const clubQs = useClubAdminSearch()
+const StudentServicesSuggestEvent = () => {
   const navigate = useNavigate()
   const [step, setStep] = useState(4)
   const [eventName, setEventName] = useState('')
@@ -189,7 +185,6 @@ const ClubAdminSuggestEvent = () => {
   }, [buildingId])
 
   useEffect(() => {
-    // Keep the submitted `venue` string aligned with the selected room/building.
     const b = buildings.find((x) => String(x?.id) === String(buildingId))
     const r = rooms.find((x) => String(x?.id) === String(roomId))
     const bName = buildingNameFor(b)
@@ -219,7 +214,6 @@ const ClubAdminSuggestEvent = () => {
     }
     setDuration(draft.duration || '3')
     setAttendance(draft.attendance || '250')
-    // Backwards compatible: old drafts store only `venue`; newer drafts store buildingId/roomId too.
     if (draft.buildingId != null) setBuildingId(String(draft.buildingId))
     if (draft.roomId != null) setRoomId(String(draft.roomId))
     if (draft.venue) setVenue(String(draft.venue))
@@ -260,7 +254,7 @@ const ClubAdminSuggestEvent = () => {
 
   const handleSubmit = async () => {
     try {
-      await proposeClubAdminEvent(clubId, {
+      await submitStudentServicesEventProposal({
         name: eventName.trim() || 'Event proposal',
         dateTime: composeProposalStartDateTime(eventDate, eventTime),
         duration,
@@ -276,13 +270,14 @@ const ClubAdminSuggestEvent = () => {
           cleaning,
           otherNeeds,
         },
+        submittedByOrganization: 'Student Services',
       })
     } catch (err) {
       alert(err?.message || 'Could not submit event proposal.')
       return
     }
     clearDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY)
-    navigate(`/club-admin${clubQs}`)
+    navigate('/student-services', { state: { section: 'event-proposals' } })
   }
 
   const addSubEvent = () => {
@@ -320,16 +315,14 @@ const ClubAdminSuggestEvent = () => {
   return (
     <>
       <header className="club-admin-header">
-        <h1 className="club-admin-header-title">Suggest New Event</h1>
+        <h1 className="club-admin-header-title">Propose campus event</h1>
       </header>
 
       <div className="club-admin-content">
         <nav style={{ fontSize: 13, color: '#64748b', marginBottom: 16, paddingLeft: 24 }}>
-          <Link to={`/club-admin${clubQs}`} style={{ color: '#64748b' }}>Home</Link>
+          <Link to="/student-services" style={{ color: '#64748b' }}>Student Services</Link>
           <span style={{ margin: '0 8px' }}>&gt;</span>
-          <Link to={`/club-admin/events${clubQs}`} style={{ color: '#64748b' }}>Events</Link>
-          <span style={{ margin: '0 8px' }}>&gt;</span>
-          <span style={{ color: '#0f172a', fontWeight: 600 }}>New Proposal</span>
+          <span style={{ color: '#0f172a', fontWeight: 600 }}>New event proposal</span>
         </nav>
 
         <div style={{ paddingLeft: 24, paddingRight: 24, marginBottom: 24 }}>
@@ -659,4 +652,4 @@ const ClubAdminSuggestEvent = () => {
   )
 }
 
-export default ClubAdminSuggestEvent
+export default StudentServicesSuggestEvent

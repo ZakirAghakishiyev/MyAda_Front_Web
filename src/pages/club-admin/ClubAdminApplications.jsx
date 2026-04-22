@@ -115,6 +115,10 @@ const ClubAdminApplications = () => {
 
   const handleApprove = async (id, typeOverride) => {
     const t = typeOverride ?? appType
+    const row = (applications?.[t] || []).find((a) => a.id === id)
+    const who = row?.applicantName ? ` from ${row.applicantName}` : ''
+    const kind = t === 'job' ? 'job application' : 'membership application'
+    if (!window.confirm(`Approve this ${kind}${who}?`)) return
     try {
       await approveClubAdminApplication(clubId, id)
     } catch (e) {

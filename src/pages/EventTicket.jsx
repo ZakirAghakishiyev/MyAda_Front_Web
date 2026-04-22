@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { fetchEvent, fetchEventTicket } from '../api/clubApi'
 import { mapEventFromApi } from '../api/clubMappers'
+import { getJwtUserId } from '../auth/jwtRoles'
+import { QRCodeSVG } from 'qrcode.react'
 import adaLogo from '../assets/ada-logo.png'
 import './ClubVacancies.css'
 import './EventTicket.css'
@@ -61,9 +63,11 @@ const formatTimeRange = (start, end) => {
 const EventTicket = () => {
   const navigate = useNavigate()
   const { id } = useParams()
+  const location = useLocation()
   const [event, setEvent] = useState(null)
   const [ticketPayload, setTicketPayload] = useState(null)
   const [loadError, setLoadError] = useState(null)
+  const [qrError, setQrError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -109,28 +113,46 @@ const EventTicket = () => {
     ticketPayload?.holderName ??
     ticketPayload?.name ??
     'Attendee'
-  const qrData = encodeURIComponent(JSON.stringify({ eventId: event.id, ticketId, attendee: attendeeName }))
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`
+
+  const registrationState =
+    location?.state && typeof location.state === 'object' ? location.state.registration : null
+
+  const jwtToken =
+    ticketPayload?.jwt ??
+    ticketPayload?.token ??
+    ticketPayload?.accessToken ??
+    ticketPayload?.ticketToken ??
+    ticketPayload?.qrToken ??
+    registrationState?.jwt ??
+    registrationState?.token ??
+    registrationState?.accessToken ??
+    null
+
+  // Per API contract: QR should contain the ticket JWT itself.
+  const qrPayload = jwtToken ? String(jwtToken) : ''
+
+  const qrDomId = `event-ticket-qr-${String(event.id)}`
 
   const handleDownload = () => {
-    fetch(qrUrl)
-      .then((r) => r.blob())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `ticket-${event.title.replace(/\s+/g, '-')}-qr.png`
-        a.click()
-        URL.revokeObjectURL(url)
-      })
-      .catch(() => {
-        const a = document.createElement('a')
-        a.href = qrUrl
-        a.download = `ticket-${event.id}-qr.png`
-        a.target = '_blank'
-        a.rel = 'noopener'
-        a.click()
-      })
+    setQrError('')
+    try {
+      const svg = document.getElementById(qrDomId)
+      if (!(svg instanceof SVGElement)) {
+        setQrError('Could not find QR code to download.')
+        return
+      }
+      const serializer = new XMLSerializer()
+      const svgString = serializer.serializeToString(svg)
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ticket-${event.title.replace(/\s+/g, '-')}-qr.svg`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setQrError(e?.message || 'Could not download QR code.')
+    }
   }
 
   const scheduleTime = formatTimeRange(event.time, event.endTime)
@@ -197,7 +219,13 @@ const EventTicket = () => {
           </div>
           <div className="et-ticket-body">
             <div className="et-ticket-qr">
-              <img src={qrUrl} alt="QR Code" width={200} height={200} />
+              <QRCodeSVG
+                id={qrDomId}
+                value={qrPayload}
+                size={200}
+                level="M"
+                includeMargin
+              />
               <span className="et-ticket-scan">SCAN AT ENTRANCE</span>
             </div>
             <div className="et-ticket-details">
@@ -215,6 +243,16 @@ const EventTicket = () => {
                   Download Ticket
                 </button>
               </div>
+              {qrError ? (
+                <p style={{ marginTop: 10, color: '#b91c1c', fontSize: 13 }} role="alert">
+                  {qrError}
+                </p>
+              ) : null}
+              {!jwtToken ? (
+                <p style={{ marginTop: 10, color: '#64748b', fontSize: 12 }}>
+                  Note: backend did not return a ticket JWT token yet, so the QR is empty.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>

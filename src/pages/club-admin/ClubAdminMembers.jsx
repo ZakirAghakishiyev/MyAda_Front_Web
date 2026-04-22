@@ -7,6 +7,7 @@ import {
   deleteClubAdminMember,
   deleteClubAdminEmployee,
 } from '../../api/clubApi'
+import { fetchAuthUserById } from '../../api/authUsersApi'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
@@ -48,16 +49,41 @@ const ClubAdminMembers = () => {
       }))
       setPositionOptions(positions)
 
-      setMembers(
-        (Array.isArray(memItems) ? memItems : []).map((m, index) => ({
-          id: m.id ?? m.memberId ?? `m-${index}`,
-          name: m.name ?? m.firstName ?? 'Member',
-          surname: m.surname ?? m.lastName ?? '',
-          email: m.email ?? '',
-          studentId: m.studentId ?? '—',
-          joinedDate: m.joinedDate ?? m.joinedAt ?? '—',
-        }))
-      )
+      const baseMembers = (Array.isArray(memItems) ? memItems : []).map((m, index) => {
+        const userId = m.userId ?? m.userID ?? m.applicantUserId ?? m.user?.id ?? m.studentId
+        return {
+          id: String(m.id ?? m.memberId ?? `m-${index}`),
+          userId: userId != null ? String(userId) : '',
+          name: '—',
+          surname: '',
+          email: '',
+          joinedDate: m.joinedDate ?? m.joinedAt ?? m.createdAt ?? '—',
+          raw: m,
+        }
+      })
+      setMembers(baseMembers)
+      // Enrich members via auth microservice.
+      const uniqueUserIds = Array.from(new Set(baseMembers.map((m) => m.userId).filter(Boolean)))
+      if (uniqueUserIds.length) {
+        const profiles = await Promise.all(uniqueUserIds.map((uid) => fetchAuthUserById(uid)))
+        const byId = new Map()
+        uniqueUserIds.forEach((uid, i) => {
+          const p = profiles[i]
+          if (p && typeof p === 'object') byId.set(uid, p)
+        })
+        setMembers((prev) =>
+          prev.map((m) => {
+            const p = m.userId ? byId.get(m.userId) : null
+            if (!p) return m
+            return {
+              ...m,
+              name: String(p.firstName ?? '').trim() || String(p.userName ?? '').trim() || m.name,
+              surname: String(p.lastName ?? '').trim() || m.surname,
+              email: String(p.email ?? '').trim() || m.email,
+            }
+          })
+        )
+      }
       setEmployees(
         (Array.isArray(empItems) ? empItems : []).map((e, index) => {
           const positionId = String(
@@ -99,8 +125,7 @@ const ClubAdminMembers = () => {
     return members.filter(
       (m) =>
         `${m.name} ${m.surname}`.toLowerCase().includes(q) ||
-        m.email.toLowerCase().includes(q) ||
-        (m.studentId && m.studentId.toLowerCase().includes(q))
+        m.email.toLowerCase().includes(q)
     )
   }, [members, search])
 
@@ -231,15 +256,13 @@ const ClubAdminMembers = () => {
                 <thead>
                   <tr>
                     <th>Member</th>
-                    <th>Student ID</th>
-                    <th>Joined</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="club-admin-table-empty">Loading members...</td>
+                      <td colSpan={2} className="club-admin-table-empty">Loading members...</td>
                     </tr>
                   ) : null}
                   {filteredMembers.map((m) => (
@@ -253,8 +276,6 @@ const ClubAdminMembers = () => {
                           </div>
                         </div>
                       </td>
-                      <td>{m.studentId ?? '—'}</td>
-                      <td>{m.joinedDate ?? '—'}</td>
                       <td>
                         <button
                           type="button"
@@ -275,14 +296,13 @@ const ClubAdminMembers = () => {
                   <tr>
                     <th>Employee</th>
                     <th>Position</th>
-                    <th>Joined</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="club-admin-table-empty">Loading employees...</td>
+                      <td colSpan={3} className="club-admin-table-empty">Loading employees...</td>
                     </tr>
                   ) : null}
                   {filteredEmployees.map((e) => (
@@ -312,7 +332,6 @@ const ClubAdminMembers = () => {
                           <span style={{ fontSize: 13, color: '#64748b' }}>{e.positionName}</span>
                         )}
                       </td>
-                      <td>{e.joinedDate ?? '—'}</td>
                       <td>
                         <button
                           type="button"

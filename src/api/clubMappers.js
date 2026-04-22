@@ -8,6 +8,21 @@ export function resolveClubMediaUrl(path) {
   return `${origin}${s.startsWith('/') ? s : `/${s}`}`
 }
 
+function firstNonEmptyLink(...candidates) {
+  for (const v of candidates) {
+    if (v == null) continue
+    const t = String(v).trim()
+    if (t) return t
+  }
+  return undefined
+}
+
+function mapEmailFromApi(dto) {
+  if (dto.email == null) return null
+  const t = String(dto.email).trim()
+  return t || null
+}
+
 /** @param {Record<string, unknown>} dto */
 export function mapClubFromApi(dto) {
   if (!dto || typeof dto !== 'object') return null
@@ -19,6 +34,11 @@ export function mapClubFromApi(dto) {
       : dto.description != null
         ? String(dto.description)
         : ''
+  const socialLinks =
+    dto.socialLinks && typeof dto.socialLinks === 'object' && !Array.isArray(dto.socialLinks)
+      ? dto.socialLinks
+      : {}
+  const sl = /** @type {Record<string, unknown>} */ (socialLinks)
   return {
     id: String(id),
     name: String(dto.name ?? ''),
@@ -31,16 +51,50 @@ export function mapClubFromApi(dto) {
     status: dto.status != null ? String(dto.status) : '',
     establishedYear: dto.establishedYear != null ? String(dto.establishedYear) : undefined,
     location: dto.location != null ? String(dto.location) : undefined,
-    email: dto.email != null ? String(dto.email) : 'clubs@ada.edu.az',
-    website: dto.website != null ? String(dto.website) : undefined,
-    instagram: dto.instagram != null ? String(dto.instagram) : undefined,
-    x: dto.x != null ? String(dto.x) : dto.twitter != null ? String(dto.twitter) : undefined,
-    tiktok: dto.tiktok != null ? String(dto.tiktok) : undefined,
-    focusAreas: Array.isArray(dto.focusAreas) ? dto.focusAreas : [],
+    email: mapEmailFromApi(dto),
+    website: firstNonEmptyLink(dto.website, sl.website),
+    instagram: firstNonEmptyLink(dto.instagram, sl.instagram),
+    x: firstNonEmptyLink(dto.x, sl.x, dto.twitter, sl.twitter),
+    twitter: firstNonEmptyLink(dto.twitter, sl.twitter, dto.x, sl.x),
+    tiktok: firstNonEmptyLink(dto.tiktok, sl.tiktok),
+    focusAreas: Array.isArray(dto.focusAreas)
+      ? dto.focusAreas.map((a, i) =>
+          typeof a === 'string'
+            ? { icon: 'target', title: a, description: '' }
+            : a && typeof a === 'object'
+              ? {
+                  icon: String(a.icon || 'target'),
+                  title: String(a.title ?? '').trim(),
+                  description: String(a.description ?? '').trim(),
+                }
+              : { icon: 'target', title: `Area ${i + 1}`, description: '' }
+        )
+      : [],
     officers: Array.isArray(dto.officers) ? dto.officers : [],
     announcements: Array.isArray(dto.announcements) ? dto.announcements : [],
     memberProfiles: Array.isArray(dto.memberProfiles) ? dto.memberProfiles : [],
-    socialLinks: dto.socialLinks && typeof dto.socialLinks === 'object' ? dto.socialLinks : {},
+    socialLinks,
+    resources: (() => {
+      const raw = Array.isArray(dto.resources)
+        ? dto.resources
+        : Array.isArray(dto.documents)
+          ? dto.documents
+          : null
+      if (raw == null || !Array.isArray(raw)) return []
+      return raw
+        .map((r, i) => {
+          if (typeof r === 'string') {
+            const url = String(r).trim()
+            return url ? { id: String(i), title: 'Link', url: resolveClubMediaUrl(url) || url } : null
+          }
+          if (!r || typeof r !== 'object') return null
+          const url = String(r.url ?? r.href ?? r.fileUrl ?? r.link ?? '').trim()
+          if (!url) return null
+          const title = String(r.title ?? r.name ?? r.fileName ?? 'Resource').trim() || 'Resource'
+          return { id: String(r.id ?? i), title, url: resolveClubMediaUrl(url) || url }
+        })
+        .filter(Boolean)
+    })(),
     categoryId: dto.categoryId,
     raw: dto,
   }
@@ -152,6 +206,21 @@ export function mapStudentServicesClubProposal(p, index = 0) {
 export function mapStudentServicesEventProposal(p, index = 0) {
   if (!p || typeof p !== 'object') return null
   const id = String(p.id ?? index)
+  const rawSubs = Array.isArray(p.subEvents) ? p.subEvents : []
+  const subEvents = rawSubs
+    .map((se) => {
+      if (!se || typeof se !== 'object') return null
+      const title = String(se.title ?? se.name ?? '').trim()
+      const capacity = String(se.capacity ?? '').trim()
+      const start = String(se.start ?? se.startTime ?? '').trim()
+      const end = String(se.end ?? se.endTime ?? '').trim()
+      const timeRange =
+        String(se.timeRange ?? '').trim() || (start && end ? `${start} - ${end}` : start || end || '')
+      const venueNotes = String(se.venueNotes ?? se.venue ?? se.location ?? '').trim()
+      const date = String(se.date ?? '').trim()
+      return { title, capacity, start, end, date, timeRange, venueNotes, raw: se }
+    })
+    .filter(Boolean)
   return {
     id,
     proposalId: String(p.proposalId ?? p.id ?? id),
@@ -173,8 +242,12 @@ export function mapStudentServicesEventProposal(p, index = 0) {
     requestedBuildingId: p.requestedBuildingId ?? 'b1',
     requestedRoomId: p.requestedRoomId ?? 'r1',
     description: String(p.description ?? ''),
-    objectives: Array.isArray(p.objectives) ? p.objectives : [],
-    subEvents: Array.isArray(p.subEvents) ? p.subEvents : [],
+    objectives: Array.isArray(p.objectives)
+      ? p.objectives
+      : typeof p.objectives === 'string' && p.objectives.trim()
+        ? [p.objectives.trim()]
+        : [],
+    subEvents,
     posterPlaceholder: true,
     raw: p,
   }
@@ -182,6 +255,19 @@ export function mapStudentServicesEventProposal(p, index = 0) {
 
 export function mapStudentServicesDirectoryClub(c) {
   if (!c || typeof c !== 'object') return null
+  const normalizeStatus = (s) => {
+    const v = String(s ?? '').trim().toLowerCase()
+    if (!v) return 'Active'
+    // Backend may expose internal enums; map them to UI-friendly values.
+    if (v === 'approved' || v === 'active') return 'Active'
+    if (v === 'archived' || v === 'inactive') return 'Inactive'
+    // Numeric enums seen in some implementations (example: 3 = archived/inactive).
+    if (v === '3') return 'Inactive'
+    if (v === '1' || v === '2') return 'Active'
+    // Fallback: preserve capitalization of known UI values; otherwise default to Active.
+    if (v === 'inactive') return 'Inactive'
+    return 'Active'
+  }
   const profileImageUrl =
     c.profileImageUrl != null
       ? resolveClubMediaUrl(c.profileImageUrl) || c.profileImageUrl
@@ -196,7 +282,7 @@ export function mapStudentServicesDirectoryClub(c) {
     presidentId: String(c.presidentId ?? ''),
     members: Number(c.members) || 0,
     category: String(c.category ?? ''),
-    status: String(c.status ?? 'Active'),
+    status: normalizeStatus(c.status),
     iconColor: c.iconColor ?? 'blue',
     profileImageUrl,
     proposedProfileImageUrl: c.proposedProfileImageUrl
@@ -224,9 +310,16 @@ export function mapStudentServicesApprovedEvent(e) {
   }
 }
 
-export function mapVacancyFromApi(dto) {
+export function mapVacancyFromApi(dto, index = 0) {
   if (!dto || typeof dto !== 'object') return null
-  const id = dto.id ?? dto.vacancyId
+  const id =
+    dto.id ??
+    dto.vacancyId ??
+    dto.vacancyID ??
+    dto.vacancy_id ??
+    dto.VacancyId ??
+    dto.VacancyID ??
+    index
   const desc = dto.description != null ? String(dto.description) : ''
   const aboutRole = desc
     ? desc.split(/\n\n+/).map((p) => p.trim()).filter(Boolean)
@@ -238,10 +331,11 @@ export function mapVacancyFromApi(dto) {
       : isActive
         ? 'active'
         : 'inactive'
+  const clubNameRaw = dto.clubName ?? dto.club?.name ?? dto.club?.title ?? dto.club
   return {
     id: String(id),
     position: String(dto.title ?? dto.position ?? ''),
-    clubName: String(dto.clubName ?? ''),
+    clubName: clubNameRaw != null ? String(clubNameRaw) : '',
     clubId: dto.clubId != null ? String(dto.clubId) : undefined,
     category: String(dto.category ?? 'General'),
     categoryTag: dto.categoryTag != null ? String(dto.categoryTag) : undefined,

@@ -85,19 +85,35 @@ const ClubVacancies = () => {
   const searchInputRef = useRef(null)
   const [vacancies, setVacancies] = useState([])
   const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       setListLoading(true)
+      setListError(null)
       try {
-        const data = await fetchVacancies({ search: search.trim() || undefined, limit: 60 })
-        const items = data?.items ?? []
+        const data = await fetchVacancies({
+          search: search.trim() || undefined,
+          savedOnly: false,
+          page: 1,
+          limit: 60,
+        })
+        // Backend commonly returns a paged object { items, page, limit, total }.
+        // Some gateways return a raw array.
+        const items = Array.isArray(data)
+          ? data
+          : (data?.items ?? data?.Items ?? data?.results ?? data?.Results ?? [])
         if (!cancelled) {
-          setVacancies(items.map((row) => mapVacancyFromApi(row)).filter(Boolean))
+          setVacancies(items.map((row, idx) => mapVacancyFromApi(row, idx)).filter(Boolean))
         }
-      } catch {
-        if (!cancelled) setVacancies([])
+      } catch (e) {
+        if (!cancelled) {
+          setVacancies([])
+          const status = e?.status || e?.response?.status
+          if (status === 401) setListError('Please sign in to view vacancies.')
+          else setListError(e?.message || 'Failed to load vacancies.')
+        }
       } finally {
         if (!cancelled) setListLoading(false)
       }
@@ -144,7 +160,7 @@ const ClubVacancies = () => {
       list = list.filter((v) => (v.categoryTag || v.category.toUpperCase()) === categoryFilter)
     }
     return list
-  }, [search, categoryFilter, savedOnlyFilter, savedIds])
+  }, [vacancies, search, categoryFilter, savedOnlyFilter, savedIds])
 
   const paginatedVacancies = useMemo(() => {
     const start = (currentPage - 1) * POSITIONS_PER_PAGE
@@ -297,6 +313,15 @@ const ClubVacancies = () => {
                     <span>Saved only</span>
                   </label>
                   <p className="vacancies-filter-label">Category</p>
+                  <label className="vacancies-filter-option">
+                    <input
+                      type="radio"
+                      name="category"
+                      checked={!categoryFilter}
+                      onChange={() => { setCategoryFilter(''); setFilterOpen(false) }}
+                    />
+                    <span>All categories</span>
+                  </label>
                   {categories.map((cat) => (
                     <label key={cat} className="vacancies-filter-option">
                       <input
@@ -320,7 +345,13 @@ const ClubVacancies = () => {
         </div>
 
         <div className={`vacancies-container vacancies-container--${viewMode}`}>
-          {paginatedVacancies.map((vacancy) => {
+          {listLoading ? (
+            <div className="vacancies-empty">Loading vacancies…</div>
+          ) : listError ? (
+            <div className="vacancies-empty" role="alert">{listError}</div>
+          ) : paginatedVacancies.length === 0 ? (
+            <div className="vacancies-empty">No vacancies found.</div>
+          ) : paginatedVacancies.map((vacancy) => {
             const style = getCategoryStyle(vacancy.category)
             const Tag = style.Icon
             return (

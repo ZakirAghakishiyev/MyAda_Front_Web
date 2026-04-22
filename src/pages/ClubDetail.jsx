@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { fetchClub, fetchClubMembers, fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
 import { mapClubFromApi, mapEventFromApi } from '../api/clubMappers'
+import { fetchAuthUserById } from '../api/authUsersApi'
+import { ClubFocusAreaIcon } from '../components/club/ClubFocusAreaIcon'
 import adaLogo from '../assets/ada-logo.png'
-import inClassTaskPdf from '../assets/In-Class Task.pdf'
 import './ClubVacancies.css'
 import './ClubDetail.css'
 
@@ -52,17 +53,6 @@ const IconBell = () => (
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
 )
-const IconChip = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
-    <line x1="9" y1="9" x2="15" y2="9" /><line x1="9" y1="15" x2="15" y2="15" /><line x1="9" y1="9" x2="9" y2="15" /><line x1="15" y1="9" x2="15" y2="15" />
-  </svg>
-)
-const IconCode = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-  </svg>
-)
 
 const TABS = [
   { id: 'about', label: 'About Us' },
@@ -79,12 +69,33 @@ const formatEventDate = (dateStr) => {
   return { month, day }
 }
 
+const trimStr = (v) => (v != null ? String(v).trim() : '')
+
+const toAbsoluteUrl = (raw) => {
+  const s = trimStr(raw)
+  if (!s) return ''
+  if (/^https?:\/\//i.test(s)) return s
+  if (/^mailto:/i.test(s)) return s
+  return `https://${s.replace(/^\/+/, '')}`
+}
+
+const formatAnnouncementDate = (raw) => {
+  const s = raw != null ? String(raw) : ''
+  if (!s.trim()) return ''
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s.trim()
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 const ClubDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const [activeTab, setActiveTab] = useState('about')
   const [club, setClub] = useState(null)
   const [memberRows, setMemberRows] = useState([])
+  const [officerRows, setOfficerRows] = useState([])
+  const [president, setPresident] = useState(null)
+  const [officersExpanded, setOfficersExpanded] = useState(false)
   const [upcomingEvents, setUpcomingEvents] = useState([])
   const [loadState, setLoadState] = useState({ loading: true, error: null })
   const [isClubMember, setIsClubMember] = useState(false)
@@ -114,11 +125,106 @@ const ClubDetail = () => {
             about: '',
             officers: [],
             announcements: [],
-            email: 'clubs@ada.edu.az',
+            email: null,
+            socialLinks: {},
+            resources: [],
           }
         )
+
+        // Officers (from club detail DTO): resolve president (positionId === 1) + enrich with auth user.
+        const rawOfficers = Array.isArray(rawClub?.officers) ? rawClub.officers : (Array.isArray(mapped?.raw?.officers) ? mapped.raw.officers : [])
+        const normalizedOfficers = rawOfficers
+          .map((o, idx) => {
+            if (!o || typeof o !== 'object') return null
+            const userId = o.userId ?? o.userID ?? o.studentId ?? o.user?.id
+            const positionId = o.positionId ?? o.positionID ?? o.position?.id ?? o.position
+            const pid = positionId != null ? String(positionId) : ''
+            const uid = userId != null ? String(userId) : ''
+            return {
+              _idx: idx,
+              id: String(o.id ?? `${idx}`),
+              userId: uid,
+              positionId: pid,
+              role: String(o.role ?? o.title ?? ''),
+              raw: o,
+            }
+          })
+          .filter(Boolean)
+
+        const presidentRow = normalizedOfficers.find((o) => String(o.positionId) === '1') || null
+        const restRows = normalizedOfficers.filter((o) => !presidentRow || o !== presidentRow)
+        setOfficerRows(restRows)
+        setPresident(null)
+        setOfficersExpanded(false)
+
+        const idsToFetch = Array.from(
+          new Set([presidentRow?.userId, ...restRows.map((r) => r.userId)].filter(Boolean))
+        )
+        if (idsToFetch.length) {
+          const profiles = await Promise.all(idsToFetch.map((uid) => fetchAuthUserById(uid).catch(() => null)))
+          const byId = new Map()
+          idsToFetch.forEach((uid, i) => {
+            const p = profiles[i]
+            if (p && typeof p === 'object') byId.set(uid, p)
+          })
+          const nameFor = (uid) => {
+            const p = uid ? byId.get(uid) : null
+            if (!p) return ''
+            const first = String(p.firstName ?? '').trim()
+            const last = String(p.lastName ?? '').trim()
+            return [first, last].filter(Boolean).join(' ').trim() || String(p.userName ?? '').trim()
+          }
+          if (!cancelled) {
+            if (presidentRow) {
+              setPresident({
+                userId: presidentRow.userId,
+                name: nameFor(presidentRow.userId) || '—',
+              })
+            }
+            setOfficerRows((prev) =>
+              prev.map((r) => ({
+                ...r,
+                name: nameFor(r.userId) || r.name,
+                role: r.role || (String(r.positionId) === '1' ? 'President' : ''),
+              }))
+            )
+          }
+        } else if (presidentRow && !cancelled) {
+          setPresident({ userId: presidentRow.userId, name: '—' })
+        }
+
         const mItems = rawMembers?.items ?? rawMembers ?? []
-        setMemberRows(Array.isArray(mItems) ? mItems : [])
+        const baseMembers = (Array.isArray(mItems) ? mItems : []).map((m, index) => {
+          const userId = m.userId ?? m.userID ?? m.applicantUserId ?? m.user?.id ?? m.studentId
+          return { ...m, _userId: userId != null ? String(userId) : '', _idx: index }
+        })
+        setMemberRows(baseMembers)
+        const uniqueUserIds = Array.from(new Set(baseMembers.map((m) => m._userId).filter(Boolean)))
+        if (uniqueUserIds.length) {
+          const profiles = await Promise.all(uniqueUserIds.map((uid) => fetchAuthUserById(uid)))
+          const byId = new Map()
+          uniqueUserIds.forEach((uid, i) => {
+            const p = profiles[i]
+            if (p && typeof p === 'object') byId.set(uid, p)
+          })
+          if (!cancelled) {
+            setMemberRows((prev) =>
+              prev.map((m) => {
+                const p = m._userId ? byId.get(m._userId) : null
+                if (!p) return m
+                const first = String(p.firstName ?? '').trim()
+                const last = String(p.lastName ?? '').trim()
+                const fullName = [first, last].filter(Boolean).join(' ').trim() || String(p.userName ?? '').trim()
+                return {
+                  ...m,
+                  name: fullName || m.name,
+                  fullName: fullName || m.fullName,
+                  email: String(p.email ?? '').trim() || m.email,
+                }
+              })
+            )
+          }
+        }
         const evItems = (rawEvents?.items ?? []).map((row) => mapEventFromApi(row)).filter(Boolean)
         const sid = String(id)
         const filtered = evItems.filter(
@@ -147,11 +253,16 @@ const ClubDetail = () => {
 
   const focusAreas = useMemo(() => {
     const raw = club?.focusAreas || []
-    return raw.map((area, i) =>
-      typeof area === 'string'
-        ? { title: area, description: '' }
-        : { title: area.title ?? area.name ?? `Area ${i + 1}`, description: area.description ?? '' }
-    )
+    return raw.map((area, i) => {
+      if (typeof area === 'string') {
+        const t = area.trim()
+        return { icon: 'target', title: t || `Area ${i + 1}`, description: '' }
+      }
+      const title = String(area.title ?? area.name ?? `Area ${i + 1}`).trim()
+      const description = String(area.description ?? '').trim()
+      const icon = typeof area.icon === 'string' && area.icon ? area.icon : 'target'
+      return { icon, title, description }
+    })
   }, [club])
 
   const members = useMemo(() => {
@@ -176,16 +287,95 @@ const ClubDetail = () => {
     }))
   }, [club, memberRows])
 
+  const memberCount = useMemo(() => {
+    if (!club) return 0
+    if (memberRows.length > 0) return memberRows.length
+    const dtoCount = club.members ?? club.memberCount ?? club.membersCount ?? club.totalMembers
+    const n = Number(dtoCount)
+    return Number.isFinite(n) ? n : 0
+  }, [club, memberRows.length])
+
   const officersList = useMemo(() => {
-    if (!club) return []
-    const offs = Array.isArray(club.officers) ? club.officers : []
-    if (offs.length) {
-      return offs.map((o) => ({
-        name: o.name ?? o.studentName ?? '—',
-        role: o.role ?? o.title ?? '',
+    const rest = officerRows
+      .map((o) => ({
+        name: o.name || '—',
+        role:
+          o.role ||
+          (String(o.positionId) === '1' ? 'President' : `Position ${o.positionId || '—'}`),
       }))
-    }
-    return [{ name: 'TBD', role: 'President' }]
+      .filter((o) => o.name || o.role)
+    if (!rest.length) return []
+    const limit = 3
+    if (officersExpanded) return rest
+    return rest.slice(0, limit)
+  }, [officerRows, officersExpanded])
+
+  const hasMoreOfficers = useMemo(() => officerRows.length > 3, [officerRows.length])
+
+  const contactLinkRows = useMemo(() => {
+    if (!club) return []
+    const sl = club.socialLinks && typeof club.socialLinks === 'object' ? club.socialLinks : {}
+    const rows = [
+      {
+        key: 'website',
+        href: toAbsoluteUrl(club.website ?? sl.website),
+        Icon: IconYouTube,
+        textForHref: () => 'YouTube',
+      },
+      {
+        key: 'instagram',
+        href: toAbsoluteUrl(club.instagram ?? sl.instagram),
+        Icon: IconInstagram,
+        textForHref: () => 'Instagram',
+      },
+      {
+        key: 'x',
+        href: toAbsoluteUrl(club.x ?? club.twitter ?? sl.x ?? sl.twitter),
+        Icon: IconX,
+        textForHref: () => 'X (Twitter)',
+      },
+      {
+        key: 'tiktok',
+        href: toAbsoluteUrl(club.tiktok ?? sl.tiktok),
+        Icon: IconTikTok,
+        textForHref: () => 'TikTok',
+      },
+    ]
+    return rows
+      .filter((r) => r.href)
+      .map((r) => ({
+        key: r.key,
+        href: r.href,
+        Icon: r.Icon,
+        text: r.textForHref(r.href),
+      }))
+  }, [club])
+
+  const announcementsDisplay = useMemo(() => {
+    const raw = club?.announcements
+    if (!Array.isArray(raw)) return []
+    return raw.map((a, index) => {
+      if (!a || typeof a !== 'object') {
+        return {
+          key: `a-${index}`,
+          date: '',
+          title: 'Announcement',
+          message: typeof a === 'string' ? a : '',
+        }
+      }
+      const dateRaw = a.date ?? a.createdAt ?? a.publishedAt ?? a.createdAtUtc ?? a.timestamp
+      return {
+        key: String(a.id ?? a.slug ?? `${a.title ?? ''}-${index}`),
+        date: formatAnnouncementDate(dateRaw),
+        title: trimStr(a.title) || 'Announcement',
+        message: trimStr(a.message ?? a.body ?? a.content ?? a.text),
+      }
+    })
+  }, [club])
+
+  const clubResources = useMemo(() => {
+    const r = club?.resources
+    return Array.isArray(r) ? r : []
   }, [club])
 
   if (loadState.loading) {
@@ -210,8 +400,6 @@ const ClubDetail = () => {
       </div>
     )
   }
-
-  const announcements = club.announcements || []
 
   return (
     <div className="club-detail-page">
@@ -266,12 +454,18 @@ const ClubDetail = () => {
             <h1 className="club-detail-hero-title">{club.name}</h1>
             <span className="club-detail-hero-tag">{club.category}</span>
             <div className="club-detail-hero-stats">
-              <span><IconPerson /> {club.members} Members</span>
+              <span><IconPerson /> {memberCount} Members</span>
               {club.establishedYear && <span>Est. {club.establishedYear}</span>}
               {club.location && <span>{club.location}</span>}
             </div>
           </div>
           <div className="club-detail-hero-actions">
+            {president?.name ? (
+              <div className="club-detail-president">
+                <div className="club-detail-president-label">President</div>
+                <div className="club-detail-president-name">{president.name}</div>
+              </div>
+            ) : null}
             <button type="button" className="club-detail-btn-primary" onClick={() => navigate(`/clubs/${id}/join`)}>
               <IconPlus /> Join Club
             </button>
@@ -307,7 +501,7 @@ const ClubDetail = () => {
                   <div className="club-detail-focus-grid">
                     {focusAreas.map((area, i) => (
                       <div key={i} className="club-detail-focus-card">
-                        <span className="club-detail-focus-icon">{i === 0 ? <IconChip /> : <IconCode />}</span>
+                        <span className="club-detail-focus-icon"><ClubFocusAreaIcon name={area.icon} /></span>
                         <h3 className="club-detail-focus-title">{area.title}</h3>
                         <p className="club-detail-focus-desc">{area.description}</p>
                       </div>
@@ -366,11 +560,13 @@ const ClubDetail = () => {
               {isClubMember ? (
                 <section className="club-detail-section">
                   <h2 className="club-detail-section-title">Club Announcements</h2>
-                  {announcements.length > 0 ? (
+                  {announcementsDisplay.length > 0 ? (
                     <ul className="club-detail-announcements-list">
-                      {announcements.map((announcement, index) => (
-                        <li key={`${announcement.title}-${index}`} className="club-detail-announcement-item">
-                          <span className="club-detail-announcement-date">{announcement.date}</span>
+                      {announcementsDisplay.map((announcement) => (
+                        <li key={announcement.key} className="club-detail-announcement-item">
+                          {announcement.date ? (
+                            <span className="club-detail-announcement-date">{announcement.date}</span>
+                          ) : null}
                           <h3 className="club-detail-announcement-title">{announcement.title}</h3>
                           <p className="club-detail-announcement-text">{announcement.message}</p>
                         </li>
@@ -393,14 +589,24 @@ const ClubDetail = () => {
             <div className="club-detail-content">
               <section className="club-detail-section">
                 <h2 className="club-detail-section-title">Resources and documents</h2>
-                <a
-                  href={inClassTaskPdf}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="club-detail-resource-link"
-                >
-                  In-Class Task.pdf
-                </a>
+                {clubResources.length > 0 ? (
+                  <ul className="club-detail-announcements-list">
+                    {clubResources.map((doc) => (
+                      <li key={doc.id} className="club-detail-announcement-item">
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="club-detail-resource-link"
+                        >
+                          {doc.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="club-detail-placeholder">No documents shared yet.</p>
+                )}
               </section>
             </div>
           )}
@@ -420,6 +626,18 @@ const ClubDetail = () => {
                 </li>
               ))}
             </ul>
+            {hasMoreOfficers && (
+              <button
+                type="button"
+                className="club-detail-btn-outline club-detail-officers-toggle"
+                onClick={() => setOfficersExpanded((v) => !v)}
+              >
+                {officersExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+            {!president && officersList.length === 0 ? (
+              <p className="club-detail-placeholder">No officers listed yet.</p>
+            ) : null}
           </section>
 
           <section className="club-detail-sidebar-block">
@@ -447,24 +665,30 @@ const ClubDetail = () => {
           <section className="club-detail-sidebar-block">
             <h3 className="club-detail-sidebar-title">Contact & Links</h3>
             <div className="club-detail-contact">
-              <a href={`mailto:${club.email}`} className="club-detail-contact-row">
-                <IconMail /> {club.email}
-              </a>
-              {club.website && (
-                <a href={club.website} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
-                  <IconYouTube /> {club.website.replace(/^https?:\/\//, '')}
+              {trimStr(club.email) ? (
+                <a href={`mailto:${trimStr(club.email)}`} className="club-detail-contact-row">
+                  <IconMail /> {trimStr(club.email)}
                 </a>
-              )}
-              <a href={club.instagram || 'https://instagram.com'} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
-                <IconInstagram /> Instagram
-              </a>
-              <a href={club.x || 'https://x.com'} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
-                <IconX /> X (Twitter)
-              </a>
-              <a href={club.tiktok || 'https://tiktok.com'} target="_blank" rel="noopener noreferrer" className="club-detail-contact-row">
-                <IconTikTok /> TikTok
-              </a>
+              ) : null}
+              {contactLinkRows.map((row) => {
+                const RowIcon = row.Icon
+                return (
+                  <a
+                    key={row.key}
+                    href={row.href}
+                    title={row.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="club-detail-contact-row"
+                  >
+                    <RowIcon /> {row.text}
+                  </a>
+                )
+              })}
             </div>
+            {!trimStr(club.email) && contactLinkRows.length === 0 ? (
+              <p className="club-detail-placeholder">No public contact info yet.</p>
+            ) : null}
           </section>
         </aside>
       </div>

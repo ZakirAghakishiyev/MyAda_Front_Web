@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { fetchAuthUserById } from '../../api/authUsersApi'
 import './ClubAdmin.css'
 
 const IconX = () => (
@@ -77,19 +78,45 @@ const ClubAdminApplicationDetail = ({
 }) => {
   const [newNote, setNewNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [authUser, setAuthUser] = useState(null)
+  const [authUserLoading, setAuthUserLoading] = useState(false)
 
   if (!application) return null
 
   const isJob = type === 'job'
   const app = application
-  const name = app.name ?? app.applicantName?.split(' ')[0] ?? ''
-  const surname = app.surname ?? app.applicantName?.split(' ').slice(1).join(' ') ?? ''
-  const fullName = [name, surname].filter(Boolean).join(' ') || app.applicantName || 'Applicant'
+  const appUserId = app.studentId && app.studentId !== '—' ? String(app.studentId) : ''
+  const name = authUser?.firstName ?? app.name ?? app.applicantName?.split(' ')[0] ?? ''
+  const surname = authUser?.lastName ?? app.surname ?? app.applicantName?.split(' ').slice(1).join(' ') ?? ''
+  const fullName =
+    [name, surname].filter(Boolean).join(' ') ||
+    authUser?.userName ||
+    app.applicantName ||
+    (appUserId ? `User ${appUserId.slice(0, 8)}…` : 'Applicant')
   const positionApplied = app.positionApplied ?? app.roleType ?? '—'
   const dateApplied = app.dateApplied ?? app.appliedOn ?? '—'
   const answers = app.answers ?? {}
   const files = Array.isArray(app.files) ? app.files : []
   const canAct = app.status === 'Pending' || app.status === 'Reviewing'
+  const email = authUser?.email ?? app.email
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = app.studentId && app.studentId !== '—' ? String(app.studentId).trim() : ''
+    if (!uid) {
+      setAuthUser(null)
+      setAuthUserLoading(false)
+      return () => { cancelled = true }
+    }
+    setAuthUserLoading(true)
+    ;(async () => {
+      const u = await fetchAuthUserById(uid)
+      if (cancelled) return
+      setAuthUser(u)
+      setAuthUserLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [app.studentId])
 
   const handleApprove = () => onApprove(app.id, type)
   const handleDisapprove = () => onDisapprove(app.id, type)
@@ -139,11 +166,15 @@ const ClubAdminApplicationDetail = ({
                 </div>
                 <div className="club-admin-detail-row">
                   <span className="club-admin-detail-label">Student ID</span>
-                  <span className="club-admin-detail-value">{app.studentId ?? '—'}</span>
+                  <span className="club-admin-detail-value">{appUserId || '—'}</span>
                 </div>
                 <div className="club-admin-detail-row">
                   <span className="club-admin-detail-label">Email</span>
-                  <a href={`mailto:${app.email}`} className="club-admin-detail-value">{app.email ?? '—'}</a>
+                  {email ? (
+                    <a href={`mailto:${email}`} className="club-admin-detail-value">{email}</a>
+                  ) : (
+                    <span className="club-admin-detail-value">—</span>
+                  )}
                 </div>
                 <div className="club-admin-detail-row">
                   <span className="club-admin-detail-label">Major</span>
@@ -165,6 +196,12 @@ const ClubAdminApplicationDetail = ({
                   <span className="club-admin-detail-label">Current Status</span>
                   <span className={`club-admin-pill ${statusBadgeClass}`}>{app.status}</span>
                 </div>
+                {authUserLoading && (
+                  <div className="club-admin-detail-row">
+                    <span className="club-admin-detail-label">Profile</span>
+                    <span className="club-admin-detail-value">Loading…</span>
+                  </div>
+                )}
               </div>
             </div>
           </section>

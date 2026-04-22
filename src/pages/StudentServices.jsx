@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
+import { fetchAuthUserById } from '../api/authUsersApi'
 import {
   fetchStudentServicesClubProposals,
   fetchStudentServicesEventProposals,
@@ -16,10 +18,13 @@ import {
   fetchStudentServicesClubMembers,
   fetchStudentServicesClubEmployees,
   patchStudentServicesClub,
+  uploadStudentServicesClubProfileImage,
   approveStudentServicesClubProfileImage,
   deleteStudentServicesClubMember,
   createStudentServicesClubEmployee,
   patchStudentServicesClubEmployee,
+  deleteStudentServicesClubEmployee,
+  putStudentServicesProposalRequirements,
 } from '../api/clubApi'
 import {
   mapStudentServicesClubProposal,
@@ -34,8 +39,10 @@ import './club-admin/ClubAdmin.css'
 
 function mapSsMemberRow(row, index) {
   if (!row || typeof row !== 'object') return null
+  const userId = row.userId ?? row.userID ?? row.applicantUserId ?? row.user?.id ?? row.studentId
   return {
     id: row.id ?? row.memberId ?? `ss-m-${index}`,
+    userId: userId != null ? String(userId) : '',
     name: String(row.name ?? row.firstName ?? '—'),
     surname: String(row.surname ?? row.lastName ?? ''),
     email: String(row.email ?? ''),
@@ -43,17 +50,22 @@ function mapSsMemberRow(row, index) {
     position: String(row.position ?? row.role ?? 'Member'),
     joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
     age: row.age != null ? Number(row.age) : null,
+    raw: row,
   }
 }
 
 function mapSsEmployeeRow(row, index) {
   if (!row || typeof row !== 'object') return null
+  const userId = row.userId ?? row.userID ?? row.user?.id ?? row.employeeUserId
+  const positionIdRaw = row.positionId ?? row.positionID ?? row.roleId ?? row.position?.id
   return {
     id: row.id ?? row.employeeId ?? `ss-e-${index}`,
+    userId: userId != null ? String(userId) : '',
+    positionId: positionIdRaw != null ? String(positionIdRaw) : null,
     name: String(row.name ?? row.firstName ?? '—'),
     surname: String(row.surname ?? row.lastName ?? ''),
     email: String(row.email ?? ''),
-    position: String(row.position ?? row.positionName ?? row.role ?? '—'),
+    position: String(row.position ?? row.positionName ?? row.role ?? row.positionTitle ?? '—'),
     department: row.department != null ? String(row.department) : '',
     studentId: row.studentId != null ? String(row.studentId) : undefined,
     joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
@@ -406,28 +418,77 @@ const INITIAL_CLUB_PROPOSALS = [
   },
 ]
 
-/* Buildings and rooms for event room assignment */
-const BUILDINGS = [
-  { id: 'b1', name: 'Student Union' },
-  { id: 'b2', name: 'North Campus Hall' },
-  { id: 'b3', name: 'Conference Center' },
-]
-const ROOMS_BY_BUILDING = {
-  b1: [
-    { id: 'r1', name: 'Grand Ballroom, Room 302 (Level 3)' },
-    { id: 'r2', name: 'Room 101' },
-    { id: 'r3', name: 'Room 205' },
-  ],
-  b2: [
-    { id: 'r4', name: 'Main Auditorium' },
-    { id: 'r5', name: 'Room B' },
-    { id: 'r6', name: 'Small Hall' },
-  ],
-  b3: [
-    { id: 'r7', name: 'Conference Room A (Level 2)' },
-    { id: 'r8', name: 'Conference Room B' },
-    { id: 'r9', name: 'Level 2 Main' },
-  ],
+function roomCapacityLabel(room) {
+  if (!room || typeof room !== 'object') return ''
+  const capRaw =
+    room.capacity ??
+    room.seatCapacity ??
+    room.maxCapacity ??
+    room.maxOccupancy ??
+    room.Capacity ??
+    room.SeatCapacity ??
+    room.MaxCapacity ??
+    room.MaxOccupancy ??
+    room.seats ??
+    room.Seats ??
+    room.maxSeats ??
+    room.maxStudents
+  const cap = Number(capRaw)
+  return Number.isFinite(cap) && cap > 0 ? ` (${cap})` : ''
+}
+
+function buildingNameFor(b) {
+  if (!b || typeof b !== 'object') return ''
+  return String(b.name ?? b.title ?? b.buildingName ?? '').trim()
+}
+
+function roomNameFor(r) {
+  if (!r || typeof r !== 'object') return ''
+  return String(r.name ?? r.number ?? r.roomNumber ?? r.title ?? r.code ?? '').trim()
+}
+
+function parseDateTimeAssumeGmtPlus4(raw) {
+  const s = raw != null ? String(raw).trim() : ''
+  if (!s) return null
+  // If backend includes an explicit offset/Z, Date will parse correctly.
+  if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) {
+    const d = new Date(s)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  // If backend sends local datetime without zone (e.g. "2026-05-01T12:00:00"),
+  // interpret it as GMT+4 then convert to user's local timezone for display.
+  if (s.includes('T')) {
+    const d = new Date(`${s}+04:00`)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+function formatDateTimeLocalFromGmtPlus4(raw) {
+  const d = parseDateTimeAssumeGmtPlus4(raw)
+  if (!d) return String(raw ?? '').trim() || '—'
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  })
+}
+
+function formatTimeRangeLocalFromGmtPlus4(rawStart, durationHoursStr) {
+  const start = parseDateTimeAssumeGmtPlus4(rawStart)
+  if (!start) return ''
+  const dur = Number(String(durationHoursStr ?? '').trim())
+  if (!Number.isFinite(dur) || dur <= 0) return ''
+  const end = new Date(start.getTime() + dur * 60 * 60 * 1000)
+  const fmt = (d) =>
+    d.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  return `${fmt(start)} - ${fmt(end)}`
 }
 
 /* Mock event proposals – fields align with ClubAdminSuggestEvent (eventName, dateTime, duration, attendance, venue, poster, description, objectives, subEvents, etc.) */
@@ -601,9 +662,10 @@ const StudentServices = () => {
   const [section, setSection] = useState('command')
 
   useEffect(() => {
-    if (location.state?.section === 'events') {
-      setSection('events')
-    }
+    const next = location.state?.section
+    if (!next) return
+    const allowed = new Set(['command', 'club-proposals', 'event-proposals', 'clubs', 'events'])
+    if (allowed.has(next)) setSection(next)
   }, [location.state?.section])
   const [clubProposals, setClubProposals] = useState(INITIAL_CLUB_PROPOSALS)
   const [selectedProposalId, setSelectedProposalId] = useState('')
@@ -622,21 +684,60 @@ const StudentServices = () => {
   const [requirementsDeadline, setRequirementsDeadline] = useState('')
   const [editingRequirementIndex, setEditingRequirementIndex] = useState(null)
   const [editingRequirementDraft, setEditingRequirementDraft] = useState('')
-  const [eventProposals, setEventProposals] = useState(INITIAL_EVENT_PROPOSALS)
+  // Start empty to avoid showing stale mock proposals when the API is available.
+  const [eventProposals, setEventProposals] = useState([])
   const [selectedEventId, setSelectedEventId] = useState('')
   const [eventSearch, setEventSearch] = useState('')
   const [eventRejectModal, setEventRejectModal] = useState({ open: false, reason: '' })
   const [eventRevisionModal, setEventRevisionModal] = useState({ open: false, changes: '' })
   const [eventRoomAssignments, setEventRoomAssignments] = useState([])
+  const [locBuildings, setLocBuildings] = useState([])
+  const [locRoomsByBuildingId, setLocRoomsByBuildingId] = useState({})
+  const [locLoadState, setLocLoadState] = useState({ loading: true, error: '' })
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLocLoadState({ loading: true, error: '' })
+      try {
+        const b = await getBuildings()
+        if (cancelled) return
+        const list = Array.isArray(b) ? b : []
+        setLocBuildings(list)
+        setLocLoadState({ loading: false, error: '' })
+      } catch (e) {
+        if (!cancelled) {
+          setLocBuildings([])
+          setLocRoomsByBuildingId({})
+          setLocLoadState({ loading: false, error: e?.message || 'Could not load locations.' })
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const ensureRoomsLoaded = useCallback(async (buildingId) => {
+    const bid = buildingId != null ? String(buildingId) : ''
+    if (!bid) return
+    setLocRoomsByBuildingId((prev) => (Object.prototype.hasOwnProperty.call(prev, bid) ? prev : { ...prev, [bid]: [] }))
+    try {
+      const rooms = await getRoomsByBuildingId(bid)
+      setLocRoomsByBuildingId((prev) => ({ ...prev, [bid]: Array.isArray(rooms) ? rooms : [] }))
+    } catch {
+      /* keep existing (possibly empty) */
+    }
+  }, [])
+
   const [commandTab, setCommandTab] = useState('clubs')
   const [commandPage, setCommandPage] = useState(1)
   const [directoryClubs, setDirectoryClubs] = useState(DIRECTORY_CLUBS)
   const [directorySelectedClubId, setDirectorySelectedClubId] = useState(null)
   const [directoryClubTab, setDirectoryClubTab] = useState('members')
+  const [clubsSearch, setClubsSearch] = useState('')
   const [clubMembers, setClubMembers] = useState([...(Array.isArray(initialMembers) ? initialMembers : [])])
   const [clubEmployees, setClubEmployees] = useState([...(Array.isArray(initialEmployees) ? initialEmployees : [])])
   const [clubMemberSearch, setClubMemberSearch] = useState('')
   const [clubEmployeeSearch, setClubEmployeeSearch] = useState('')
+  const [clubRosterLoadState, setClubRosterLoadState] = useState({ loading: false, error: '' })
   const [addEmployeeOpen, setAddEmployeeOpen] = useState(false)
   const [addEmployeeId, setAddEmployeeId] = useState('')
   const [addEmployeePosition, setAddEmployeePosition] = useState('')
@@ -645,7 +746,11 @@ const StudentServices = () => {
   const [pendingEmployeePosition, setPendingEmployeePosition] = useState({})
   const [clubEditName, setClubEditName] = useState('')
   const [clubEditStatus, setClubEditStatus] = useState('')
+  const [clubEditDescription, setClubEditDescription] = useState('')
   const [clubEditImage, setClubEditImage] = useState(null)
+  const [clubEditImageUploadState, setClubEditImageUploadState] = useState({ uploading: false, error: '' })
+
+  const [ssDataLoadState, setSsDataLoadState] = useState({ loading: true, error: '' })
 
   // Student Services – Events (approved events overview)
   const [approvedEvents, setApprovedEvents] = useState(APPROVED_EVENTS)
@@ -700,33 +805,43 @@ const StudentServices = () => {
   const addEventPosterInputRef = React.useRef(null)
 
   const refreshStudentServicesFromApi = useCallback(async () => {
+    setSsDataLoadState({ loading: true, error: '' })
     try {
+      const proposalListParams = { page: 1, limit: 100 }
       const [rawProposals, rawEventProposals, rawClubs, rawEvents, rawReq] = await Promise.all([
-        fetchStudentServicesClubProposals().catch(() => null),
-        fetchStudentServicesEventProposals().catch(() => null),
+        fetchStudentServicesClubProposals(proposalListParams).catch(() => null),
+        fetchStudentServicesEventProposals(proposalListParams).catch(() => null),
         fetchStudentServicesClubs({ limit: 100 }).catch(() => null),
         fetchStudentServicesEvents().catch(() => null),
         fetchStudentServicesProposalRequirements().catch(() => null),
       ])
-      const cpItems = rawProposals?.items ?? rawProposals ?? []
-      if (Array.isArray(cpItems) && cpItems.length > 0) {
-        const mapped = cpItems.map((p, i) => mapStudentServicesClubProposal(p, i)).filter(Boolean)
-        setClubProposals(mapped)
-        setSelectedProposalId((prev) => prev || mapped[0]?.id || '')
+      if (rawProposals != null) {
+        const cpItems = rawProposals.items ?? rawProposals
+        if (Array.isArray(cpItems)) {
+          const mapped = cpItems.map((p, i) => mapStudentServicesClubProposal(p, i)).filter(Boolean)
+          setClubProposals(mapped)
+          setSelectedProposalId((prev) => (mapped.some((p) => p.id === prev) ? prev : mapped[0]?.id || ''))
+        }
       }
-      const epItems = rawEventProposals?.items ?? rawEventProposals ?? []
-      if (Array.isArray(epItems) && epItems.length > 0) {
-        const mappedEv = epItems.map((p, i) => mapStudentServicesEventProposal(p, i)).filter(Boolean)
-        setEventProposals(mappedEv)
-        setSelectedEventId((prev) => prev || mappedEv[0]?.id || '')
+      if (rawEventProposals != null) {
+        const epItems = rawEventProposals.items ?? rawEventProposals
+        if (Array.isArray(epItems)) {
+          const mappedEv = epItems.map((p, i) => mapStudentServicesEventProposal(p, i)).filter(Boolean)
+          setEventProposals(mappedEv)
+          setSelectedEventId((prev) => (mappedEv.some((p) => p.id === prev) ? prev : mappedEv[0]?.id || ''))
+        }
       }
-      const dirItems = rawClubs?.items ?? rawClubs ?? []
-      if (Array.isArray(dirItems) && dirItems.length > 0) {
-        setDirectoryClubs(dirItems.map((c) => mapStudentServicesDirectoryClub(c)).filter(Boolean))
+      if (rawClubs != null) {
+        const dirItems = rawClubs.items ?? rawClubs
+        if (Array.isArray(dirItems)) {
+          setDirectoryClubs(dirItems.map((c) => mapStudentServicesDirectoryClub(c)).filter(Boolean))
+        }
       }
-      const evItems = rawEvents?.items ?? rawEvents ?? []
-      if (Array.isArray(evItems) && evItems.length > 0) {
-        setApprovedEvents(evItems.map((e) => mapStudentServicesApprovedEvent(e)).filter(Boolean))
+      if (rawEvents != null) {
+        const evItems = rawEvents.items ?? rawEvents
+        if (Array.isArray(evItems)) {
+          setApprovedEvents(evItems.map((e) => mapStudentServicesApprovedEvent(e)).filter(Boolean))
+        }
       }
       if (rawReq && typeof rawReq === 'object') {
         const reqs = rawReq.requirements ?? rawReq.items
@@ -736,8 +851,9 @@ const StudentServices = () => {
           if (!Number.isNaN(d.getTime())) setRequirementsDeadline(d.toISOString().slice(0, 10))
         }
       }
+      setSsDataLoadState({ loading: false, error: '' })
     } catch {
-      /* keep mock seed data */
+      setSsDataLoadState({ loading: false, error: 'Could not load Student Services data from the API.' })
     }
   }, [])
 
@@ -1056,6 +1172,22 @@ const StudentServices = () => {
   }
 
   const selectedDirectoryClub = directoryClubs.find((c) => c.id === directorySelectedClubId)
+  const filteredDirectoryClubs = useMemo(() => {
+    const q = clubsSearch.trim().toLowerCase()
+    if (!q) return directoryClubs
+    return directoryClubs.filter((c) => {
+      const name = String(c.name ?? '').toLowerCase()
+      const president = String(c.president ?? '').toLowerCase()
+      const category = String(c.category ?? '').toLowerCase()
+      const status = String(c.status ?? '').toLowerCase()
+      return (
+        name.includes(q) ||
+        president.includes(q) ||
+        category.includes(q) ||
+        status.includes(q)
+      )
+    })
+  }, [directoryClubs, clubsSearch])
   const filteredClubMembers = useMemo(() => {
     const q = clubMemberSearch.trim().toLowerCase()
     if (!q) return clubMembers
@@ -1079,49 +1211,52 @@ const StudentServices = () => {
     )
   }, [clubEmployees, clubEmployeeSearch])
 
+  const normalizeClubStatusForPatch = (s) => {
+    const v = String(s ?? '').trim().toLowerCase()
+    if (!v) return 'Active'
+    if (v === 'inactive' || v === 'archived' || v === '3') return 'Inactive'
+    if (v === 'active' || v === 'approved' || v === '1' || v === '2') return 'Active'
+    return 'Active'
+  }
+
   const handleSaveClubSettings = async () => {
     if (!selectedDirectoryClub) return
     const cid = selectedDirectoryClub.id
     const name = clubEditName.trim() || selectedDirectoryClub.name
-    const status = clubEditStatus || selectedDirectoryClub.status
-    const rawDesc =
-      selectedDirectoryClub.raw && typeof selectedDirectoryClub.raw === 'object'
-        ? selectedDirectoryClub.raw.description
-        : null
+    const status = normalizeClubStatusForPatch(clubEditStatus || selectedDirectoryClub.status)
+    const description =
+      clubEditDescription.trim() ||
+      (selectedDirectoryClub.raw && typeof selectedDirectoryClub.raw === 'object'
+        ? String(selectedDirectoryClub.raw.description ?? selectedDirectoryClub.raw.about ?? '').trim()
+        : '') ||
+      name
     try {
-      await patchStudentServicesClub(cid, {
-        name,
-        description: rawDesc != null ? String(rawDesc) : name,
-        status,
-      })
+      await patchStudentServicesClub(cid, { name, description, status })
     } catch (e) {
       alert(e?.message || 'Could not save club.')
       return
     }
-    const updateClub = (profileImageUrl) => {
-      setDirectoryClubs((prev) =>
-        prev.map((c) =>
-          c.id === selectedDirectoryClub.id
-            ? {
-                ...c,
-                name,
-                status,
-                ...(profileImageUrl != null && { profileImageUrl }),
-              }
-            : c
-        )
-      )
-      setClubEditImage(null)
-      setDirectorySelectedClubId(null)
+    try {
+      await refreshStudentServicesFromApi()
+    } catch {
+      /* ignore */
     }
-    if (clubEditImage && clubEditImage instanceof File) {
-      const reader = new FileReader()
-      reader.onload = () => updateClub(reader.result)
-      reader.readAsDataURL(clubEditImage)
-    } else {
-      updateClub(selectedDirectoryClub.profileImageUrl)
+    setDirectorySelectedClubId(cid)
+  }
+
+  const handleUploadClubLogo = async (file) => {
+    if (!selectedDirectoryClub) return
+    if (!(file instanceof File)) return
+    setClubEditImage(file)
+    setClubEditImageUploadState({ uploading: true, error: '' })
+    try {
+      await uploadStudentServicesClubProfileImage(selectedDirectoryClub.id, file)
+      setClubEditImageUploadState({ uploading: false, error: '' })
+      // Refresh so proposedProfileImageUrl appears immediately.
+      refreshStudentServicesFromApi()
+    } catch (e) {
+      setClubEditImageUploadState({ uploading: false, error: e?.message || 'Could not upload club logo.' })
     }
-    refreshStudentServicesFromApi()
   }
 
   const handleApproveProposedClubImage = async () => {
@@ -1150,13 +1285,13 @@ const StudentServices = () => {
   }
 
   const handleAddEmployee = async () => {
-    const id = addEmployeeId.trim()
-    const position = addEmployeePosition && addEmployeePosition !== 'Select position' ? addEmployeePosition : null
-    if (!id || !position || !selectedDirectoryClub) return
+    const userId = addEmployeeId.trim()
+    const positionId = addEmployeePosition && addEmployeePosition !== 'Select position' ? String(addEmployeePosition) : null
+    if (!userId || !positionId || !selectedDirectoryClub) return
     try {
       await createStudentServicesClubEmployee(selectedDirectoryClub.id, {
-        studentId: id,
-        position,
+        userId,
+        positionId,
       })
     } catch (e) {
       alert(e?.message || 'Could not add employee.')
@@ -1166,7 +1301,7 @@ const StudentServices = () => {
     setAddEmployeeId('')
     setAddEmployeePosition('')
     try {
-      const rawE = await fetchStudentServicesClubEmployees(selectedDirectoryClub.id)
+      const rawE = await fetchStudentServicesClubEmployees(selectedDirectoryClub.id, { page: 1, limit: 200 })
       const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
       setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
     } catch {
@@ -1188,13 +1323,13 @@ const StudentServices = () => {
     if (newPosition == null || !selectedDirectoryClub) return
     try {
       await patchStudentServicesClubEmployee(selectedDirectoryClub.id, String(employeeId), {
-        position: newPosition,
+        positionId: String(newPosition),
       })
     } catch (e) {
       alert(e?.message || 'Could not update position.')
       return
     }
-    setClubEmployees((prev) => prev.map((emp) => (emp.id === employeeId ? { ...emp, position: newPosition } : emp)))
+    setClubEmployees((prev) => prev.map((emp) => (emp.id === employeeId ? { ...emp, positionId: String(newPosition) } : emp)))
     setPendingEmployeePosition((prev) => {
       const next = { ...prev }
       delete next[employeeId]
@@ -1208,6 +1343,13 @@ const StudentServices = () => {
     const EMPLOYEE_POSITIONS = Array.isArray(EMPLOYEE_POSITIONS_LIST) ? EMPLOYEE_POSITIONS_LIST : ['President', 'Vice President', 'Secretary', 'Treasurer']
     const posKey = (p) => (typeof p === 'object' && p != null ? p.id : p)
     const posLabel = (p) => (typeof p === 'object' && p != null ? p.title : p)
+    const posId = (p) => (typeof p === 'object' && p != null ? String(p.id) : String(p))
+    const positionTitleById = (pid) => {
+      const v = pid != null ? String(pid) : ''
+      if (!v) return ''
+      const match = EMPLOYEE_POSITIONS.find((p) => posId(p) === v)
+      return match ? posLabel(match) : ''
+    }
 
     return (
       <>
@@ -1245,6 +1387,8 @@ const StudentServices = () => {
               </header>
               <div className="club-admin-content">
                 <p style={{ margin: '0 24px 20px', fontSize: 14, color: '#64748b' }}>Manage club members. Update position or remove a member.</p>
+                {clubRosterLoadState.loading && <p style={{ margin: '0 24px 12px', fontSize: 13, color: '#2563eb' }}>Loading members…</p>}
+                {clubRosterLoadState.error && <p style={{ margin: '0 24px 12px', fontSize: 13, color: '#b91c1c' }}>{clubRosterLoadState.error}</p>}
                 <div className="club-admin-card" style={{ margin: '0 24px 24px' }}>
                   <table className="club-admin-table">
                     <thead>
@@ -1339,6 +1483,8 @@ const StudentServices = () => {
               </header>
               <div className="club-admin-content">
                 <p style={{ margin: '0 24px 20px', fontSize: 14, color: '#64748b' }}>Manage club employees. Add without application: enter ID and position, then confirm.</p>
+                {clubRosterLoadState.loading && <p style={{ margin: '0 24px 12px', fontSize: 13, color: '#2563eb' }}>Loading employees…</p>}
+                {clubRosterLoadState.error && <p style={{ margin: '0 24px 12px', fontSize: 13, color: '#b91c1c' }}>{clubRosterLoadState.error}</p>}
                 <div className="club-admin-card" style={{ margin: '0 24px 24px' }}>
                   <table className="club-admin-table">
                     <thead>
@@ -1352,9 +1498,10 @@ const StudentServices = () => {
                     </thead>
                     <tbody>
                       {filteredClubEmployees.map((e) => {
-                        const currentPosition = e.position ?? ''
-                        const draftPosition = pendingEmployeePosition[e.id] ?? currentPosition
-                        const hasPendingChange = pendingEmployeePosition[e.id] != null && pendingEmployeePosition[e.id] !== currentPosition
+                        const currentPositionId = e.positionId != null ? String(e.positionId) : ''
+                        const draftPositionId = pendingEmployeePosition[e.id] != null ? String(pendingEmployeePosition[e.id]) : currentPositionId
+                        const hasPendingChange = pendingEmployeePosition[e.id] != null && String(pendingEmployeePosition[e.id]) !== currentPositionId
+                        const displayFallback = e.position && e.position !== '—' ? e.position : positionTitleById(currentPositionId)
                         return (
                           <tr key={e.id}>
                             <td>
@@ -1370,13 +1517,13 @@ const StudentServices = () => {
                             <td>
                               <select
                                 className="club-admin-select-inline"
-                                value={draftPosition}
-                                onChange={(ev) => handleEmployeePositionChange(e.id, ev.target.value || null, currentPosition)}
+                                value={draftPositionId}
+                                onChange={(ev) => handleEmployeePositionChange(e.id, ev.target.value || null, currentPositionId)}
                                 aria-label={`Position for ${e.name} ${e.surname}`}
                               >
-                                <option value="">—</option>
+                                <option value="">{displayFallback ? `— (currently: ${displayFallback})` : '—'}</option>
                                 {EMPLOYEE_POSITIONS.map((pos) => (
-                                  <option key={posKey(pos)} value={posLabel(pos)}>{posLabel(pos)}</option>
+                                  <option key={posKey(pos)} value={posId(pos)}>{posLabel(pos)}</option>
                                 ))}
                               </select>
                             </td>
@@ -1409,7 +1556,23 @@ const StudentServices = () => {
                     <div className="club-admin-popup-body"><p>Are you sure you want to remove this employee from their role?</p></div>
                     <div className="club-admin-popup-footer">
                       <button type="button" className="club-admin-btn-secondary" onClick={() => setRemoveEmployeeId(null)}>Cancel</button>
-                      <button type="button" className="club-admin-btn-danger" onClick={() => { setClubEmployees((prev) => prev.filter((x) => x.id !== removeEmployeeId)); setRemoveEmployeeId(null) }}>Remove</button>
+                      <button
+                        type="button"
+                        className="club-admin-btn-danger"
+                        onClick={async () => {
+                          if (removeEmployeeId == null || !selectedDirectoryClub) return
+                          try {
+                            await deleteStudentServicesClubEmployee(selectedDirectoryClub.id, String(removeEmployeeId))
+                          } catch (e) {
+                            alert(e?.message || 'Could not remove employee.')
+                            return
+                          }
+                          setClubEmployees((prev) => prev.filter((x) => x.id !== removeEmployeeId))
+                          setRemoveEmployeeId(null)
+                        }}
+                      >
+                        Remove
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1423,15 +1586,15 @@ const StudentServices = () => {
                     </div>
                     <div className="club-admin-popup-body">
                       <div className="club-admin-field">
-                        <label>Student ID</label>
-                        <input type="text" placeholder="e.g. 20230123" value={addEmployeeId} onChange={(e) => setAddEmployeeId(e.target.value)} />
+                        <label>User ID (GUID)</label>
+                        <input type="text" placeholder="e.g. b3c2d1e0-1111-2222-3333-444455556666" value={addEmployeeId} onChange={(e) => setAddEmployeeId(e.target.value)} />
                       </div>
                       <div className="club-admin-field">
                         <label>Position</label>
                         <select value={addEmployeePosition} onChange={(e) => setAddEmployeePosition(e.target.value)}>
                           <option value="">Select position</option>
                           {EMPLOYEE_POSITIONS.map((pos) => (
-                            <option key={posKey(pos)} value={posLabel(pos)}>{posLabel(pos)}</option>
+                            <option key={posKey(pos)} value={posId(pos)}>{posLabel(pos)}</option>
                           ))}
                         </select>
                       </div>
@@ -1462,9 +1625,29 @@ const StudentServices = () => {
                   </select>
                 </div>
                 <div className="club-admin-field">
+                  <label>Description</label>
+                  <textarea
+                    rows={4}
+                    value={clubEditDescription}
+                    onChange={(e) => setClubEditDescription(e.target.value)}
+                    placeholder="Club description shown to students"
+                  />
+                </div>
+                <div className="club-admin-field">
                   <label>Club logo</label>
-                  <input type="file" accept="image/*" onChange={(e) => setClubEditImage(e.target.files?.[0] ?? null)} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={clubEditImageUploadState.uploading}
+                    onChange={(e) => handleUploadClubLogo(e.target.files?.[0] ?? null)}
+                  />
                   {clubEditImage && <span className="ss-cc-settings-filename">{clubEditImage.name}</span>}
+                  {clubEditImageUploadState.uploading && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: '#2563eb' }}>Uploading logo…</div>
+                  )}
+                  {clubEditImageUploadState.error && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c' }}>{clubEditImageUploadState.error}</div>
+                  )}
                 </div>
                 {selectedDirectoryClub.proposedProfileImageUrl && (
                   <div className="club-admin-field">
@@ -1508,7 +1691,7 @@ const StudentServices = () => {
           <h1 className="ss-cc-title">Master Directory</h1>
           <p className="ss-cc-subtitle">The central source of truth for all campus organizations, student-led activities, and approved programming.</p>
         </div>
-        <button type="button" className="ss-cc-register-btn" onClick={() => navigate('/clubs/propose')}>
+        <button type="button" className="ss-cc-register-btn" onClick={() => navigate('/student-services/clubs/propose')}>
           <span className="ss-cc-register-icon"><IconPlusCircle /></span>
           Register New Club
         </button>
@@ -1777,13 +1960,41 @@ const StudentServices = () => {
     if (!window.confirm('Are you sure you want to approve this event proposal?')) return
     const sel = eventProposals.find((e) => e.id === selectedEventId)
     const pid = sel?.proposalId ?? sel?.id
-    const assignments = (eventRoomAssignments || []).map((a, idx) => ({
-      subEventIndex: idx,
-      buildingId: a.buildingId ?? 'B1',
-      roomId: a.roomId ?? 'R101',
-    }))
+    const subs = Array.isArray(sel?.raw?.subEvents)
+      ? sel.raw.subEvents
+      : Array.isArray(sel?.subEvents)
+        ? sel.subEvents
+        : []
+    const rows = eventRoomAssignments || []
+    const firstBuildingId = locBuildings[0]?.id != null ? String(locBuildings[0].id) : 'b1'
+    const firstRoomId =
+      Array.isArray(locRoomsByBuildingId[firstBuildingId]) && locRoomsByBuildingId[firstBuildingId][0]?.id != null
+        ? String(locRoomsByBuildingId[firstBuildingId][0].id)
+        : 'r1'
+    const normId = (v, fallback) => String(v ?? fallback)
+
+    let assignments
+    if (subs.length === 0) {
+      const a = rows[0] || {}
+      assignments = [
+        {
+          subEventIndex: 0,
+          buildingId: normId(a.buildingId, firstBuildingId),
+          roomId: normId(a.roomId, firstRoomId),
+        },
+      ]
+    } else {
+      assignments = subs.map((_, i) => {
+        const a = rows[i] || rows[0] || {}
+        return {
+          subEventIndex: i,
+          buildingId: normId(a.buildingId, sel?.requestedBuildingId ?? firstBuildingId),
+          roomId: normId(a.roomId, sel?.requestedRoomId ?? firstRoomId),
+        }
+      })
+    }
     try {
-      if (pid) await approveStudentServicesEventProposal(pid, assignments.length ? assignments : [{ subEventIndex: 0, buildingId: 'B1', roomId: 'R101' }])
+      if (pid) await approveStudentServicesEventProposal(pid, assignments)
     } catch (e) {
       alert(e?.message || 'Approve failed.')
       return
@@ -1800,8 +2011,10 @@ const StudentServices = () => {
       setEventRoomAssignments([])
       return
     }
-    const b = event.requestedBuildingId || BUILDINGS[0]?.id
-    const r = event.requestedRoomId || (ROOMS_BY_BUILDING[b] && ROOMS_BY_BUILDING[b][0]?.id)
+    const b = event.requestedBuildingId || (locBuildings[0]?.id != null ? String(locBuildings[0].id) : '')
+    if (b) ensureRoomsLoaded(b)
+    const rooms = b ? locRoomsByBuildingId[String(b)] || [] : []
+    const r = event.requestedRoomId || (rooms[0]?.id != null ? String(rooms[0].id) : '')
     if (!event.subEvents || event.subEvents.length === 0) {
       setEventRoomAssignments([{ buildingId: b, roomId: r }])
     } else {
@@ -1809,7 +2022,7 @@ const StudentServices = () => {
         event.subEvents.map(() => ({ buildingId: b, roomId: r }))
       )
     }
-  }, [selectedEventId, eventProposals])
+  }, [selectedEventId, eventProposals, locBuildings, locRoomsByBuildingId, ensureRoomsLoaded])
 
   useEffect(() => {
     if (!directorySelectedClubId) return
@@ -1817,6 +2030,9 @@ const StudentServices = () => {
     if (club) {
       setClubEditName(club.name)
       setClubEditStatus(club.status)
+      const raw = club.raw && typeof club.raw === 'object' ? club.raw : null
+      const desc = raw != null ? String(raw.description ?? raw.about ?? '').trim() : ''
+      setClubEditDescription(desc)
     }
   }, [directorySelectedClubId, directoryClubs])
 
@@ -1825,20 +2041,61 @@ const StudentServices = () => {
     let cancelled = false
     const clubId = directorySelectedClubId
     ;(async () => {
+      setClubRosterLoadState({ loading: true, error: '' })
       try {
-        const [rawM, rawE] = await Promise.all([
-          fetchStudentServicesClubMembers(clubId).catch(() => ({ items: [] })),
-          fetchStudentServicesClubEmployees(clubId).catch(() => ({ items: [] })),
+        // Fetch ALL members (paged API). Employees endpoint is typically unpaged.
+        const fetchAllMembers = async () => {
+          const all = []
+          const limit = 200
+          for (let page = 1; page <= 20; page += 1) {
+            const raw = await fetchStudentServicesClubMembers(clubId, { page, limit })
+            const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : []
+            all.push(...items)
+            if (items.length < limit) break
+          }
+          return all
+        }
+
+        const [allMembersRaw, rawE] = await Promise.all([
+          fetchAllMembers(),
+          fetchStudentServicesClubEmployees(clubId, { page: 1, limit: 200 }),
         ])
         if (cancelled) return
-        const mItems = Array.isArray(rawM?.items) ? rawM.items : Array.isArray(rawM) ? rawM : []
         const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
-        setClubMembers(mItems.map(mapSsMemberRow).filter(Boolean))
+        const baseMembers = (Array.isArray(allMembersRaw) ? allMembersRaw : []).map(mapSsMemberRow).filter(Boolean)
+        setClubMembers(baseMembers)
         setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+        setClubRosterLoadState({ loading: false, error: '' })
+
+        // Enrich members via auth microservice (name/email).
+        const uniqueUserIds = Array.from(new Set(baseMembers.map((m) => m.userId).filter(Boolean)))
+        if (uniqueUserIds.length) {
+          const profiles = await Promise.all(uniqueUserIds.map((uid) => fetchAuthUserById(uid)))
+          const byId = new Map()
+          uniqueUserIds.forEach((uid, i) => {
+            const p = profiles[i]
+            if (p && typeof p === 'object') byId.set(uid, p)
+          })
+          if (!cancelled) {
+            setClubMembers((prev) =>
+              prev.map((m) => {
+                const p = m.userId ? byId.get(m.userId) : null
+                if (!p) return m
+                return {
+                  ...m,
+                  name: String(p.firstName ?? '').trim() || String(p.userName ?? '').trim() || m.name,
+                  surname: String(p.lastName ?? '').trim() || m.surname,
+                  email: String(p.email ?? '').trim() || m.email,
+                }
+              })
+            )
+          }
+        }
       } catch {
         if (!cancelled) {
           setClubMembers([])
           setClubEmployees([])
+          setClubRosterLoadState({ loading: false, error: 'Could not load members/employees for this club.' })
         }
       }
     })()
@@ -1850,15 +2107,21 @@ const StudentServices = () => {
   const setEventRoomAssignmentAt = (index, buildingId, roomId) => {
     setEventRoomAssignments((prev) => {
       const next = [...prev]
-      while (next.length <= index) next.push({ buildingId: BUILDINGS[0]?.id, roomId: ROOMS_BY_BUILDING[BUILDINGS[0]?.id]?.[0]?.id })
+      const firstBuildingId = locBuildings[0]?.id != null ? String(locBuildings[0].id) : ''
+      const firstRoomId =
+        firstBuildingId && Array.isArray(locRoomsByBuildingId[firstBuildingId]) && locRoomsByBuildingId[firstBuildingId][0]?.id != null
+          ? String(locRoomsByBuildingId[firstBuildingId][0].id)
+          : ''
+      while (next.length <= index) next.push({ buildingId: firstBuildingId, roomId: firstRoomId })
       const cur = next[index]
       next[index] = {
         buildingId: buildingId ?? cur.buildingId,
         roomId: roomId !== undefined ? roomId : cur.roomId,
       }
       if (buildingId && roomId === undefined) {
-        const rooms = ROOMS_BY_BUILDING[buildingId]
-        next[index].roomId = rooms?.[0]?.id ?? ''
+        const bid = String(buildingId)
+        const rooms = locRoomsByBuildingId[bid] || []
+        next[index].roomId = rooms?.[0]?.id != null ? String(rooms[0].id) : ''
       }
       return next
     })
@@ -2209,9 +2472,30 @@ const StudentServices = () => {
               </div>
             </div>
             <div className="ss-cp-req-footer">
-              <span className="ss-cp-req-autosave">Auto-save enabled</span>
+              <span className="ss-cp-req-autosave" style={{ fontSize: 13, color: '#64748b' }}>
+                Save changes to the server so applicants see updated criteria.
+              </span>
               <div className="ss-cp-req-footer-buttons">
                 <button type="button" className="ss-cp-btn ss-cp-btn--secondary" onClick={() => setRequirementsModalOpen(false)}>Close</button>
+                <button
+                  type="button"
+                  className="ss-cp-btn ss-cp-btn--secondary"
+                  onClick={async () => {
+                    try {
+                      await putStudentServicesProposalRequirements({
+                        requirements: requirementsList,
+                        ...(requirementsDeadline
+                          ? { deadline: new Date(`${requirementsDeadline}T12:00:00`).toISOString() }
+                          : {}),
+                      })
+                      alert('Proposal requirements saved.')
+                    } catch (e) {
+                      alert(e?.message || 'Could not save requirements.')
+                    }
+                  }}
+                >
+                  Save to server
+                </button>
                 <button
                   type="button"
                   className="ss-cp-btn ss-cp-btn--approve"
@@ -2241,6 +2525,11 @@ const StudentServices = () => {
             <h2 className="ss-eap-pending-title">Pending Proposals</h2>
             <span className="ss-eap-pending-badge">{pendingEventCount}</span>
           </div>
+          {ssDataLoadState.error && (
+            <div style={{ marginTop: 10, fontSize: 12, color: '#b91c1c' }}>
+              {ssDataLoadState.error}
+            </div>
+          )}
           <div className="ss-eap-search-wrap">
             <span className="ss-eap-search-icon"><IconSearch /></span>
             <input
@@ -2271,6 +2560,11 @@ const StudentServices = () => {
                 </div>
               </button>
             ))}
+            {!ssDataLoadState.loading && filterEventProposals(eventProposals).length === 0 && (
+              <div style={{ padding: '14px 12px', fontSize: 13, color: '#64748b' }}>
+                No event proposals found.
+              </div>
+            )}
           </div>
         </aside>
 
@@ -2303,8 +2597,15 @@ const StudentServices = () => {
                   <div className="ss-eap-grid">
                     <div className="ss-eap-field">
                       <span className="ss-eap-field-label">DATE &amp; TIME</span>
-                      <p className="ss-eap-field-value">{selectedEvent.dateTime}</p>
-                      <p className="ss-eap-field-value">{selectedEvent.timeRange}</p>
+                      <p className="ss-eap-field-value">
+                        {formatDateTimeLocalFromGmtPlus4(selectedEvent.raw?.dateTime ?? selectedEvent.dateTime)}
+                      </p>
+                      <p className="ss-eap-field-value">
+                        {formatTimeRangeLocalFromGmtPlus4(
+                          selectedEvent.raw?.dateTime ?? selectedEvent.dateTime,
+                          selectedEvent.raw?.duration ?? selectedEvent.duration
+                        ) || selectedEvent.timeRange}
+                      </p>
                     </div>
                     <div className="ss-eap-field">
                       <span className="ss-eap-field-label">DURATION</span>
@@ -2377,12 +2678,25 @@ const StudentServices = () => {
                   {(() => {
                     const hasSubEvents = selectedEvent.subEvents && selectedEvent.subEvents.length > 0
                     const slotCount = hasSubEvents ? selectedEvent.subEvents.length : 1
-                    const defaults = { buildingId: selectedEvent.requestedBuildingId || BUILDINGS[0]?.id, roomId: selectedEvent.requestedRoomId || (ROOMS_BY_BUILDING[selectedEvent.requestedBuildingId]?.[0]?.id) || ROOMS_BY_BUILDING[BUILDINGS[0]?.id]?.[0]?.id }
+                    const firstBuildingId = locBuildings[0]?.id != null ? String(locBuildings[0].id) : ''
+                    const firstRoomId =
+                      firstBuildingId &&
+                      Array.isArray(locRoomsByBuildingId[firstBuildingId]) &&
+                      locRoomsByBuildingId[firstBuildingId][0]?.id != null
+                        ? String(locRoomsByBuildingId[firstBuildingId][0].id)
+                        : ''
+                    const baseBuildingId = selectedEvent.requestedBuildingId || firstBuildingId
+                    const baseRooms = baseBuildingId ? locRoomsByBuildingId[String(baseBuildingId)] || [] : []
+                    const baseRoomId =
+                      selectedEvent.requestedRoomId ||
+                      (baseRooms[0]?.id != null ? String(baseRooms[0].id) : firstRoomId)
+                    const defaults = { buildingId: String(baseBuildingId || ''), roomId: String(baseRoomId || '') }
                     return (
                       <div className="ss-eap-assign-rooms">
                         {Array.from({ length: slotCount }, (_, i) => {
                           const a = eventRoomAssignments[i] || defaults
-                          const rooms = ROOMS_BY_BUILDING[a.buildingId] || []
+                          const bid = String(a.buildingId || '')
+                          const rooms = locRoomsByBuildingId[bid] || []
                           const label = hasSubEvents ? selectedEvent.subEvents[i].title : 'Room for entire event'
                           return (
                             <div key={i} className="ss-eap-assign-row">
@@ -2391,11 +2705,17 @@ const StudentServices = () => {
                                 <select
                                   className="ss-eap-select"
                                   value={a.buildingId}
-                                  onChange={(e) => setEventRoomAssignmentAt(i, e.target.value, undefined)}
+                                  onChange={(e) => {
+                                    const nextBuildingId = e.target.value
+                                    ensureRoomsLoaded(nextBuildingId)
+                                    setEventRoomAssignmentAt(i, nextBuildingId, undefined)
+                                  }}
                                   aria-label={`Building for ${label}`}
                                 >
-                                  {BUILDINGS.map((b) => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                  {locBuildings.map((b) => (
+                                    <option key={String(b.id)} value={String(b.id)}>
+                                      {buildingNameFor(b) || `Building ${b.id}`}
+                                    </option>
                                   ))}
                                 </select>
                                 <select
@@ -2405,7 +2725,9 @@ const StudentServices = () => {
                                   aria-label={`Room for ${label}`}
                                 >
                                   {rooms.map((r) => (
-                                    <option key={r.id} value={r.id}>{r.name}</option>
+                                    <option key={String(r.id)} value={String(r.id)}>
+                                      {roomNameFor(r) || `Room ${r.id}`}{roomCapacityLabel(r)}
+                                    </option>
                                   ))}
                                 </select>
                               </div>
@@ -2480,6 +2802,17 @@ const StudentServices = () => {
         <div className="ss-card" style={{ marginTop: 20 }}>
           <h2>Approved Clubs</h2>
           <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>Click a club row to open its detail page (members, employees, settings).</p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <input
+              className="ss-search"
+              placeholder="Search clubs by name, president, category, or status..."
+              type="text"
+              value={clubsSearch}
+              onChange={(e) => setClubsSearch(e.target.value)}
+              aria-label="Search approved clubs"
+              style={{ maxWidth: 420 }}
+            />
+          </div>
           <div className="ss-cc-table-wrap" style={{ marginBottom: 0 }}>
             <table className="ss-cc-table">
               <thead>
@@ -2509,7 +2842,7 @@ const StudentServices = () => {
                   }
                 }}
               >
-                {directoryClubs.map((c) => (
+                {filteredDirectoryClubs.map((c) => (
                   <tr
                     key={c.id}
                     data-club-id={c.id}
@@ -2543,6 +2876,11 @@ const StudentServices = () => {
                 ))}
               </tbody>
             </table>
+            {filteredDirectoryClubs.length === 0 && (
+              <div style={{ padding: '14px 12px', fontSize: 13, color: '#64748b' }}>
+                No clubs match your search.
+              </div>
+            )}
           </div>
         </div>
       </>
@@ -2879,6 +3217,14 @@ const StudentServices = () => {
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="club-admin-btn-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                onClick={() => navigate('/student-services/events/propose')}
+              >
+                Propose event
+              </button>
               <button
                 type="button"
                 className="club-admin-btn-primary"

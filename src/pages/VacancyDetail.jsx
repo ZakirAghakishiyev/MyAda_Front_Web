@@ -65,7 +65,9 @@ const VacancyDetail = () => {
       } catch (e) {
         if (!cancelled) {
           setVacancy(null)
-          setLoadError(e?.message || 'Failed to load vacancy.')
+          const status = e?.status || e?.response?.status
+          if (status === 404) setLoadError('Vacancy not found.')
+          else setLoadError(e?.message || 'Failed to load vacancy.')
         }
       }
     })()

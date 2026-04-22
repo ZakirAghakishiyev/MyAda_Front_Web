@@ -49,6 +49,22 @@ const formatTimeRange = (start, end) => {
   return end ? `${formatTime(start)} - ${formatTime(end)}` : formatTime(start)
 }
 
+function toFiniteNonNegativeInt(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const i = Math.floor(n)
+  return i >= 0 ? i : null
+}
+
+function pickFirstFiniteNonNegativeInt(obj, keys) {
+  if (!obj || typeof obj !== 'object') return null
+  for (const key of keys) {
+    const v = toFiniteNonNegativeInt(obj[key])
+    if (v != null) return v
+  }
+  return null
+}
+
 const EventDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -60,6 +76,7 @@ const EventDetail = () => {
   const [registering, setRegistering] = useState(false)
   const [hostClub, setHostClub] = useState(null)
   const [hostClubLoading, setHostClubLoading] = useState(false)
+  const [registeredCountOverride, setRegisteredCountOverride] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -73,7 +90,25 @@ const EventDetail = () => {
           fetchMyEventRegistrations().catch(() => null),
         ])
         if (cancelled) return
-        setEvent(mapEventFromApi(rawEv))
+        const mapped = mapEventFromApi(rawEv)
+        setEvent(mapped)
+        const rawObj = mapped?.raw && typeof mapped.raw === 'object' ? mapped.raw : rawEv
+        const initialRegisteredCount = pickFirstFiniteNonNegativeInt(rawObj, [
+          'registeredCount',
+          'registrationsCount',
+          'registrationCount',
+          'attendeesCount',
+          'attendeeCount',
+          'participantsCount',
+          'participantCount',
+          'participants',
+          'attendees',
+          'spotsTaken',
+          'seatsTaken',
+          'takenSeats',
+          'filledSeats',
+        ])
+        setRegisteredCountOverride(initialRegisteredCount)
         const items = rawReg?.items ?? rawReg ?? []
         const list = Array.isArray(items) ? items : []
         const found = list.some((r) => String(r.eventId ?? r.event?.id ?? r.id) === String(id))
@@ -122,12 +157,50 @@ const EventDetail = () => {
   const registered = apiRegistered || isRegistered(id)
 
   const totalSlots = useMemo(() => {
-    if (!event) return 150
-    const cap = Number(event.seatLimit)
-    return Number.isFinite(cap) && cap > 0 ? cap : 150
+    if (!event) return 0
+    const raw = event.raw && typeof event.raw === 'object' ? event.raw : {}
+    const cap =
+      toFiniteNonNegativeInt(event.seatLimit) ??
+      pickFirstFiniteNonNegativeInt(raw, [
+        'seatLimit',
+        'capacity',
+        'maxCapacity',
+        'maxAttendees',
+        'totalSlots',
+        'totalSeats',
+        'totalCapacity',
+      ])
+    return cap != null && cap > 0 ? cap : 0
   }, [event])
 
-  const remainingSlots = useMemo(() => Math.max(0, Math.floor(totalSlots * 0.72)), [totalSlots])
+  const registeredCount = useMemo(() => {
+    if (registeredCountOverride != null) return registeredCountOverride
+    const raw = event?.raw && typeof event.raw === 'object' ? event.raw : null
+    return (
+      pickFirstFiniteNonNegativeInt(raw, [
+        'registeredCount',
+        'registrationsCount',
+        'registrationCount',
+        'attendeesCount',
+        'attendeeCount',
+        'participantsCount',
+        'participantCount',
+        'participants',
+        'attendees',
+        'spotsTaken',
+        'seatsTaken',
+        'takenSeats',
+        'filledSeats',
+      ]) ?? 0
+    )
+  }, [event, registeredCountOverride])
+
+  const remainingSlots = useMemo(() => {
+    if (!totalSlots) return 0
+    return Math.max(0, totalSlots - (registeredCount || 0))
+  }, [registeredCount, totalSlots])
+
+  const isSoldOut = totalSlots > 0 && remainingSlots <= 0
 
   if (loading) {
     return (
@@ -156,12 +229,14 @@ const EventDetail = () => {
 
   const handleRegister = async () => {
     if (registering) return
+    if (isSoldOut) return
     setRegistering(true)
     try {
-      await registerForEvent(id)
+      const regResult = await registerForEvent(id)
       registerEvent(id)
       setApiRegistered(true)
-      navigate(`/clubs/events/${id}/ticket`, { state: { fromRegistration: true } })
+      setRegisteredCountOverride((prev) => (prev == null ? (registeredCount || 0) + 1 : prev + 1))
+      navigate(`/clubs/events/${id}/ticket`, { state: { fromRegistration: true, registration: regResult } })
     } catch (e) {
       alert(e?.message || 'Could not register.')
     } finally {
@@ -260,7 +335,10 @@ const EventDetail = () => {
             <span className="ed-sidebar-label">Remaining Slots</span>
             <p className="ed-sidebar-slots">{remainingSlots} / {totalSlots}</p>
             <div className="ed-progress">
-              <div className="ed-progress-fill" style={{ width: `${((totalSlots - remainingSlots) / totalSlots) * 100}%` }} />
+              <div
+                className="ed-progress-fill"
+                style={{ width: `${totalSlots ? ((Math.min(totalSlots, registeredCount) / totalSlots) * 100) : 0}%` }}
+              />
             </div>
             {registered ? (
               <button
@@ -272,9 +350,16 @@ const EventDetail = () => {
               </button>
             ) : (
               <>
-                <button type="button" className="ed-btn ed-btn--primary ed-btn--full" onClick={handleRegister} disabled={registering}>
+                <button
+                  type="button"
+                  className="ed-btn ed-btn--primary ed-btn--full"
+                  onClick={handleRegister}
+                  disabled={registering || isSoldOut || !totalSlots}
+                  aria-disabled={registering || isSoldOut || !totalSlots}
+                  title={isSoldOut ? 'All spaces are taken.' : undefined}
+                >
                   <IconCalendar />
-                  {registering ? 'Registering…' : 'Register for Event'}
+                  {registering ? 'Registering…' : isSoldOut ? 'Sold Out' : 'Register for Event'}
                 </button>
                 <button type="button" className="ed-btn ed-btn--secondary ed-btn--full">
                   Add to Calendar

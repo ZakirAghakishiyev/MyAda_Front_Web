@@ -25,12 +25,12 @@ Path parameters like `{clubId}` are URL-encoded in the client.
 
 ---
 
-## 2. Clubs (authenticated)
+## 2. Clubs (mixed: public detail + authenticated listings)
 
 | Method | Path | Query | Body | Client function |
 |--------|------|-------|------|-----------------|
 | GET | `clubs` | `search`, `category`, `page` (default 1), `limit` (default 12) | — | `fetchClubs(params)` |
-| GET | `clubs/{clubId}` | — | — | `fetchClub(clubId)` |
+| GET | `clubs/{clubId}` | — | — | `fetchClub(clubId)` *(public when signed out; uses auth when available)* |
 | GET | `clubs/{clubId}/members` | — | — | `fetchClubMembers(clubId)` |
 | POST | `clubs/{clubId}/join-applications` | — | **FormData** (e.g. `letterOfPurpose`, `portfolioLinks`, `portfolioFiles[]`) | `submitClubJoinApplication(clubId, formData)` |
 
@@ -74,11 +74,11 @@ Path parameters like `{clubId}` are URL-encoded in the client.
 
 ---
 
-## 6. Club proposals — student submit (authenticated)
+## 6. Club proposals — student submit (unauthenticated JSON)
 
 | Method | Path | Query | Body | Client function |
 |--------|------|-------|------|-----------------|
-| POST | `club-proposals` | — | **FormData** (multipart proposal) | `submitClubProposal(formData)` |
+| POST | `club-proposals` | — | **JSON** (`application/json`) | `submitClubProposal(body)` |
 
 ---
 
@@ -178,17 +178,18 @@ Prefix for all rows in this section: **`club-admin/{clubId}/`** (the client buil
 | GET | `student-services/clubs` | `search`, `page` (default 1), `limit` (default 12) | — | `fetchStudentServicesClubs(params)` |
 | GET | `student-services/clubs/{clubId}` | — | — | `fetchStudentServicesClub(clubId)` |
 | PATCH | `student-services/clubs/{clubId}` | — | **JSON** | `patchStudentServicesClub(clubId, body)` |
+| POST | `student-services/clubs/{clubId}/profile-image` | — | **FormData** (e.g. `logoFile`) | `uploadStudentServicesClubProfileImage(clubId, file)` |
 | POST | `student-services/clubs/{clubId}/profile-image/approve` | — | `{}` | `approveStudentServicesClubProfileImage(clubId)` |
 
 ### Club proposals (institutional review)
 
 | Method | Path | Query | Body | Client function |
 |--------|------|-------|------|-----------------|
-| GET | `student-services/club-proposals` | — | — | `fetchStudentServicesClubProposals()` |
-| GET | `student-services/club-proposals/{proposalId}` | — | — | `fetchStudentServicesClubProposal(proposalId)` |
-| POST | `student-services/club-proposals/{proposalId}/approve` | — | `{}` | `approveStudentServicesClubProposal(proposalId)` |
-| POST | `student-services/club-proposals/{proposalId}/reject` | — | `{ "reason": "..." }` | `rejectStudentServicesClubProposal(proposalId, reason)` |
-| POST | `student-services/club-proposals/{proposalId}/request-revision` | — | `{ "changes": "..." }` | `requestRevisionStudentServicesClubProposal(proposalId, changes)` |
+| GET | `student-services/clubs/proposals` | — | — | `fetchStudentServicesClubProposals()` |
+| GET | `student-services/clubs/proposals/{proposalId}` | — | — | `fetchStudentServicesClubProposal(proposalId)` |
+| POST | `student-services/clubs/proposals/{proposalId}/approve` | — | `{}` | `approveStudentServicesClubProposal(proposalId)` |
+| POST | `student-services/clubs/proposals/{proposalId}/reject` | — | `{ "reason": "..." }` | `rejectStudentServicesClubProposal(proposalId, reason)` |
+| POST | `student-services/clubs/proposals/{proposalId}/request-revision` | — | `{ "changes": "..." }` | `requestRevisionStudentServicesClubProposal(proposalId, changes)` |
 
 ### Club proposal requirements (policy text / deadline)
 
@@ -201,11 +202,12 @@ Prefix for all rows in this section: **`club-admin/{clubId}/`** (the client buil
 
 | Method | Path | Query | Body | Client function |
 |--------|------|-------|------|-----------------|
-| GET | `student-services/event-proposals` | — | — | `fetchStudentServicesEventProposals()` |
-| GET | `student-services/event-proposals/{proposalId}` | — | — | `fetchStudentServicesEventProposal(proposalId)` |
-| POST | `student-services/event-proposals/{proposalId}/approve` | — | `{ "assignments": ... }` (room/building routing) | `approveStudentServicesEventProposal(proposalId, assignments)` |
-| POST | `student-services/event-proposals/{proposalId}/reject` | — | `{ "reason": "..." }` | `rejectStudentServicesEventProposal(proposalId, reason)` |
-| POST | `student-services/event-proposals/{proposalId}/request-revision` | — | `{ "changes": "..." }` | `requestRevisionStudentServicesEventProposal(proposalId, changes)` |
+| GET | `student-services/events/proposals` | — | — | `fetchStudentServicesEventProposals()` |
+| POST | `student-services/events/proposals` | — | **JSON** (same general shape as club-admin `events/proposals`) | `submitStudentServicesEventProposal(body)` |
+| GET | `student-services/events/proposals/{proposalId}` | — | — | `fetchStudentServicesEventProposal(proposalId)` |
+| POST | `student-services/events/proposals/{proposalId}/approve` | — | `{ "assignments": ... }` (room/building routing) | `approveStudentServicesEventProposal(proposalId, assignments)` |
+| POST | `student-services/events/proposals/{proposalId}/reject` | — | `{ "reason": "..." }` | `rejectStudentServicesEventProposal(proposalId, reason)` |
+| POST | `student-services/events/proposals/{proposalId}/request-revision` | — | `{ "changes": "..." }` | `requestRevisionStudentServicesEventProposal(proposalId, changes)` |
 
 ### Approved events (institutional)
 

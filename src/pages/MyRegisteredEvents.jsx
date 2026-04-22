@@ -59,6 +59,39 @@ const formatTimeRange = (start, end) => {
   return end ? `${fmt(start)} - ${fmt(end)}` : fmt(start)
 }
 
+function toFiniteNonNegativeInt(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const i = Math.floor(n)
+  return i >= 0 ? i : null
+}
+
+function pickFirstFiniteNonNegativeInt(obj, keys) {
+  if (!obj || typeof obj !== 'object') return null
+  for (const key of keys) {
+    const v = toFiniteNonNegativeInt(obj[key])
+    if (v != null) return v
+  }
+  return null
+}
+
+function attendeesLabelFor(event) {
+  const raw = event?.raw && typeof event.raw === 'object' ? event.raw : null
+  const count = pickFirstFiniteNonNegativeInt(raw, [
+    'registeredCount',
+    'registrationsCount',
+    'registrationCount',
+    'attendeesCount',
+    'attendeeCount',
+    'participantsCount',
+    'participantCount',
+    'participants',
+    'attendees',
+  ])
+  if (count == null) return '— Attending'
+  return `${count} Attending`
+}
+
 const TABS = [
   { key: 'upcoming', label: 'Upcoming Events' },
   { key: 'past', label: 'Past Events' }
@@ -77,25 +110,48 @@ const MyRegisteredEvents = () => {
         const raw = await fetchMyEventRegistrations()
         const items = raw?.items ?? raw ?? []
         const list = Array.isArray(items) ? items : []
-        const loaded = await Promise.all(
-          list.map(async (row) => {
+        // Preferred contract returns `row.event` snapshot (including `imageUrl`) so we can render
+        // ticket cards without refetching event details.
+        const mappedFromSnapshots = list
+          .map((row) => {
+            const eid = row.eventId ?? row.event?.id ?? row.id
+            if (!eid) return null
+            const snapshot = row.event && typeof row.event === 'object'
+              ? row.event
+              : {
+                  id: eid,
+                  name: row.eventName ?? row.title ?? 'Event',
+                  startTime: row.startTime,
+                  endTime: row.endTime,
+                  location: row.location ?? '',
+                  imageUrl: row.imageUrl ?? row.eventImageUrl ?? row.eventImageUrlSnapshot,
+                  seatLimit: row.seatLimit ?? row.eventSeatLimitSnapshot,
+                  registeredCount: row.registeredCount,
+                }
+            const m = mapEventFromApi({ id: eid, ...snapshot })
+            if (!m) return null
+            // Keep registration metadata accessible via `raw` so attendee counts can be read.
+            return { ...m, raw: { ...(m.raw || {}), ...(snapshot || {}), ...(row || {}) } }
+          })
+          .filter(Boolean)
+
+        // Fallback: older API only returns eventId list; then we refetch event detail.
+        const missingSnapshots = list.filter((row) => !row?.event && (row.eventId ?? row.event?.id))
+        const fetchedFallback = await Promise.all(
+          missingSnapshots.map(async (row) => {
             const eid = row.eventId ?? row.event?.id
             if (!eid) return null
             try {
               const ev = await fetchEvent(eid)
-              return mapEventFromApi(ev)
+              const m = mapEventFromApi(ev)
+              return m ? { ...m, raw: { ...(m.raw || {}), ...(row || {}) } } : null
             } catch {
-              return mapEventFromApi({
-                id: eid,
-                name: row.eventName ?? row.title ?? 'Event',
-                startTime: row.startTime,
-                location: row.location ?? '',
-                clubName: row.clubName ?? '',
-              })
+              return null
             }
           })
         )
-        const merged = loaded.filter(Boolean)
+
+        const merged = [...mappedFromSnapshots, ...fetchedFallback.filter(Boolean)]
         const seen = new Set(merged.map((e) => String(e.id)))
         const ctxIds = getRegisteredIds()
         for (const eid of ctxIds) {
@@ -223,7 +279,7 @@ const MyRegisteredEvents = () => {
                   <span><IconMapPin /> {event.location}</span>
                 </div>
                 <div className="mre-card-footer">
-                  <span className="mre-card-attendees">240 Attending</span>
+                  <span className="mre-card-attendees">{attendeesLabelFor(event)}</span>
                   <div className="mre-card-actions">
                     <button
                       type="button"

@@ -63,6 +63,28 @@ const formatTime = (timeStr) => {
   return `${hour}:${m.toString().padStart(2, '0')} ${period}`
 }
 
+function parseEventDateTimeFromRaw(raw, fallbackDate, fallbackTime) {
+  const s = raw != null ? String(raw).trim() : ''
+  if (s) {
+    const d = new Date(s)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  if (!fallbackDate) return null
+  const t = fallbackTime ? String(fallbackTime).trim() : ''
+  const iso = `${fallbackDate}T${t || '00:00'}:00`
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function isOngoingOrFutureEvent(ev, now = new Date()) {
+  const start = parseEventDateTimeFromRaw(ev?.raw?.startTime ?? ev?.raw?.start, ev?.date, ev?.time)
+  const end = parseEventDateTimeFromRaw(ev?.raw?.endTime ?? ev?.raw?.end, ev?.date, ev?.endTime)
+  // If we can't parse dates, keep it visible rather than hiding potentially valid events.
+  if (!start && !end) return true
+  if (end) return end.getTime() >= now.getTime()
+  return start.getTime() >= now.getTime()
+}
+
 const ClubEvents = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -105,7 +127,8 @@ const ClubEvents = () => {
   }, [loadEvents])
 
   const filteredEvents = useMemo(() => {
-    let list = events
+    const now = new Date()
+    let list = events.filter((e) => isOngoingOrFutureEvent(e, now))
     if (selectedClubParam) {
       list = list.filter((e) => String(e.clubId) === String(selectedClubParam))
     }

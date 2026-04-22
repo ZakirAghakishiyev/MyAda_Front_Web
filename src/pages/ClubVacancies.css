@@ -383,6 +383,19 @@
   gap: 20px;
 }
 
+.vacancies-empty {
+  padding: 24px 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  text-align: center;
+  color: #475569;
+}
+
+.vacancies-container--grid .vacancies-empty {
+  grid-column: 1 / -1;
+}
+
 @media (min-width: 640px) {
   .vacancies-container--grid {
     grid-template-columns: repeat(2, 1fr);

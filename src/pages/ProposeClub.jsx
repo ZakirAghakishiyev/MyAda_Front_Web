@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { submitClubProposal } from '../api/clubApi'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { fetchStudentServicesProposalRequirements, submitClubProposal } from '../api/clubApi'
 import adaLogo from '../assets/ada-logo.png'
 import './ProposeClub.css'
 
@@ -9,8 +9,50 @@ const STEP_LABELS = ['DETAILS', 'LEADERSHIP', 'FACULTY', 'REVIEW']
 const DESC_MAX = 500
 const MIN_ALIGNMENT_WORDS = 200
 const POSITION_OPTIONS = ['Select Position', 'Secretary', 'Treasurer', 'Social Media Manager', 'Event Coordinator', 'Outreach Officer', 'Other']
+const STUDENT_ID_REGEX = /^\d{8}$/
 
 const PROPOSE_CLUB_DRAFT_COOKIE_KEY = 'clubs_propose_club_draft'
+
+const DEFAULT_REQUIREMENTS = [
+  'Minimum of 10 currently enrolled student members required.',
+  'Founding members must maintain a minimum 2.5 cumulative GPA.',
+  'Club constitution must align with university anti-discrimination policies.',
+]
+
+function parseDeadlineToDate(deadlineRaw) {
+  const s = (deadlineRaw || '').trim()
+  if (!s) return null
+
+  // If backend sends an ISO timestamp (e.g. "2026-04-25T08:00:00Z"), Date parses it as UTC and
+  // displays it in the user's local timezone when formatting.
+  if (s.includes('T')) {
+    const d = new Date(s)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  // If backend sends an ISO date only (e.g. "2026-05-01"), treat it as end-of-day local time.
+  const endOfDay = new Date(`${s}T23:59:59.999`)
+  return Number.isNaN(endOfDay.getTime()) ? null : endOfDay
+}
+
+const formatDeadlineLabel = (deadlineRaw) => {
+  const d = parseDeadlineToDate(deadlineRaw)
+  if (!d) return '—'
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  })
+}
+
+const isAfterDeadline = (deadlineRaw) => {
+  const d = parseDeadlineToDate(deadlineRaw)
+  if (!d) return false
+  return Date.now() > d.getTime()
+}
 
 const setDraftCookie = (key, value, days = 7) => {
   if (typeof document === 'undefined') return
@@ -103,6 +145,8 @@ const countWords = (s) => (s || '').trim().split(/\s+/).filter(Boolean).length
 
 const ProposeClub = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const clubsHome = location.pathname.startsWith('/student-services') ? '/student-services' : '/clubs'
   const [step, setStep] = useState(1)
   const [clubName, setClubName] = useState('')
   const [shortDesc, setShortDesc] = useState('')
@@ -123,6 +167,35 @@ const ProposeClub = () => {
   const [logoFile, setLogoFile] = useState(null)
   const [constitutionFile, setConstitutionFile] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [policy, setPolicy] = useState({
+    loading: true,
+    requirements: DEFAULT_REQUIREMENTS,
+    deadline: null,
+  })
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const dto = await fetchStudentServicesProposalRequirements()
+        if (cancelled) return
+        const reqs = Array.isArray(dto?.requirements) ? dto.requirements.filter((r) => typeof r === 'string' && r.trim()) : null
+        setPolicy({
+          loading: false,
+          requirements: reqs && reqs.length ? reqs : DEFAULT_REQUIREMENTS,
+          deadline: dto?.deadline != null ? String(dto.deadline) : null,
+        })
+      } catch {
+        if (!cancelled) {
+          setPolicy((p) => ({
+            ...p,
+            loading: false,
+          }))
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     const draft = getDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY)
@@ -145,23 +218,23 @@ const ProposeClub = () => {
   }, [])
 
   const handleBack = () => {
-    if (step === 1) navigate('/clubs')
+    if (step === 1) navigate(clubsHome)
     else setStep((s) => s - 1)
   }
 
   const validatePresidentId = (val) => {
     if (!val) return ''
-    return /^\d{8}$/.test(val) ? '' : 'Student ID must be 8 digits'
+    return STUDENT_ID_REGEX.test(val.trim()) ? '' : 'Student ID must be 8 digits'
   }
   const validateVpId = (val) => {
     if (!val) return ''
-    return /^\d{8}$/.test(val) ? '' : 'Student ID must be 8 digits'
+    return STUDENT_ID_REGEX.test(val.trim()) ? '' : 'Student ID must be 8 digits'
   }
 
   const onPresidentBlur = () => setPresidentError(validatePresidentId(presidentId))
   const onVpBlur = () => {
     setVpError(validateVpId(vicePresidentId))
-    if (vicePresidentId && /^\d{8}$/.test(vicePresidentId)) setVpStatus('Waitlisted for verification')
+    if (vicePresidentId && STUDENT_ID_REGEX.test(vicePresidentId.trim())) setVpStatus('Waitlisted for verification')
     else setVpStatus('')
   }
 
@@ -187,16 +260,27 @@ const ProposeClub = () => {
     (step === 3 && canContinueStep3) ||
     (step === 4 && canContinueStep4)
 
+  const deadlinePassed = isAfterDeadline(policy.deadline)
+
+  // Deny access entirely after the deadline.
+  useEffect(() => {
+    if (policy.loading) return
+    if (!deadlinePassed) return
+    navigate(clubsHome, { replace: true, state: { toast: 'Club proposals are closed (deadline passed).' } })
+  }, [policy.loading, deadlinePassed, navigate, clubsHome])
+
   const handleContinue = async () => {
     if (step < STEPS) {
       setStep((s) => s + 1)
       return
     }
+    if (deadlinePassed) {
+      alert('The submission deadline has passed. New club proposals are currently closed.')
+      return
+    }
     if (!logoFile || !constitutionFile || !clubName.trim()) return
     setSubmitting(true)
     try {
-      const fd = new FormData()
-      fd.append('name', clubName.trim())
       const description = [
         shortDesc && `Summary: ${shortDesc}`,
         uniqueDesc && `Uniqueness: ${uniqueDesc}`,
@@ -207,14 +291,30 @@ const ProposeClub = () => {
       ]
         .filter(Boolean)
         .join('\n\n')
-      fd.append('description', description.slice(0, 12000))
-      fd.append('logoFile', logoFile)
-      fd.append('constitutionFile', constitutionFile)
-      await submitClubProposal(fd)
+      await submitClubProposal({
+        name: clubName.trim(),
+        description: description.slice(0, 12000),
+        // Backend expects placeholders/paths in JSON for now (not multipart streams).
+        logoFile: logoFile?.name || 'logo.png',
+        constitutionFile: constitutionFile?.name || 'constitution.pdf',
+        presidentStudentId: presidentId.trim(),
+        vicePresidentStudentId: vicePresidentId.trim(),
+        otherMembersJson: otherMembers.map((m) => ({
+          studentId: String(m.studentId || '').trim(),
+          position: String(m.position || '').trim(),
+        })),
+        commitment: commitment === 'yes' ? 'yes' : 'no',
+        shortDesc: shortDesc.trim().slice(0, DESC_MAX),
+        uniqueDesc: uniqueDesc.trim(),
+        goals: goals.trim(),
+        activities: activities.trim(),
+        alignment: alignment.trim(),
+        vision: vision.trim(),
+      })
       clearDraftCookie(PROPOSE_CLUB_DRAFT_COOKIE_KEY)
-      navigate('/clubs')
+      navigate(clubsHome)
     } catch (e) {
-      alert(e?.message || 'Could not submit proposal. Please sign in and try again.')
+      alert(e?.message || 'Could not submit proposal. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -249,9 +349,9 @@ const ProposeClub = () => {
         <div>
           <strong>Eligibility Requirements</strong>
           <ul>
-            <li>Minimum of 10 currently enrolled student members required.</li>
-            <li>Founding members must maintain a minimum 2.5 cumulative GPA.</li>
-            <li>Club constitution must align with university anti-discrimination policies.</li>
+            {(policy.requirements || DEFAULT_REQUIREMENTS).map((r, idx) => (
+              <li key={`${idx}-${r}`}>{r}</li>
+            ))}
           </ul>
           <a href="#handbook" className="propose-sidebar-link">VIEW FULL HANDBOOK</a>
         </div>
@@ -261,12 +361,61 @@ const ProposeClub = () => {
         <div>
           <strong>Submission Deadline</strong>
           <p>For Fall Semester recognition, all applications must be submitted by:</p>
-          <p className="propose-sidebar-deadline">Friday, October 27th, 2023</p>
-          <p className="propose-sidebar-note">Applications submitted after this date will be considered for the Spring Semester cycle.</p>
+          <p className="propose-sidebar-deadline">
+            {policy.loading ? 'Loading…' : formatDeadlineLabel(policy.deadline)}
+          </p>
+          {deadlinePassed ? (
+            <p className="propose-sidebar-note">Submissions are closed because the deadline has passed.</p>
+          ) : (
+            <p className="propose-sidebar-note">Applications submitted after this date will be considered for the next cycle.</p>
+          )}
         </div>
       </div>
     </aside>
   )
+
+  if (!policy.loading && deadlinePassed) {
+    return (
+      <div className="propose-page">
+        <header className="vacancies-nav">
+          <div className="vacancies-nav-left">
+            <div
+              className="vacancies-nav-logo"
+              onClick={() => navigate('/')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+            >
+              <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
+            </div>
+          </div>
+        </header>
+        <div className="propose-content-wrap">
+          <div className="propose-main-col">
+            <div className="propose-card">
+              <h1 className="propose-page-title" style={{ marginTop: 0 }}>Club proposals are closed</h1>
+              <p className="propose-card-desc" style={{ marginTop: 8 }}>
+                The submission deadline has passed.
+              </p>
+              <div className="propose-warning-box" style={{ marginTop: 16 }}>
+                <IconWarning />
+                <div>
+                  <strong>Submission Deadline</strong>
+                  <p style={{ margin: '6px 0 0' }}>{formatDeadlineLabel(policy.deadline)}</p>
+                </div>
+              </div>
+              <div className="propose-actions propose-actions--footer" style={{ justifyContent: 'flex-start' }}>
+                <button type="button" className="propose-btn-primary" onClick={() => navigate(clubsHome, { replace: true })}>
+                  Back
+                </button>
+              </div>
+            </div>
+          </div>
+          <Sidebar />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="propose-page">
@@ -516,7 +665,7 @@ const ProposeClub = () => {
               <div className="propose-actions propose-actions--footer">
                 <button type="button" className="propose-btn-secondary" onClick={handleBack}><IconBack /> Back to Previous Step</button>
                 <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
-                <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue || submitting}>
+                <button type="button" className="propose-btn-primary" onClick={handleContinue} disabled={!canContinue || submitting || deadlinePassed}>
                   {submitting ? 'Submitting…' : 'Submit Registration'} <IconChevronRight />
                 </button>
               </div>

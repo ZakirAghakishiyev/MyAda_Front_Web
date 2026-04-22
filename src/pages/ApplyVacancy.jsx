@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { fetchVacancy, submitVacancyApplication } from '../api/clubApi'
 import { mapVacancyFromApi } from '../api/clubMappers'
+import { getJwtUserId } from '../auth/jwtRoles'
 import './ApplyVacancy.css'
 
 const IconBack = () => (
@@ -97,6 +98,8 @@ const ApplyVacancy = () => {
     setSubmitting(true)
     try {
       const fd = new FormData()
+      const uid = getJwtUserId()
+      if (uid) fd.append('userId', uid)
       fd.append('purposeOfApplication', purposeTrimmed)
       if (cvFile) fd.append('cvFile', cvFile)
       await submitVacancyApplication(id, fd)
@@ -165,18 +168,18 @@ const ApplyVacancy = () => {
                 <span className="apply-vacancy-required-badge">Required</span>
               </div>
               <p className="apply-vacancy-hint">
-                Tell us why you&apos;re interested in this role and what makes you a great fit. Mention any previous experience with media creation, video editing, or social media management.
+                Tell us why you&apos;re interested in this role and what makes you a great fit.
               </p>
               <textarea
                 className="apply-vacancy-textarea"
-                placeholder="I am passionate about storytelling through digital media and have managed a YouTube channel for two years..."
+                placeholder="I am passionate about..."
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
                 rows={6}
                 aria-required="true"
               />
               <span className={`apply-vacancy-wordcount ${purposeValid ? 'apply-vacancy-wordcount--ok' : ''}`}>
-                Required — describe your motivation and fit (non-empty text).
+                Required — non-empty text.
               </span>
             </div>
 

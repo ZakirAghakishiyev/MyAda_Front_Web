@@ -83,7 +83,7 @@ const ClubAdminNewVacancy = () => {
       if (!Number.isNaN(n) && n > 0) body.positionId = n
     }
     if (deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
-      body.applicationDeadline = `${deadline}T23:59:59`
+      body.applicationDeadline = `${deadline}T23:59:59Z`
     }
     try {
       await createClubAdminVacancy(clubId, body)

@@ -57,9 +57,15 @@ const ClubAdminPositions = () => {
       setPositions(
         (Array.isArray(items) ? items : []).map((p, index) => ({
           id: p.id ?? p.positionId ?? `p-${index}`,
-          title: p.name ?? p.title ?? p.positionTitle ?? 'Position',
-          category: p.category ?? 'Other',
+          title: p.title ?? p.name ?? p.positionTitle ?? 'Position',
+          categoryId: p.categoryId != null ? Number(p.categoryId) : undefined,
+          category:
+            p.categoryName ??
+            p.category ??
+            (p.categoryId != null && VACANCY_CATEGORIES[Number(p.categoryId) - 1]) ??
+            'Other',
           requirements: Array.isArray(p.requirements) ? p.requirements : [],
+          raw: p,
         }))
       )
     } catch (e) {
@@ -114,9 +120,14 @@ const ClubAdminPositions = () => {
   const saveEdit = async (e) => {
     e.preventDefault()
     if (!editing || !title.trim() || !category) return
+    const catIdx = VACANCY_CATEGORIES.findIndex((c) => c === category)
+    const categoryId = catIdx >= 0 ? catIdx + 1 : undefined
     try {
       await patchClubAdminPosition(clubId, editing, {
+        title: title.trim(),
         name: title.trim(),
+        categoryId,
+        requirements: (requirements || []).map((r) => String(r).trim()).filter(Boolean),
       })
       await loadPositions()
     } catch (e) {

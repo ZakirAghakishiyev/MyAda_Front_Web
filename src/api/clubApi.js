@@ -87,6 +87,18 @@ export async function clubAuthJson(path, init = {}) {
   return unwrapApiResponse(data)
 }
 
+/** Try canonical path; on 404 only, retry legacy path (no body stream reuse for multipart — use for GET/JSON only). */
+async function clubAuthJsonPrimaryOrFallback(primaryPath, fallbackPath, init = {}) {
+  try {
+    return await clubAuthJson(primaryPath, init)
+  } catch (e) {
+    if (e.status === 404 && fallbackPath) {
+      return await clubAuthJson(fallbackPath, init)
+    }
+    throw e
+  }
+}
+
 /* --- Categories (public) --- */
 
 export function fetchCategories() {
@@ -106,7 +118,11 @@ export function fetchClubs(params = {}) {
 }
 
 export function fetchClub(clubId) {
-  return clubAuthJson(`clubs/${encodeURIComponent(clubId)}`, { method: 'GET' })
+  // Public club detail is readable without auth (student directory). When the user is signed in,
+  // prefer the authenticated fetch (same DTO, but may include additional fields depending on gateway rules).
+  const path = `clubs/${encodeURIComponent(clubId)}`
+  if (getAccessToken()) return clubAuthJson(path, { method: 'GET' })
+  return clubPublicJson(path, { method: 'GET' })
 }
 
 export function fetchClubMembers(clubId) {
@@ -202,7 +218,13 @@ export function fetchMyMembershipApplications() {
 }
 
 export function fetchMyEventRegistrations() {
-  return clubAuthJson(usersScopedPath('event-registrations'), { method: 'GET' })
+  // Preferred contract: GET /users/me/event-registrations
+  // Fallback: older gateways use user-scoped path /users/{id}/event-registrations
+  return clubAuthJsonPrimaryOrFallback(
+    'users/me/event-registrations',
+    usersScopedPath('event-registrations'),
+    { method: 'GET' }
+  )
 }
 
 export function fetchMyClubNotifications(type = 'all') {
@@ -221,10 +243,26 @@ export function markClubNotificationRead(notificationId) {
   )
 }
 
-/* --- Club proposal (student) — protected in doc; uses multipart --- */
+/* --- Club proposal (student) --- */
 
-export function submitClubProposal(formData) {
-  return clubAuthJson('club-proposals', { method: 'POST', body: formData })
+/**
+ * Submit a club proposal JSON payload.
+ * Uses non-user-scoped endpoint: club-proposals
+ */
+export function submitClubProposal(body) {
+  const userId = getJwtUserId()
+  const normalizedBody = {
+    ...(body && typeof body === 'object' ? body : {}),
+    // Legacy alias reads submitter from payload id.
+    id: String((body && body.id) || userId || '').trim() || undefined,
+  }
+  const init = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(normalizedBody),
+  }
+  // Club proposals are intentionally unauthenticated in the current backend contract.
+  return clubPublicJson('club-proposals', init)
 }
 
 /* --- Applications (interview slots) --- */
@@ -526,38 +564,69 @@ export function fetchStudentServicesClub(clubId) {
   return clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}`, { method: 'GET' })
 }
 
-export function fetchStudentServicesClubProposals() {
-  return clubAuthJson('student-services/club-proposals', { method: 'GET' })
+export function fetchStudentServicesClubProposals(params = {}) {
+  const q = new URLSearchParams()
+  if (params.status) q.set('status', String(params.status))
+  if (params.search) q.set('search', String(params.search))
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 50))
+  const qs = `?${q}`
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/proposals${qs}`,
+    `student-services/club-proposals${qs}`,
+    { method: 'GET' }
+  )
 }
 
 export function fetchStudentServicesClubProposal(proposalId) {
-  return clubAuthJson(`student-services/club-proposals/${encodeURIComponent(proposalId)}`, {
-    method: 'GET',
-  })
+  const enc = encodeURIComponent(proposalId)
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/proposals/${enc}`,
+    `student-services/club-proposals/${enc}`,
+    { method: 'GET' }
+  )
 }
 
 export function approveStudentServicesClubProposal(proposalId) {
-  return clubAuthJson(`student-services/club-proposals/${encodeURIComponent(proposalId)}/approve`, {
+  const enc = encodeURIComponent(proposalId)
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
-  })
+  }
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/proposals/${enc}/approve`,
+    `student-services/club-proposals/${enc}/approve`,
+    init
+  )
 }
 
 export function rejectStudentServicesClubProposal(proposalId, reason) {
-  return clubAuthJson(`student-services/club-proposals/${encodeURIComponent(proposalId)}/reject`, {
+  const enc = encodeURIComponent(proposalId)
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
-  })
+  }
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/proposals/${enc}/reject`,
+    `student-services/club-proposals/${enc}/reject`,
+    init
+  )
 }
 
 export function requestRevisionStudentServicesClubProposal(proposalId, changes) {
-  return clubAuthJson(`student-services/club-proposals/${encodeURIComponent(proposalId)}/request-revision`, {
+  const enc = encodeURIComponent(proposalId)
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ changes }),
-  })
+  }
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/proposals/${enc}/request-revision`,
+    `student-services/club-proposals/${enc}/request-revision`,
+    init
+  )
 }
 
 export function fetchStudentServicesProposalRequirements() {
@@ -572,38 +641,79 @@ export function putStudentServicesProposalRequirements(body) {
   })
 }
 
-export function fetchStudentServicesEventProposals() {
-  return clubAuthJson('student-services/event-proposals', { method: 'GET' })
+export function fetchStudentServicesEventProposals(params = {}) {
+  const q = new URLSearchParams()
+  if (params.status) q.set('status', String(params.status))
+  if (params.search) q.set('search', String(params.search))
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 50))
+  const qs = `?${q}`
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/events/proposals${qs}`,
+    `student-services/event-proposals${qs}`,
+    { method: 'GET' }
+  )
+}
+
+/** Submit a new event proposal for institutional review (Student Services; mirrors `club-admin/.../events/proposals`). */
+export function submitStudentServicesEventProposal(body) {
+  const init = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }
+  return clubAuthJsonPrimaryOrFallback('student-services/events/proposals', 'student-services/event-proposals', init)
 }
 
 export function fetchStudentServicesEventProposal(proposalId) {
-  return clubAuthJson(`student-services/event-proposals/${encodeURIComponent(proposalId)}`, {
-    method: 'GET',
-  })
+  const enc = encodeURIComponent(proposalId)
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/events/proposals/${enc}`,
+    `student-services/event-proposals/${enc}`,
+    { method: 'GET' }
+  )
 }
 
 export function approveStudentServicesEventProposal(proposalId, assignments) {
-  return clubAuthJson(`student-services/event-proposals/${encodeURIComponent(proposalId)}/approve`, {
+  const enc = encodeURIComponent(proposalId)
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ assignments }),
-  })
+  }
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/events/proposals/${enc}/approve`,
+    `student-services/event-proposals/${enc}/approve`,
+    init
+  )
 }
 
 export function rejectStudentServicesEventProposal(proposalId, reason) {
-  return clubAuthJson(`student-services/event-proposals/${encodeURIComponent(proposalId)}/reject`, {
+  const enc = encodeURIComponent(proposalId)
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
-  })
+  }
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/events/proposals/${enc}/reject`,
+    `student-services/event-proposals/${enc}/reject`,
+    init
+  )
 }
 
 export function requestRevisionStudentServicesEventProposal(proposalId, changes) {
-  return clubAuthJson(`student-services/event-proposals/${encodeURIComponent(proposalId)}/request-revision`, {
+  const enc = encodeURIComponent(proposalId)
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ changes }),
-  })
+  }
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/events/proposals/${enc}/request-revision`,
+    `student-services/event-proposals/${enc}/request-revision`,
+    init
+  )
 }
 
 export function fetchStudentServicesEvents() {
@@ -642,6 +752,16 @@ export function patchStudentServicesClub(clubId, body) {
   })
 }
 
+/** Upload or replace club logo (multipart). Field name matches club-admin profile uploads. */
+export function uploadStudentServicesClubProfileImage(clubId, file) {
+  const fd = new FormData()
+  fd.append('logoFile', file)
+  return clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/profile-image`, {
+    method: 'POST',
+    body: fd,
+  })
+}
+
 export function approveStudentServicesClubProfileImage(clubId) {
   return clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/profile-image/approve`, {
     method: 'POST',
@@ -650,8 +770,18 @@ export function approveStudentServicesClubProfileImage(clubId) {
   })
 }
 
-export function fetchStudentServicesClubMembers(clubId) {
-  return clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/members`, { method: 'GET' })
+export function fetchStudentServicesClubMembers(clubId, params = {}) {
+  const q = new URLSearchParams()
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 50))
+  const enc = encodeURIComponent(clubId)
+  const qs = `?${q}`
+  // Preferred: student-services directory endpoint. Fallback: club-admin members (commonly implemented first).
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/${enc}/members${qs}`,
+    `club-admin/${enc}/members${qs}`,
+    { method: 'GET' }
+  )
 }
 
 export function patchStudentServicesClubMember(clubId, memberId, body) {
@@ -668,8 +798,18 @@ export function deleteStudentServicesClubMember(clubId, memberId) {
   })
 }
 
-export function fetchStudentServicesClubEmployees(clubId) {
-  return clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/employees`, { method: 'GET' })
+export function fetchStudentServicesClubEmployees(clubId, params = {}) {
+  const q = new URLSearchParams()
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 50))
+  const enc = encodeURIComponent(clubId)
+  const qs = `?${q}`
+  // Preferred: student-services directory endpoint. Fallback: club-admin employees (commonly implemented first).
+  return clubAuthJsonPrimaryOrFallback(
+    `student-services/clubs/${enc}/employees${qs}`,
+    `club-admin/${enc}/employees${qs}`,
+    { method: 'GET' }
+  )
 }
 
 export function createStudentServicesClubEmployee(clubId, body) {

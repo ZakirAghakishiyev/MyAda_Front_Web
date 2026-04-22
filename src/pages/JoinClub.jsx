@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { fetchClub, submitClubJoinApplication } from '../api/clubApi'
 import { mapClubFromApi } from '../api/clubMappers'
+import { getJwtUserId } from '../auth/jwtRoles'
 import './JoinClub.css'
 
 const IconBack = () => (
@@ -54,9 +55,16 @@ const JoinClub = () => {
     setSubmitting(true)
     try {
       const fd = new FormData()
+      // Optional: backend uses JWT sub/user_id when omitted, but we send it when available.
+      const uid = getJwtUserId()
+      if (uid) fd.append('userId', String(uid))
       fd.append('letterOfPurpose', letterOfPurpose.trim())
       if (portfolioLinks.trim()) fd.append('portfolioLinks', portfolioLinks.trim())
-      portfolioFiles.forEach((file) => fd.append('portfolioFiles', file))
+      // Backend accepts file[] under `portfolioFiles` (and some implementations prefer `portfolioFiles[]`).
+      portfolioFiles.forEach((file) => {
+        fd.append('portfolioFiles', file)
+        fd.append('portfolioFiles[]', file)
+      })
       await submitClubJoinApplication(id, fd)
       navigate(`/clubs/${id}`)
     } catch (e) {

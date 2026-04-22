@@ -7,6 +7,11 @@ function normalizeAdminStatus(status) {
 
 function formatAppliedOn(row) {
   if (row.submittedAt) return new Date(row.submittedAt).toLocaleDateString()
+  if (row.membership && typeof row.membership === 'object' && row.membership.createdAt) {
+    const d = new Date(String(row.membership.createdAt))
+    if (!Number.isNaN(d.getTime())) return d.toLocaleDateString()
+    return String(row.membership.createdAt)
+  }
   if (row.appliedOn) return String(row.appliedOn)
   return '—'
 }
@@ -83,8 +88,8 @@ export function mapClubAdminApplicationFromApi(row) {
       year: '—',
       gpa: '—',
       answers: {
-        letterOfPurpose: m.message != null ? String(m.message) : '',
-        previousExperience: m.portfolioLinks != null ? String(m.portfolioLinks) : '',
+        letterOfPurpose: m.letterOfPurpose != null ? String(m.letterOfPurpose) : '',
+        previousExperience: m.links != null ? String(m.links) : '',
       },
       files: Array.isArray(row.files) ? row.files : [],
       raw: row,

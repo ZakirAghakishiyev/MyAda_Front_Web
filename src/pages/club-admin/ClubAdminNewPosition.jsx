@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { VACANCY_CATEGORIES } from '../../data/clubAdminData'
 import { createClubAdminPosition } from '../../api/clubApi'
@@ -30,13 +30,22 @@ const ClubAdminNewPosition = () => {
     'Enthusiasm for university events and student life.'
   ])
 
+  const categoryId = useMemo(() => {
+    const idx = VACANCY_CATEGORIES.findIndex((c) => c === category)
+    return idx >= 0 ? idx + 1 : null
+  }, [category])
+
   const handleCreate = async (e) => {
     e.preventDefault()
     const trimmed = title.trim()
-    if (!trimmed || !category) return
+    if (!trimmed || !categoryId) return
     try {
       await createClubAdminPosition(clubId, {
+        title: trimmed,
+        // backend may accept `name` as fallback
         name: trimmed,
+        categoryId,
+        requirements: (requirements || []).map((r) => String(r).trim()).filter(Boolean),
       })
     } catch (err) {
       alert(err?.message || 'Could not create position.')

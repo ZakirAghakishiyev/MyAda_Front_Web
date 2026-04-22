@@ -71,6 +71,7 @@ import ClubAdminProfile from './pages/club-admin/ClubAdminProfile'
 import ClubAdminInterviewTimes from './pages/club-admin/ClubAdminInterviewTimes'
 import StudentServices from './pages/StudentServices'
 import StudentServicesEventDetail from './pages/StudentServicesEventDetail'
+import StudentServicesSuggestEvent from './pages/StudentServicesSuggestEvent'
 import './App.css'
 
 const AppContent = () => {
@@ -115,7 +116,7 @@ const AppContent = () => {
   const isApplyVacancyRoute = location.pathname.match(/^\/clubs\/vacancies\/[^/]+\/apply$/)
   const isEventDetailRoute = location.pathname.match(/^\/clubs\/events\/[^/]+$/)
   const isEventTicketRoute = location.pathname.match(/^\/clubs\/events\/[^/]+\/ticket$/)
-  const isStudentServicesEventDetailRoute = location.pathname.match(/^\/student-services\/events\/[^/]+$/)
+  const isStudentServicesNestedRoute = location.pathname.startsWith('/student-services/')
   const isItemDetailRoute = location.pathname.match(/^\/lost-and-found\/item\/\d+$/)
   const isAdminItemDetailRoute = location.pathname.match(/^\/admin\/lost-and-found\/item\/\d+$/)
 
@@ -138,7 +139,7 @@ const AppContent = () => {
     !isModalFromHome &&
     !isModalFromAdmin &&
     !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isSchedulingRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesEventDetailRoute)
+    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isSchedulingRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesNestedRoute)
 
   return (
     <div className="app">
@@ -163,10 +164,26 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/student-services/events/propose"
+            element={
+              <RequireStudentServices>
+                <StudentServicesSuggestEvent />
+              </RequireStudentServices>
+            }
+          />
+          <Route
             path="/student-services/events/:id"
             element={
               <RequireStudentServices>
                 <StudentServicesEventDetail />
+              </RequireStudentServices>
+            }
+          />
+          <Route
+            path="/student-services/clubs/propose"
+            element={
+              <RequireStudentServices>
+                <ProposeClub />
               </RequireStudentServices>
             }
           />
