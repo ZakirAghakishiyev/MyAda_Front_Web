@@ -1,16 +1,11 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import {
-  getStudentAttendanceForCrn,
-  formatAttendanceDate,
-  saveManualAttendanceStatus,
-} from '../data/attendanceData'
+import * as attendanceApi from '../api/attendance'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 import './AttendanceStudents.css'
 
 const STATUS_ORDER = ['late', 'absent', 'present', 'excused']
-
 const statusLabel = (status) => {
   switch (status) {
     case 'present': return { text: 'PRESENT', className: 'ap-student-status--present' }
@@ -21,16 +16,136 @@ const statusLabel = (status) => {
   }
 }
 
+function formatAttendanceDateFromIso(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso)
+  return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 export default function AttendanceStudents() {
   const { instructorId, lessonId } = useParams()
   const navigate = useNavigate()
   const lessonBase = `/attendance/${encodeURIComponent(instructorId || 'demo')}/lesson/${encodeURIComponent(lessonId || 'demo')}`
-  const students = getStudentAttendanceForCrn(lessonId)
+  const [sessions, setSessions] = useState([])
+  const [students, setStudents] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState(null)
+  const [selectedStudentHistory, setSelectedStudentHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const [draftStatuses, setDraftStatuses] = useState({})
   const [saveMessage, setSaveMessage] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const selectedStudent = students.find((s) => s.studentId === selectedStudentId)
+  const selectedStudent = useMemo(
+    () => students.find((s) => String(s.studentId) === String(selectedStudentId)) || null,
+    [students, selectedStudentId]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const isDemo = String(instructorId || '').toLowerCase() === 'demo' || String(lessonId || '').toLowerCase() === 'demo'
+      if (isDemo) return
+      setLoading(true)
+      setError('')
+      try {
+        const list = await attendanceApi.getLessonSessions({ instructorId, lessonId })
+        if (cancelled) return
+        setSessions(list)
+
+        // Prefer lesson enrollments endpoint (admin), fallback to a session roster.
+        try {
+          const enrollments = await attendanceApi.getLessonEnrollmentsAdmin({ lessonId })
+          if (cancelled) return
+          setStudents(
+            enrollments.map((r) => ({
+              id: String(r.studentId),
+              name: r.name || r.studentCode || '—',
+              studentId: r.studentId,
+              email: r.email || '',
+            }))
+          )
+          return
+        } catch {
+          // Fallback below.
+        }
+
+        const targetSessionId = list.find((s) => s.isActive)?.sessionId ?? list[0]?.sessionId
+        if (!targetSessionId) {
+          setStudents([])
+          return
+        }
+        const roster = await attendanceApi.getSessionAttendance({ instructorId, sessionId: targetSessionId })
+        if (cancelled) return
+
+        setStudents(
+          roster.map((r) => ({
+            id: String(r.studentId),
+            name: r.name || r.studentCode || '—',
+            studentId: r.studentId,
+            email: '',
+          }))
+        )
+      } catch (e) {
+        if (!cancelled) {
+          setStudents([])
+          setSessions([])
+          setError(e?.message || 'Could not load students.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [instructorId, lessonId])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadHistory() {
+      const isDemo = String(instructorId || '').toLowerCase() === 'demo' || String(lessonId || '').toLowerCase() === 'demo'
+      if (isDemo) return
+      if (!selectedStudentId) {
+        setSelectedStudentHistory([])
+        setHistoryError('')
+        return
+      }
+      setHistoryLoading(true)
+      setHistoryError('')
+      try {
+        const rows = await attendanceApi.getStudentLessonAttendance({
+          studentId: selectedStudentId,
+          lessonId,
+        })
+        if (cancelled) return
+        setSelectedStudentHistory(rows)
+      } catch (e) {
+        if (!cancelled) {
+          setSelectedStudentHistory([])
+          setHistoryError(e?.message || 'Could not load this student attendance history.')
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false)
+      }
+    }
+    loadHistory()
+    return () => { cancelled = true }
+  }, [instructorId, lessonId, selectedStudentId])
+
+  const studentStats = useMemo(() => {
+    const byId = new Map()
+    for (const s of students) byId.set(String(s.studentId), { attendedCount: 0, totalSessions: sessions.length })
+    for (const row of selectedStudentHistory) {
+      const key = String(selectedStudentId)
+      const stats = byId.get(key) || { attendedCount: 0, totalSessions: sessions.length }
+      if (row.status === 'present' || row.status === 'late') stats.attendedCount += 1
+      byId.set(key, stats)
+    }
+    return byId
+  }, [students, sessions.length, selectedStudentHistory, selectedStudentId])
 
   const cycleStatus = (sessionId, studentId, currentStatus) => {
     const nextIndex = (STATUS_ORDER.indexOf(currentStatus) + 1) % STATUS_ORDER.length
@@ -42,18 +157,34 @@ export default function AttendanceStudents() {
     setSaveMessage('')
   }
 
-  const handleSubmitStatus = (sessionId, studentId, fallbackStatus) => {
+  const handleSubmitStatus = async (sessionId, studentId, fallbackStatus) => {
+    if (saving) return
     const key = `${sessionId}::${studentId}`
     const status = draftStatuses[key] || fallbackStatus
-    saveManualAttendanceStatus({ sessionId, studentId, status })
-    setDraftStatuses((prev) => {
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
-    setSaveMessage('Attendance status updated locally.')
+    setSaving(true)
+    setSaveMessage('')
+    try {
+      await attendanceApi.patchSessionAttendance({
+        instructorId,
+        sessionId,
+        studentId,
+        status,
+      })
+      // Refresh the student's lesson history and clear draft.
+      const rows = await attendanceApi.getStudentLessonAttendance({ studentId, lessonId })
+      setSelectedStudentHistory(rows)
+      setDraftStatuses((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      setSaveMessage('Attendance status updated.')
+    } catch (e) {
+      setSaveMessage(e?.message || 'Could not update attendance status.')
+    } finally {
+      setSaving(false)
+    }
   }
-
   return (
     <div className="attendance-portal">
       <header className="ap-navbar">
@@ -81,8 +212,11 @@ export default function AttendanceStudents() {
 
         <div className="ap-students-card">
           <div className="ap-students-toolbar">
-            <span className="ap-students-count">{students.length} student{students.length !== 1 ? 's' : ''}</span>
+            <span className="ap-students-count">
+              {loading ? 'Loading…' : `${students.length} student${students.length !== 1 ? 's' : ''}`}
+            </span>
           </div>
+          {error ? <p className="ap-controls-error" role="alert" style={{ marginBottom: 10 }}>{error}</p> : null}
           <div className="ap-students-table-wrap">
             <table className="ap-students-table">
               <thead>
@@ -94,7 +228,12 @@ export default function AttendanceStudents() {
                 </tr>
               </thead>
               <tbody>
-                {students.map((s) => (
+                {!loading && students.map((s) => {
+                  const stats = studentStats.get(String(s.studentId)) || { attendedCount: 0, totalSessions: sessions.length }
+                  const total = stats.totalSessions || sessions.length || 0
+                  const attended = stats.attendedCount || 0
+                  const rate = total ? Math.round((attended / total) * 100) : 0
+                  return (
                   <tr
                     key={s.studentId}
                     className={selectedStudentId === s.studentId ? 'ap-students-row--selected' : ''}
@@ -108,11 +247,15 @@ export default function AttendanceStudents() {
                     <td>{s.email}</td>
                     <td>
                       <span className="ap-student-rate">
-                        {s.attendedCount}/{s.totalSessions} sessions · {s.rate}%
+                        {attended}/{total} sessions · {rate}%
                       </span>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
+                {!loading && students.length === 0 ? (
+                  <tr><td colSpan={4}>No students found.</td></tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -122,12 +265,16 @@ export default function AttendanceStudents() {
               <h2 className="ap-student-detail-title">Attendance history — {selectedStudent.name}</h2>
               <p className="ap-student-detail-subtitle">Status at each session for this CRN.</p>
               {saveMessage ? <p className="ap-status-save-message">{saveMessage}</p> : null}
+              {historyError ? <p className="ap-controls-error" role="alert">{historyError}</p> : null}
               <ul className="ap-student-history-list">
-                {selectedStudent.sessionHistory.length === 0 ? (
+                {historyLoading ? (
+                  <li className="ap-student-history-empty">Loading attendance history…</li>
+                ) : selectedStudentHistory.length === 0 ? (
                   <li className="ap-student-history-empty">No session records yet.</li>
                 ) : (
-                  selectedStudent.sessionHistory
-                    .sort((a, b) => new Date(b.date + 'T' + b.startTime) - new Date(a.date + 'T' + a.startTime))
+                  selectedStudentHistory
+                    .slice()
+                    .sort((a, b) => new Date(b.sessionStartTime || 0) - new Date(a.sessionStartTime || 0))
                     .map((h, i) => {
                       const draftKey = `${h.sessionId}::${selectedStudent.studentId}`
                       const currentStatus = draftStatuses[draftKey] || h.status
@@ -135,8 +282,12 @@ export default function AttendanceStudents() {
                       const { text, className } = statusLabel(currentStatus)
                       return (
                         <li key={`${h.sessionId}-${i}`} className="ap-student-history-item">
-                          <span className="ap-student-history-date">{formatAttendanceDate(h.date)}</span>
-                          <span className="ap-student-history-time">{h.startTime} – {h.endTime}</span>
+                          <span className="ap-student-history-date">{formatAttendanceDateFromIso(h.sessionStartTime)}</span>
+                          <span className="ap-student-history-time">
+                            {h.sessionStartTime ? new Date(h.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {' – '}
+                            {h.sessionEndTime ? new Date(h.sessionEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </span>
                           <div className="ap-status-editor">
                             <button
                               type="button"
@@ -150,8 +301,9 @@ export default function AttendanceStudents() {
                                 type="button"
                                 className="ap-status-submit"
                                 onClick={() => handleSubmitStatus(h.sessionId, selectedStudent.studentId, h.status)}
+                                disabled={saving}
                               >
-                                Submit
+                                {saving ? 'Saving…' : 'Submit'}
                               </button>
                             ) : null}
                           </div>

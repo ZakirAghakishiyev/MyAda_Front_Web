@@ -1,36 +1,17 @@
-import { getAccessToken } from '../auth'
+import { getAccessToken, authFetch } from '../auth'
 
 const ATTENDANCE_API_BASE =
-  import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || 'http://localhost:5008'
+  import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || 'http://localhost:5009'
 
-const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{6,512}$/
+/** Legacy / short opaque tokens (non-JWT) */
+const LEGACY_TOKEN_PATTERN = /^[A-Za-z0-9._~-]{6,1024}$/
 
-/**
- * @typedef {Object} AttendanceQrScanRequest
- * @property {string} token
- */
-
-/**
- * @typedef {Object} AttendanceQrScanResponse
- * @property {boolean} success
- * @property {string} message
- * @property {number|string|null} [attendanceId]
- * @property {string|null} [recordedAt]
- * @property {unknown} [data]
- */
-
-/**
- * @typedef {Error & {
- *   status?: number,
- *   code?: string,
- *   body?: unknown,
- *   details?: string[],
- * }} AttendanceApiError
- */
-
-/**
- * Attendance API – teacher-side QR attendance plus student QR scan client.
- */
+function looksLikeJwt(value) {
+  const s = String(value || '').trim()
+  if (!s || s.includes('|')) return false
+  const parts = s.split('.')
+  return parts.length >= 3 && parts.every((p) => p.length > 0)
+}
 
 function readEnvelope(data) {
   if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'result')) {
@@ -68,12 +49,8 @@ function makeAttendanceError(message, extras = {}) {
 function getAuthHeaders(includeJson = false) {
   const headers = new Headers()
   const accessToken = getAccessToken()
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`)
-  }
-  if (includeJson) {
-    headers.set('Content-Type', 'application/json')
-  }
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  if (includeJson) headers.set('Content-Type', 'application/json')
   return headers
 }
 
@@ -85,14 +62,55 @@ async function attendanceRequest(path, options = {}) {
   if (!response.ok) {
     throw makeAttendanceError(
       normalizeApiMessage(payload, `Attendance request failed (${response.status}).`),
-      {
-        status: response.status,
-        body: payload,
-      }
+      { status: response.status, body: payload }
     )
   }
 
   return data
+}
+
+function baseWithoutAttendanceSuffix() {
+  return ATTENDANCE_API_BASE.replace(/\/attendance$/i, '') || ATTENDANCE_API_BASE
+}
+
+/**
+ * Some deployments expose attendance routes at:
+ * - {gateway}/attendance/api/...
+ * Others expose them at:
+ * - {gateway}/api/...
+ *
+ * This helper tries both by building candidate URLs.
+ */
+async function attendanceRequestCandidates(paths, options = {}) {
+  const list = Array.isArray(paths) ? paths : [paths]
+  const baseRoot = baseWithoutAttendanceSuffix()
+  const candidates = []
+  for (const p of list) {
+    const path = String(p || '')
+    if (!path) continue
+    candidates.push(`${ATTENDANCE_API_BASE}${path}`)
+    candidates.push(`${baseRoot}${path}`)
+  }
+
+  let lastErr
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, options)
+      const payload = await parseJsonSafe(response)
+      const data = readEnvelope(payload)
+      if (!response.ok) {
+        throw makeAttendanceError(
+          normalizeApiMessage(payload, `Attendance request failed (${response.status}).`),
+          { status: response.status, body: payload }
+        )
+      }
+      return data
+    } catch (e) {
+      lastErr = e
+      if (e?.status !== 404) throw e
+    }
+  }
+  throw lastErr || makeAttendanceError('Attendance request failed.')
 }
 
 function toNumberOrNull(value) {
@@ -151,11 +169,7 @@ function pickBestSession(sessions = []) {
 }
 
 /**
- * Accept only the plain token text stored inside the QR code.
- * Reject empty values, URLs, JSON payloads, or tokens with spaces/new lines.
- *
- * @param {string} rawValue
- * @returns {string}
+ * Basic sanity check for scan payload. Supports JWT, `jwt|studentGuid`, or legacy short token.
  */
 export function validateAttendanceQrToken(rawValue) {
   const parsed = parseAttendanceQrPayload(rawValue)
@@ -166,27 +180,22 @@ export function validateAttendanceQrToken(rawValue) {
       status: 400,
     })
   }
-
-  if (
-    token.includes('\n') ||
-    token.includes('\r') ||
-    token.includes(' ') ||
-    /^https?:\/\//i.test(token)
-  ) {
-    throw makeAttendanceError('QR code format is invalid. Expected a plain attendance token only.', {
+  if (token.includes('\n') || token.includes('\r') || /^https?:\/\//i.test(token)) {
+    throw makeAttendanceError('QR code format is invalid. Expected a JWT or `jwt|studentGuid` string.', {
       code: 'INVALID_QR_FORMAT',
       status: 400,
     })
   }
-
-  if (!TOKEN_PATTERN.test(token)) {
-    throw makeAttendanceError('QR code token is malformed. Please scan the current attendance QR code.', {
-      code: 'INVALID_QR_MALFORMED',
-      status: 400,
-    })
+  if (token.includes('|')) {
+    const [left] = token.split('|')
+    if (looksLikeJwt(left) || LEGACY_TOKEN_PATTERN.test(String(left || '').trim())) return token
+    throw makeAttendanceError('QR code token is malformed.', { code: 'INVALID_QR_MALFORMED', status: 400 })
   }
-
-  return token
+  if (looksLikeJwt(token) || LEGACY_TOKEN_PATTERN.test(token)) return token
+  throw makeAttendanceError('QR code token is malformed. Please scan the current attendance QR code.', {
+    code: 'INVALID_QR_MALFORMED',
+    status: 400,
+  })
 }
 
 export function parseAttendanceQrPayload(rawValue) {
@@ -199,6 +208,7 @@ export function parseAttendanceQrPayload(rawValue) {
   }
 
   if (!value.startsWith('{')) {
+    // Plain JWT, legacy token, or `jwt|studentGuid` — context is in the JWT; no separate qrContext.
     return { token: value, qrContext: null, rawValue: value }
   }
 
@@ -213,22 +223,20 @@ export function parseAttendanceQrPayload(rawValue) {
   }
 
   const token = String(firstDefined(parsed?.token, parsed?.payload, '')).trim()
-  const sessionId = toNumberOrNull(firstDefined(parsed?.sessionId, parsed?.session_id))
-  const roundCount = toNumberOrNull(firstDefined(parsed?.roundCount, parsed?.activationId, parsed?.round_count))
-  const instructorId = String(firstDefined(parsed?.instructorId, parsed?.instructor_id, '') || '').trim()
-
+  if (!token) {
+    throw makeAttendanceError('QR JSON did not include a token field.', { code: 'INVALID_QR_FORMAT', status: 400 })
+  }
   return {
     token,
-    qrContext: {
-      sessionId,
-      roundCount,
-      instructorId: instructorId || null,
-    },
+    qrContext: null,
     rawValue: value,
   }
 }
 
-function buildAttendanceQrPayload({ token, sessionId, roundCount, instructorId }) {
+/**
+ * @deprecated Use raw JWT in QR. Kept for older demos only.
+ */
+function buildLegacyQrJsonPayload({ token, sessionId, roundCount, instructorId }) {
   return JSON.stringify({
     token,
     sessionId: sessionId == null ? null : String(sessionId),
@@ -238,22 +246,25 @@ function buildAttendanceQrPayload({ token, sessionId, roundCount, instructorId }
 }
 
 /**
- * Builds the exact request body expected by the attendance QR scan endpoint.
- *
- * @param {string} token
- * @returns {AttendanceQrScanRequest}
+ * Prefer `JWT|studentGuid` so the server can verify the correct account. If the scanned
+ * value already includes `|`, it is used as-is.
  */
-export function buildAttendanceQrScanRequest(token) {
-  return { token: validateAttendanceQrToken(token) }
+export function buildScanTokenForRequest(scannedValue, studentGuid) {
+  const raw = String(scannedValue ?? '').trim()
+  if (!raw) {
+    throw makeAttendanceError('Scanned value is empty.', { code: 'INVALID_QR_EMPTY', status: 400 })
+  }
+  if (raw.includes('|')) {
+    return validateAttendanceQrToken(raw)
+  }
+  const validated = validateAttendanceQrToken(raw)
+  const guid = String(studentGuid ?? '').trim()
+  if (!guid) {
+    throw makeAttendanceError('Student id is required to bind the token.', { code: 'STUDENT_ID_MISSING' })
+  }
+  return `${validated}|${guid}`
 }
 
-/**
- * Attempt to resolve the authenticated student id using an explicit value first,
- * then common storage keys, then JWT claims already present on the client.
- *
- * @param {string|number|null|undefined} explicitStudentId
- * @returns {string}
- */
 export function resolveAuthenticatedStudentId(explicitStudentId) {
   const direct = String(explicitStudentId ?? '').trim()
   if (direct) return direct
@@ -266,7 +277,6 @@ export function resolveAuthenticatedStudentId(explicitStudentId) {
   ]
     .map((value) => String(value ?? '').trim())
     .filter(Boolean)
-
   if (storageCandidates.length > 0) return storageCandidates[0]
 
   const accessToken = getAccessToken()
@@ -285,10 +295,9 @@ export function resolveAuthenticatedStudentId(explicitStudentId) {
       ]
         .map((value) => String(value ?? '').trim())
         .filter(Boolean)
-
       if (claimCandidates.length > 0) return claimCandidates[0]
     } catch {
-      // Ignore malformed or opaque token payloads and fall through.
+      // Ignore malformed or opaque token payloads.
     }
   }
 
@@ -297,28 +306,9 @@ export function resolveAuthenticatedStudentId(explicitStudentId) {
   })
 }
 
-export function getStaticSessionState() {
-  return {
-    valid: true,
-    closed: false,
-    canActivate: true,
-    currentRound: 0,
-    round1Completed: false,
-    round2Completed: false,
-    registeredCount: 0,
-    totalCount: 45,
-    sessionId: 'static-session',
-    attendanceSessionId: 'static-attendance',
-  }
-}
-
-/**
- * Resolve the instructor session to use for QR attendance.
- */
 export async function getSessionState({ instructorId, lessonId }) {
   const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedLessonId = toNumberOrNull(lessonId)
-
   if (normalizedInstructorId == null || normalizedLessonId == null) {
     throw makeAttendanceError('Instructor id (GUID) and lesson id are required to load attendance sessions.')
   }
@@ -337,9 +327,7 @@ export async function getSessionState({ instructorId, lessonId }) {
         : []
 
   const selectedSession = pickBestSession(items)
-  if (!selectedSession) {
-    throw makeAttendanceError('No attendance session exists for this lesson yet.')
-  }
+  if (!selectedSession) throw makeAttendanceError('No attendance session exists for this lesson yet.')
 
   let summary = null
   try {
@@ -535,76 +523,90 @@ export async function createLessonSession({ instructorId, lessonId, startAt, end
   throw lastError || makeAttendanceError('Could not create session.')
 }
 
-/**
- * Activate attendance for the current session.
- */
-export async function startRound({ instructorId, sessionId }) {
-  const normalizedInstructorId = normalizeRouteUserId(instructorId)
-  const normalizedSessionId = toNumberOrNull(sessionId)
-
-  if (normalizedInstructorId == null || normalizedSessionId == null) {
-    throw makeAttendanceError('Instructor id (GUID) and session id are required to start attendance.')
+async function postAttendanceSessionFirstMatch(instructorId, sessionId, suffixPaths, body) {
+  const iid = normalizeRouteUserId(instructorId)
+  const sid = toNumberOrNull(sessionId)
+  if (!iid || sid == null) {
+    throw makeAttendanceError('Instructor id (GUID) and session id are required.')
   }
-
-  return attendanceRequest(
-    `/api/instructors/${normalizedInstructorId}/sessions/${normalizedSessionId}/attendance/activate`,
-    {
-      method: 'POST',
-      headers: getAuthHeaders(),
-    }
-  )
+  const base = `/api/instructors/${encodeURIComponent(iid)}/sessions/${sid}`
+  const paths = suffixPaths.map((s) => `${base}${s}`)
+  const headers = getAuthHeaders(false)
+  const init = { method: 'POST', headers }
+  if (body != null) {
+    headers.set('Content-Type', 'application/json')
+    init.body = JSON.stringify(body)
+  }
+  return attendanceRequestCandidates(paths, init)
 }
 
 /**
- * Deactivate attendance for the current session.
+ * Activate a numbered round (1 or 2). Tries /attendance/activate/{n} then legacy /attendance/activate.
  */
-export async function endRound({ instructorId, sessionId }) {
+export async function activateAttendanceRound({ instructorId, sessionId, round }) {
+  const n = round === 2 ? 2 : 1
+  return postAttendanceSessionFirstMatch(instructorId, sessionId, [`/attendance/activate/${n}`, `/attendance/activate`])
+}
+
+/** @deprecated use activateAttendanceRound with explicit round */
+export async function startRound({ instructorId, sessionId, round = 1 }) {
+  return activateAttendanceRound({ instructorId, sessionId, round: round === 2 ? 2 : 1 })
+}
+
+/**
+ * Deactivate a numbered round. Tries /attendance/deactivate/{n} then legacy /deactivate.
+ */
+export async function deactivateAttendanceRound({ instructorId, sessionId, round }) {
+  const n = round === 2 ? 2 : 1
+  return postAttendanceSessionFirstMatch(instructorId, sessionId, [`/attendance/deactivate/${n}`, `/attendance/deactivate`])
+}
+
+/** @deprecated use deactivateAttendanceRound with explicit round */
+export async function endRound({ instructorId, sessionId, round = 1 }) {
+  return deactivateAttendanceRound({ instructorId, sessionId, round: round === 2 ? 2 : 1 })
+}
+
+/**
+ * Finalize session attendance (after both rounds are fully deactivated per product flow).
+ * POST /api/instructors/.../sessions/.../attendance/finalize
+ */
+export async function finalizeSessionAttendance({ instructorId, sessionId }) {
   const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedSessionId = toNumberOrNull(sessionId)
-
   if (normalizedInstructorId == null || normalizedSessionId == null) {
-    throw makeAttendanceError('Instructor id (GUID) and session id are required to stop attendance.')
+    throw makeAttendanceError('Instructor id (GUID) and session id are required to finalize attendance.')
   }
-
-  return attendanceRequest(
-    `/api/instructors/${normalizedInstructorId}/sessions/${normalizedSessionId}/attendance/deactivate`,
-    {
-      method: 'POST',
-      headers: getAuthHeaders(),
-    }
-  )
+  return postAttendanceSessionFirstMatch(instructorId, sessionId, ['/attendance/finalize'])
 }
 
 /**
  * Fetch the current server-issued QR token for the active attendance session.
+ * QR value should be the **raw JWT** (session/round context is inside the token).
  */
 export async function getQRPayload({ instructorId, sessionId, roundCount }) {
   const normalizedInstructorId = normalizeRouteUserId(instructorId)
   const normalizedSessionId = toNumberOrNull(sessionId)
-
   if (normalizedInstructorId == null || normalizedSessionId == null) {
     throw makeAttendanceError('Instructor id (GUID) and session id are required to generate the QR token.')
   }
 
   const data = await attendanceRequest(
     `/api/instructors/${normalizedInstructorId}/sessions/${normalizedSessionId}/qr-token`,
-    {
-      method: 'POST',
-      headers: getAuthHeaders(),
-    }
+    { method: 'POST', headers: getAuthHeaders() }
   )
 
   const token = String(firstDefined(data?.token, data?.payload, data?.qrToken, data?.value, data) || '').trim()
-  if (!token) {
-    throw makeAttendanceError('Attendance backend returned an empty QR token.')
-  }
+  if (!token) throw makeAttendanceError('Attendance backend returned an empty QR token.')
 
   const resolvedRoundCount = Number.isFinite(Number(roundCount))
     ? Number(roundCount)
     : toNumberOrNull(firstDefined(data?.activationId, data?.roundCount))
 
   return {
-    payload: buildAttendanceQrPayload({
+    /** Raw JWT string to encode in the QR (preferred). */
+    payload: token,
+    /** @deprecated use `payload` (now raw JWT) */
+    legacyJsonPayload: buildLegacyQrJsonPayload({
       token,
       sessionId: normalizedSessionId,
       roundCount: resolvedRoundCount,
@@ -617,21 +619,21 @@ export async function getQRPayload({ instructorId, sessionId, roundCount }) {
   }
 }
 
+function extractServerErrorCode(data) {
+  if (!data || typeof data !== 'object') return null
+  return (
+    data.errorCode || data.ErrorCode || data.error_code || data.code || data.Code || data.detail?.errorCode || null
+  )
+}
+
 /**
- * Post the scanned QR token for the authenticated student.
- *
- * Example request body:
- * { "token": "ADA_d4f8k9x1" }
- *
- * @param {Object} params
- * @param {string|number|null|undefined} params.studentId
- * @param {string} params.scannedToken
- * @returns {Promise<AttendanceQrScanResponse>}
+ * Student check-in: POST /api/students/{studentId}/attendance/scan
+ * Tries /attendance/scan first, then legacy /attendance/qr/scan on 404.
+ * Body: { token, studentId? , deviceInfo? } — token should be `jwt|studentGuid` when possible.
  */
 export async function scanAttendanceQrCode({ studentId, scannedToken }) {
   const resolvedStudentId = resolveAuthenticatedStudentId(studentId)
   const accessToken = getAccessToken()
-
   if (!accessToken) {
     throw makeAttendanceError('You are not signed in. Please log in and try again.', {
       code: 'ACCESS_TOKEN_MISSING',
@@ -639,57 +641,230 @@ export async function scanAttendanceQrCode({ studentId, scannedToken }) {
     })
   }
 
-  const parsedScan = parseAttendanceQrPayload(scannedToken)
-  const requestBody = buildAttendanceQrScanRequest(parsedScan.token)
-  const qrContext =
-    parsedScan.qrContext &&
-    Object.values(parsedScan.qrContext).some((value) => value !== null && value !== undefined && value !== '')
-      ? parsedScan.qrContext
-      : null
-  const endpoint = `${ATTENDANCE_API_BASE}/api/students/${encodeURIComponent(resolvedStudentId)}/attendance/qr/scan`
+  const token = buildScanTokenForRequest(scannedToken, resolvedStudentId)
+  const bodyObj = {
+    token,
+    studentId: resolvedStudentId,
+    deviceInfo:
+      typeof navigator !== 'undefined' ? `Web ${navigator.userAgent || 'browser'}` : 'Web FrontWeb',
+  }
+  const body = JSON.stringify(bodyObj)
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: getAuthHeaders(true),
-    body: JSON.stringify({
-      studentId: resolvedStudentId,
-      ...requestBody,
-      ...(qrContext ? { qrContext } : {}),
-      deviceInfo:
-        typeof navigator !== 'undefined'
-          ? navigator.userAgent
-          : 'FrontWeb attendance client',
-    }),
-  })
+  const enc = encodeURIComponent(resolvedStudentId)
+  const relPaths = [
+    `/api/students/${enc}/attendance/scan`,
+    `/api/students/${enc}/attendance/qr/scan`,
+  ]
 
-  const payload = await parseJsonSafe(response)
-  const data = readEnvelope(payload)
+  const baseRoot = baseWithoutAttendanceSuffix()
+  const basePairs = [ATTENDANCE_API_BASE, baseRoot].filter((b, i, a) => a.indexOf(b) === i)
 
-  if (!response.ok) {
-    let message = normalizeApiMessage(payload, `Attendance scan failed (${response.status}).`)
-    let code = 'ATTENDANCE_SCAN_FAILED'
+  let lastErr
+  for (const base of basePairs) {
+    for (const path of relPaths) {
+      const url = `${String(base).replace(/\/$/, '')}${path}`
+      const response = await authFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+      const payload = await parseJsonSafe(response)
+      const data = readEnvelope(payload)
 
-    if (response.status === 400) {
-      message = normalizeApiMessage(payload, 'Invalid or expired QR code.')
-      code = 'ATTENDANCE_QR_INVALID'
-    } else if (response.status === 401 || response.status === 403) {
-      message = normalizeApiMessage(payload, 'Unauthorized request or wrong student for this QR code.')
-      code = 'ATTENDANCE_QR_UNAUTHORIZED'
+      if (!response.ok) {
+        const errCode = extractServerErrorCode(payload) || extractServerErrorCode(data)
+        let message = normalizeApiMessage(data ?? payload, `Attendance scan failed (${response.status}).`)
+        if (errCode) message = `${message}${String(message).includes(String(errCode)) ? '' : ` (${errCode})`}`
+        if (response.status === 404) {
+          lastErr = makeAttendanceError(message, { code: errCode, status: 404, body: payload })
+          continue
+        }
+        throw makeAttendanceError(message, {
+          code:
+            errCode ||
+            (response.status === 401 || response.status === 403 ? 'UNAUTHORIZED' : 'ATTENDANCE_SCAN_FAILED'),
+          status: response.status,
+          body: payload,
+        })
+      }
+
+      return {
+        success: true,
+        message: normalizeApiMessage(data, 'Attendance marked successfully.'),
+        status: data?.status ?? data?.attendanceStatus ?? null,
+        round: data?.round ?? data?.roundNumber ?? data?.activationId ?? null,
+        validScanCount: data?.validScanCount ?? data?.scansCompleted ?? null,
+        errorCode: data?.errorCode ?? null,
+        attendanceId: data?.attendanceId ?? data?.id ?? null,
+        recordedAt: data?.scannedAt ?? data?.recordedAt ?? data?.createdAt ?? null,
+        data,
+      }
     }
-
-    throw makeAttendanceError(message, {
-      code,
-      status: response.status,
-      body: payload,
-      details: Array.isArray(payload?.errors) ? payload.errors : undefined,
-    })
   }
+  throw lastErr || makeAttendanceError('Could not reach attendance scan endpoint.', { code: 'SCAN_ENDPOINT_UNREACHABLE' })
+}
 
+export function getStaticSessionState() {
   return {
-    success: true,
-    message: normalizeApiMessage(data, 'Attendance marked successfully.'),
-    attendanceId: data?.attendanceId ?? data?.id ?? null,
-    recordedAt: data?.recordedAt ?? data?.createdAt ?? null,
-    data,
+    valid: true,
+    closed: false,
+    canActivate: true,
+    currentRound: 0,
+    round1Completed: false,
+    round2Completed: false,
+    registeredCount: 0,
+    totalCount: 45,
+    sessionId: 1,
+    attendanceSessionId: 1,
+    topic: 'Demo attendance session',
+    startTime: null,
+    endTime: null,
   }
+}
+
+function normalizeAttendanceStatusToUi(value) {
+  const raw = String(value || '').trim().toLowerCase()
+  if (raw === 'present') return 'present'
+  if (raw === 'late') return 'late'
+  if (raw === 'absent') return 'absent'
+  if (raw === 'excused') return 'excused'
+  return raw || 'absent'
+}
+
+function normalizeUiStatusToApi(value) {
+  const raw = String(value || '').trim().toLowerCase()
+  if (raw === 'present') return 'Present'
+  if (raw === 'late') return 'Late'
+  if (raw === 'absent') return 'Absent'
+  if (raw === 'excused') return 'Excused'
+  return 'Absent'
+}
+
+/**
+ * Instructor roster for a session.
+ * GET /api/instructors/{instructorId}/sessions/{sessionId}/attendance
+ */
+export async function getSessionAttendance({ instructorId, sessionId }) {
+  const normalizedInstructorId = String(instructorId ?? '').trim()
+  const normalizedSessionId = toNumberOrNull(sessionId)
+  if (!normalizedInstructorId || normalizedSessionId == null) {
+    throw makeAttendanceError('Instructor id (GUID) and session id are required.')
+  }
+  const data = await attendanceRequest(
+    `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/sessions/${normalizedSessionId}/attendance`,
+    { headers: getAuthHeaders() }
+  )
+  const rows = unwrapList(data)
+  return rows
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const studentId = String(firstDefined(item.studentId, item.student_id, '') || '').trim()
+      if (!studentId) return null
+      return {
+        id: item.id ?? item.attendanceId ?? `${normalizedSessionId}:${studentId}`,
+        attendanceId: toNumberOrNull(firstDefined(item.id, item.attendanceId, item.attendance_id)),
+        sessionId: normalizedSessionId,
+        lessonId: toNumberOrNull(firstDefined(item.lessonId, item.lesson_id)),
+        studentId,
+        name: firstDefined(item.studentFullName, item.studentName, item.fullName, item.name, ''),
+        studentCode: firstDefined(item.studentCode, item.code, item.studentNumber, ''),
+        status: normalizeAttendanceStatusToUi(firstDefined(item.status, item.attendanceStatus, 'absent')),
+        firstScanAt: firstDefined(item.firstScanAt, item.first_scan_at, null),
+        lastScanAt: firstDefined(item.lastScanAt, item.last_scan_at, null),
+        isManuallyAdjusted: Boolean(firstDefined(item.isManuallyAdjusted, item.manuallyAdjusted, false)),
+        instructorNote: firstDefined(item.instructorNote, item.note, null),
+        raw: item,
+      }
+    })
+    .filter(Boolean)
+}
+
+/**
+ * Instructor updates a single student's attendance status for a session.
+ * PATCH /api/instructors/{instructorId}/sessions/{sessionId}/attendance/{studentId}
+ */
+export async function patchSessionAttendance({ instructorId, sessionId, studentId, status, instructorNote }) {
+  const normalizedInstructorId = String(instructorId ?? '').trim()
+  const normalizedSessionId = toNumberOrNull(sessionId)
+  const normalizedStudentId = String(studentId ?? '').trim()
+  if (!normalizedInstructorId || normalizedSessionId == null || !normalizedStudentId) {
+    throw makeAttendanceError('Instructor id, session id, and student id are required.')
+  }
+  const payload = {
+    status: normalizeUiStatusToApi(status),
+    ...(instructorNote != null ? { instructorNote: String(instructorNote) } : {}),
+  }
+  const data = await attendanceRequest(
+    `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/sessions/${normalizedSessionId}/attendance/${encodeURIComponent(normalizedStudentId)}`,
+    {
+      method: 'PATCH',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify(payload),
+    }
+  )
+  return data
+}
+
+/**
+ * Student per-session attendance rows for a lesson.
+ * GET /api/students/{studentId}/lessons/{lessonId}/attendance
+ */
+export async function getStudentLessonAttendance({ studentId, lessonId }) {
+  const resolvedStudentId = String(studentId ?? '').trim()
+  const normalizedLessonId = toNumberOrNull(lessonId)
+  if (!resolvedStudentId || normalizedLessonId == null) {
+    throw makeAttendanceError('Student id (GUID) and lesson id are required.')
+  }
+  const data = await attendanceRequest(
+    `/api/students/${encodeURIComponent(resolvedStudentId)}/lessons/${normalizedLessonId}/attendance`,
+    { headers: getAuthHeaders() }
+  )
+  const rows = unwrapList(data)
+  return rows
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const sessionId = toNumberOrNull(firstDefined(item.sessionId, item.session_id))
+      if (sessionId == null) return null
+      return {
+        attendanceId: toNumberOrNull(firstDefined(item.attendanceId, item.id)),
+        sessionId,
+        sessionStartTime: firstDefined(item.sessionStartTime, item.session_start_time, item.startTime, null),
+        sessionEndTime: firstDefined(item.sessionEndTime, item.session_end_time, item.endTime, null),
+        lessonName: firstDefined(item.lessonName, item.lesson, null),
+        lessonCode: firstDefined(item.lessonCode, item.code, null),
+        status: normalizeAttendanceStatusToUi(firstDefined(item.status, item.attendanceStatus, 'absent')),
+        firstScanAt: firstDefined(item.firstScanAt, item.first_scan_at, null),
+        lastScanAt: firstDefined(item.lastScanAt, item.last_scan_at, null),
+        isManuallyAdjusted: Boolean(firstDefined(item.isManuallyAdjusted, item.manuallyAdjusted, false)),
+        instructorNote: firstDefined(item.instructorNote, item.note, null),
+        raw: item,
+      }
+    })
+    .filter(Boolean)
+}
+
+/**
+ * Admin: list enrolled students for a lesson.
+ * GET /api/admin/lessons/{lessonId}/enrollments
+ */
+export async function getLessonEnrollmentsAdmin({ lessonId }) {
+  const normalizedLessonId = toNumberOrNull(lessonId)
+  if (normalizedLessonId == null) {
+    throw makeAttendanceError('lessonId is required.')
+  }
+  const data = await attendanceRequestCandidates(
+    [`/api/admin/lessons/${normalizedLessonId}/enrollments`],
+    { method: 'GET', headers: getAuthHeaders() }
+  )
+  const rows = unwrapList(data)
+  return rows
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const studentId = String(firstDefined(item.studentId, item.userId, item.id, '') || '').trim()
+      if (!studentId) return null
+      return {
+        studentId,
+        name: firstDefined(item.studentFullName, item.fullName, item.name, ''),
+        email: firstDefined(item.email, item.studentEmail, ''),
+        studentCode: firstDefined(item.studentCode, item.code, item.studentNumber, ''),
+        raw: item,
+      }
+    })
+    .filter(Boolean)
 }

@@ -5,7 +5,8 @@ import * as attendanceApi from '../api/attendance'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 
-const QR_REFRESH_INTERVAL_MS = 5_000
+/** Short-lived JWT: refresh on this interval (see backend QrToken lifetime). */
+const QR_REFRESH_INTERVAL_MS = 15_000
 const QR_RETRY_DELAY_MS = 3000
 const QR_REFRESH_SECONDS = QR_REFRESH_INTERVAL_MS / 1000
 
@@ -109,7 +110,10 @@ export default function AttendancePortal() {
   const [round1Completed, setRound1Completed] = useState(false)
   const [round2Completed, setRound2Completed] = useState(false)
   const [sessionClosed, setSessionClosed] = useState(false)
+  const [sessionFinalized, setSessionFinalized] = useState(false)
   const [canActivate, setCanActivate] = useState(false)
+  const [finalizeLoading, setFinalizeLoading] = useState(false)
+  const [finalizeError, setFinalizeError] = useState(null)
 
   const [qrPayload, setQrPayload] = useState(null)
   const [qrLoading, setQrLoading] = useState(false)
@@ -206,6 +210,11 @@ export default function AttendancePortal() {
   useEffect(() => {
     loadSessionOptions().catch(() => {})
   }, [loadSessionOptions])
+
+  useEffect(() => {
+    setSessionFinalized(false)
+    setFinalizeError(null)
+  }, [selectedSessionId])
 
   useEffect(() => {
     if (!instructorId || !lessonId || !selectedSessionId) return
@@ -327,7 +336,9 @@ export default function AttendancePortal() {
         hasLoggedQrGenRef.current = true
         addLog('QR Generation successful...')
       }
-      addLog(`QR Refreshed (Token: ${(data.token || payload).slice(0, 12)}...)`)
+      const tok = String(data.token || payload || '')
+      const tail = tok ? `…${tok.slice(-8)}` : '—'
+      addLog(`QR refreshed (token end ${tail})`)
     } catch (e) {
       setQrError(e.message || 'QR retrieval failed')
       addLog(`QR refresh failed: ${e.message}`, true)
@@ -401,10 +412,14 @@ export default function AttendancePortal() {
     if (!canActivate || roundActionLoading) return
     setRoundActionLoading(true)
     setRoundActionError(null)
+    const nextRound = round1Completed ? 2 : 1
     try {
-      await attendanceApi.startRound(ids)
-      const nextRound = round1Completed ? 2 : 1
-      addLog(`Attendance Round ${nextRound} Started`, true)
+      await attendanceApi.activateAttendanceRound({
+        instructorId: ids.instructorId,
+        sessionId: ids.sessionId,
+        round: nextRound,
+      })
+      addLog(`Attendance round ${nextRound} started (activate).`, true)
       setCurrentRound(nextRound)
       setAttendanceActive(true)
       setCanActivate(true)
@@ -426,14 +441,20 @@ export default function AttendancePortal() {
     if (!attendanceActive || roundActionLoading) return
     setRoundActionLoading(true)
     setRoundActionError(null)
+    const endedRound = currentRound
     try {
-      await attendanceApi.endRound(ids)
-      addLog(`Attendance Round ${currentRound} Ended`)
-      if (currentRound === 1) {
+      await attendanceApi.deactivateAttendanceRound({
+        instructorId: ids.instructorId,
+        sessionId: ids.sessionId,
+        round: endedRound,
+      })
+      addLog(`Attendance round ${endedRound} ended (deactivate).`)
+      if (endedRound === 1) {
         setRound1Completed(true)
         setCurrentRound(0)
         setAttendanceActive(false)
-        setSessionState((s) => ({ ...(s || {}), round1Completed: true, currentRound: 0 }))
+        setCanActivate(true)
+        setSessionState((s) => ({ ...(s || {}), round1Completed: true, currentRound: 0, canActivate: true }))
         persistProgress({
           round1Completed: true,
           currentRound: 0,
@@ -441,18 +462,18 @@ export default function AttendancePortal() {
           canActivate: true,
           sessionClosed: false,
         })
-      } else if (currentRound === 2) {
+      } else if (endedRound === 2) {
         setRound2Completed(true)
         setCurrentRound(0)
         setAttendanceActive(false)
-        setSessionClosed(true)
+        // Round 1 must be fully deactivated before round 2; call finalize when both rounds are done.
         setCanActivate(false)
-        setSessionState((s) => ({ ...(s || {}), round2Completed: true, currentRound: 0, closed: true, canActivate: false }))
+        setSessionState((s) => ({ ...(s || {}), round2Completed: true, currentRound: 0, canActivate: false }))
         persistProgress({
           round2Completed: true,
           currentRound: 0,
           attendanceActive: false,
-          sessionClosed: true,
+          sessionClosed: false,
           canActivate: false,
         })
       }
@@ -463,18 +484,56 @@ export default function AttendancePortal() {
     }
   }
 
+  const handleFinalize = async () => {
+    if (finalizeLoading || !ids.sessionId) return
+    setFinalizeLoading(true)
+    setFinalizeError(null)
+    try {
+      await attendanceApi.finalizeSessionAttendance({ instructorId: ids.instructorId, sessionId: ids.sessionId })
+      setSessionFinalized(true)
+      setSessionClosed(true)
+      setCanActivate(false)
+      setAttendanceActive(false)
+      setCurrentRound(0)
+      setSessionState((s) => (s ? { ...s, closed: true, canActivate: false, currentRound: 0 } : null))
+      addLog('Session attendance finalized on server.', true)
+    } catch (e) {
+      setFinalizeError(e?.message || 'Could not finalize session.')
+    } finally {
+      setFinalizeLoading(false)
+    }
+  }
+
   const registeredCount = sessionState?.registeredCount ?? 0
   const totalCount = sessionState?.totalCount ?? 45
   const attendanceRate = totalCount ? Math.round((registeredCount / totalCount) * 100) : 0
 
-  const canStartRound1 = sessionInitialized && canActivate && !attendanceActive && !round1Completed && !round2Completed
-  const canStopRound1 = attendanceActive && currentRound === 1
-  const canStartRound2 = sessionInitialized && canActivate && !attendanceActive && round1Completed && !round2Completed
-  const canStopRound2 = attendanceActive && currentRound === 2
+  const canStartRound1 =
+    sessionInitialized &&
+    canActivate &&
+    !attendanceActive &&
+    !round1Completed &&
+    !round2Completed &&
+    !sessionFinalized
+  const canStopRound1 = attendanceActive && currentRound === 1 && !sessionFinalized
+  const canStartRound2 =
+    sessionInitialized &&
+    canActivate &&
+    !attendanceActive &&
+    round1Completed &&
+    !round2Completed &&
+    !sessionFinalized
+  const canStopRound2 = attendanceActive && currentRound === 2 && !sessionFinalized
+  const canFinalizeSession =
+    sessionInitialized &&
+    round1Completed &&
+    round2Completed &&
+    !attendanceActive &&
+    !sessionFinalized
 
   const handleEndSession = useCallback(() => {
-    if (!sessionInitialized) return
-    if (!window.confirm('End this attendance session? No further rounds can be started.')) return
+    if (!sessionInitialized || sessionFinalized) return
+    if (!window.confirm('End this UI session locally? This does not call the server—use “Finalize session” to close attendance in the system.')) return
     setAttendanceActive(false)
     setCurrentRound(0)
     setSessionClosed(true)
@@ -488,7 +547,7 @@ export default function AttendancePortal() {
       canActivate: false,
     })
     addLog('Session ended by instructor', true)
-  }, [sessionInitialized, persistProgress, addLog])
+  }, [sessionInitialized, sessionFinalized, persistProgress, addLog])
 
   return (
     <div className="attendance-portal">
@@ -520,8 +579,8 @@ export default function AttendancePortal() {
           <h1 className="ap-course-title">{course.title}</h1>
           <p className="ap-course-details">{course.section} • {course.room} • {course.instructor}</p>
           <div className="ap-session-actions">
-            <button type="button" className="ap-btn ap-btn--danger" onClick={handleEndSession} disabled={!sessionInitialized}>
-              <IconClose /> End Session
+            <button type="button" className="ap-btn ap-btn--danger" onClick={handleEndSession} disabled={!sessionInitialized || sessionFinalized}>
+              <IconClose /> End local session
             </button>
           </div>
         </section>
@@ -595,7 +654,7 @@ export default function AttendancePortal() {
         {!sessionInitialized && (
           <section className="ap-init-card">
             <h2 className="ap-init-title">Session not started</h2>
-            <p className="ap-init-text">Select a lesson session above, then initialize attendance. After that you can start Round 1 and Round 2.</p>
+            <p className="ap-init-text">Select a lesson session, initialize, then activate round 1 / round 2 in order. After both rounds are stopped, use Finalize to close attendance on the server.</p>
             <button
               type="button"
               className="ap-btn ap-btn--primary ap-init-btn"
@@ -647,7 +706,7 @@ export default function AttendancePortal() {
                 <div className="ap-qr-card">
                   <p className="ap-qr-label">Dynamic attendance</p>
                   {qrPayload ? (
-                    <QRCodeSVG value={qrPayload} size={200} level="M" className="ap-qr-svg" />
+                    <QRCodeSVG value={String(qrPayload)} size={200} level="M" className="ap-qr-svg" />
                   ) : (
                     <div className="ap-qr-placeholder">
                       {qrLoading ? 'Loading…' : attendanceActive ? 'Waiting for QR…' : 'Start a round to show QR'}
@@ -697,6 +756,18 @@ export default function AttendancePortal() {
                   >
                     <IconStop /> Stop Round 2
                   </button>
+                  {finalizeError ? <p className="ap-controls-error">{finalizeError}</p> : null}
+                  <button
+                    type="button"
+                    className="ap-btn ap-btn--primary ap-btn--full"
+                    disabled={!canFinalizeSession || finalizeLoading}
+                    onClick={() => void handleFinalize()}
+                  >
+                    {finalizeLoading ? 'Finalizing…' : 'Finalize session'}
+                  </button>
+                  {sessionFinalized ? (
+                    <p className="ap-registered-rate" style={{ marginTop: 8 }}>This session is finalized for attendance.</p>
+                  ) : null}
                   <div className="ap-registered">
                     <span className="ap-registered-label">REGISTERED</span>
                     <span className="ap-registered-count">{registeredCount}/{totalCount}</span>

@@ -536,13 +536,26 @@ const SupportRequest = ({ initialArea = 'it' }) => {
             </div>
 
             <div className="it-support-info-box it-support-info-box--accent">
-              <p className="it-support-info-title">Need immediate help?</p>
+              <p className="it-support-info-title">Call Hub (Realtime)</p>
               <p className="it-support-info-text">
-                For emergencies or campus‑wide outages, please contact the Student Services desk directly.
+                Join the call hub to talk instantly. Caller sends request, dispatcher accepts, then both join the same call room.
               </p>
-              <a href="tel:+994501234567" className="it-support-hotline">
-                +994 (50) 123‑45‑67
-              </a>
+              <div className="it-support-callhub-actions">
+                <button
+                  type="button"
+                  className="it-support-hotline"
+                  onClick={() => navigate('/calls/caller')}
+                >
+                  Join as Caller
+                </button>
+                <button
+                  type="button"
+                  className="it-support-hotline it-support-hotline--secondary"
+                  onClick={() => navigate('/calls/dispatcher')}
+                >
+                  Join as Dispatcher
+                </button>
+              </div>
             </div>
           </aside>
         </div>

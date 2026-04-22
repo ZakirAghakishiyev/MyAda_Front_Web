@@ -5,6 +5,8 @@ import { FilterProvider } from './contexts/FilterContext'
 import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
 import { RegisteredEventsProvider } from './contexts/RegisteredEventsContext'
 import { LostAndFoundAdminProvider } from './contexts/LostAndFoundAdminContext'
+import { CallProvider } from './call/CallContext'
+import GlobalCallUi from './call/GlobalCallUi'
 import Header from './components/Header'
 import LostAndFoundAdmin from './pages/LostAndFoundAdmin'
 import LostAndFoundAdminItemDetail from './pages/LostAndFoundAdminItemDetail'
@@ -72,6 +74,8 @@ import ClubAdminInterviewTimes from './pages/club-admin/ClubAdminInterviewTimes'
 import StudentServices from './pages/StudentServices'
 import StudentServicesEventDetail from './pages/StudentServicesEventDetail'
 import StudentServicesSuggestEvent from './pages/StudentServicesSuggestEvent'
+import CallerCallPage from './pages/call/CallerCallPage'
+import DispatcherCallPage from './pages/call/DispatcherCallPage'
 import './App.css'
 
 const AppContent = () => {
@@ -352,6 +356,10 @@ const AppContent = () => {
             </>
           } />
           <Route path="/support-dispatcher/staff" element={<SupportStaffDirectory />} />
+          <Route path="/caller" element={<Navigate to="/calls/caller" replace />} />
+          <Route path="/dispatcher" element={<Navigate to="/calls/dispatcher" replace />} />
+          <Route path="/calls/caller" element={<CallerCallPage />} />
+          <Route path="/calls/dispatcher" element={<DispatcherCallPage />} />
           <Route path="/staff-portal" element={<StaffPortalLayout />}>
             <Route index element={<StaffPortal />} />
             <Route path="history" element={<StaffPortalHistory />} />
@@ -391,7 +399,10 @@ function App() {
         >
           <RegisteredEventsProvider>
             <LostAndFoundAdminProvider>
-              <AppContent />
+              <CallProvider>
+                <GlobalCallUi />
+                <AppContent />
+              </CallProvider>
             </LostAndFoundAdminProvider>
           </RegisteredEventsProvider>
         </Router>

@@ -288,7 +288,7 @@ export default function AttendanceQrTestPage() {
 
             <div className="attendance-qr-test__meta">
               <span>Resolved student id: <strong>{resolvedStudentId || 'Unavailable'}</strong></span>
-              <span>Endpoint: <code>/api/students/{resolvedStudentId || '<studentId>'}/attendance/qr/scan</code></span>
+              <span>Endpoint: <code>/api/students/{resolvedStudentId || '<studentId>'}/attendance/scan</code></span>
             </div>
 
             {submitError ? (

@@ -1,14 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  parseAttendanceQrPayload,
-  resolveAuthenticatedStudentId,
-  scanAttendanceQrCode,
-} from '../api/attendance'
+import { Html5Qrcode } from 'html5-qrcode'
+import { parseAttendanceQrPayload, resolveAuthenticatedStudentId, scanAttendanceQrCode } from '../api/attendance'
 import { getAccessToken } from '../auth'
 import './AttendanceStudentScanner.css'
 
-const SCAN_INTERVAL_MS = 350
+const REPEAT_WINDOW_MS = 1_500
+const READER_ELEMENT_ID = 'attendance-qr-reader-h5'
 
 function formatRecordedAt(value) {
   if (!value) return null
@@ -24,26 +22,48 @@ function formatRecordedAt(value) {
   }).format(date)
 }
 
+function tokenDebugTail(value) {
+  const s = String(value || '')
+  if (!s) return '—'
+  if (s.length <= 8) return '****'
+  return `…${s.slice(-6)}`
+}
+
 function mapScanErrorMessage(error) {
   if (!error) return 'Attendance scan failed.'
+  const code = error.code || error?.body?.errorCode || error?.body?.code
+  const supportCodes = new Set([
+    'token_expired',
+    'student_not_enrolled',
+    'already_scanned_this_round',
+    'replay_token',
+    'student_token_mismatch',
+    'activation_inactive',
+    'outside_attendance_window',
+  ])
+  if (code && String(code).toLowerCase && supportCodes.has(String(code).toLowerCase())) {
+    return `${error.message || 'Scan not accepted.'} (ref: ${code})`
+  }
   if (error.status === 400) return error.message || 'Invalid or expired QR code.'
   if (error.status === 401 || error.status === 403) {
     return error.message || 'Unauthorized request or wrong student.'
   }
+  if (code) return `${error.message || 'Request failed.'} (ref: ${code})`
   return error.message || 'Attendance scan failed.'
 }
 
 export default function AttendanceStudentScanner() {
-  const videoRef = useRef(null)
-  const streamRef = useRef(null)
-  const scanTimerRef = useRef(null)
+  const lastDupRef = useRef({ t: 0, s: '' })
+  const html5Ref = useRef(null)
   const isSubmittingRef = useRef(false)
 
   const [manualToken, setManualToken] = useState('')
-  const [lastScannedToken, setLastScannedToken] = useState('')
+  const [lastScannedForPreview, setLastScannedForPreview] = useState('')
   const [scannerStatus, setScannerStatus] = useState('idle')
   const [cameraError, setCameraError] = useState('')
-  const [scanMessage, setScanMessage] = useState('Open the scanner, point the camera at the QR code, and we will post the token automatically.')
+  const [scanMessage, setScanMessage] = useState(
+    'Start the camera and point it at the instructor QR, or paste the code manually for testing.',
+  )
   const [result, setResult] = useState(null)
   const [submitError, setSubmitError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -60,93 +80,61 @@ export default function AttendanceStudentScanner() {
     }
   }, [studentIdOverride])
 
-  const barcodeDetectorSupported =
-    typeof window !== 'undefined' && 'BarcodeDetector' in window
-
-  const stopScanner = useCallback(() => {
-    if (scanTimerRef.current) {
-      clearInterval(scanTimerRef.current)
-      scanTimerRef.current = null
+  const stopScanner = useCallback(async () => {
+    if (html5Ref.current) {
+      try {
+        const h = html5Ref.current
+        const state = h.getState?.()
+        if (state === 2 || state === 'SCANNING') {
+          await h.stop()
+        }
+        await h.clear()
+      } catch {
+        // ignore
+      }
+      html5Ref.current = null
     }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-
     setIsCameraOpen(false)
     setScannerStatus('idle')
   }, [])
 
-  const submitScannedToken = useCallback(async (rawToken, sourceLabel) => {
-    if (isSubmittingRef.current) return
+  const submitScannedToken = useCallback(
+    async (rawToken, sourceLabel) => {
+      if (isSubmittingRef.current) return
+      const trimmed = String(rawToken || '').trim()
+      if (!trimmed) return
+      const now = Date.now()
+      if (trimmed === lastDupRef.current.s && now - lastDupRef.current.t < REPEAT_WINDOW_MS) {
+        return
+      }
 
-    let parsed
-    try {
-      parsed = parseAttendanceQrPayload(rawToken)
-    } catch (error) {
-      setSubmitError(error.message)
+      isSubmittingRef.current = true
+      setIsSubmitting(true)
+      setSubmitError('')
       setResult(null)
-      return
-    }
+      setLastScannedForPreview(trimmed)
+      setScanMessage(`Code received (${sourceLabel}). Submitting check-in…`)
 
-    isSubmittingRef.current = true
-    setIsSubmitting(true)
-    setSubmitError('')
-    setResult(null)
-    setLastScannedToken(parsed.token)
-    setScanMessage(`Token detected from ${sourceLabel}. Sending attendance request...`)
-
-    try {
-      const response = await scanAttendanceQrCode({
-        studentId: studentIdOverride || undefined,
-        scannedToken: rawToken,
-      })
-
-      setResult(response)
-      setScanMessage(response.message || 'Attendance marked successfully.')
-      stopScanner()
-    } catch (error) {
-      setSubmitError(mapScanErrorMessage(error))
-      setResult(null)
-      setScanMessage('Scan failed. You can retry with the camera or submit the token manually.')
-    } finally {
-      isSubmittingRef.current = false
-      setIsSubmitting(false)
-    }
-  }, [stopScanner, studentIdOverride])
-
-  const handleManualSubmit = useCallback(async (event) => {
-    event.preventDefault()
-    await submitScannedToken(manualToken, 'manual entry')
-  }, [manualToken, submitScannedToken])
-
-  const scanFrame = useCallback(async () => {
-    if (
-      !barcodeDetectorSupported ||
-      !videoRef.current ||
-      videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
-      isSubmittingRef.current
-    ) {
-      return
-    }
-
-    try {
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
-      const barcodes = await detector.detect(videoRef.current)
-      const rawValue = String(barcodes?.[0]?.rawValue ?? '').trim()
-
-      if (!rawValue) return
-
-      await submitScannedToken(rawValue, 'camera scan')
-    } catch (error) {
-      setCameraError(error?.message || 'Unable to read QR code from camera.')
-    }
-  }, [barcodeDetectorSupported, submitScannedToken])
+      try {
+        const response = await scanAttendanceQrCode({
+          studentId: studentIdOverride || undefined,
+          scannedToken: rawToken,
+        })
+        setResult(response)
+        lastDupRef.current = { t: Date.now(), s: trimmed }
+        setScanMessage(response.message || 'Check-in successful.')
+        await stopScanner()
+      } catch (error) {
+        setSubmitError(mapScanErrorMessage(error))
+        setResult(null)
+        setScanMessage('Scan not accepted. Try again or use manual entry.')
+      } finally {
+        isSubmittingRef.current = false
+        setIsSubmitting(false)
+      }
+    },
+    [stopScanner, studentIdOverride],
+  )
 
   const startScanner = useCallback(async () => {
     setCameraError('')
@@ -157,72 +145,79 @@ export default function AttendanceStudentScanner() {
       setSubmitError('You must be signed in before scanning attendance.')
       return
     }
-
     if (!resolvedStudentId) {
-      setSubmitError('Student id is unavailable. Provide it in context or sign in again.')
+      setSubmitError('Student id is unavailable. Sign in again or set an override.')
       return
     }
-
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Camera access is not available in this browser. Use manual token entry instead.')
+      setCameraError('Camera access is not available in this browser. Use manual paste instead.')
       return
     }
 
-    if (!barcodeDetectorSupported) {
-      setCameraError('QR scanning is not supported in this browser. Use manual token entry instead.')
-      return
-    }
+    await stopScanner()
 
+    setScannerStatus('starting')
     try {
-      stopScanner()
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: 'environment' },
-      })
-
-      streamRef.current = stream
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-
+      const h = new Html5Qrcode(READER_ELEMENT_ID, { verbose: false })
+      html5Ref.current = h
+      await h.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 280, height: 280 } },
+        (decodedText) => {
+          void submitScannedToken(decodedText, 'camera')
+        },
+        () => {},
+      )
       setIsCameraOpen(true)
       setScannerStatus('scanning')
-      setScanMessage('Camera is live. Hold the QR code steady until the token is detected.')
-      scanTimerRef.current = setInterval(() => {
-        void scanFrame()
-      }, SCAN_INTERVAL_MS)
+      setScanMessage('Camera is live. Hold the QR in frame until the check-in is sent.')
     } catch (error) {
-      stopScanner()
-      setCameraError(error?.message || 'Unable to start the camera.')
+      await stopScanner()
+      setCameraError(error?.message || 'Unable to start the camera. Try manual entry.')
     }
-  }, [accessToken, barcodeDetectorSupported, resolvedStudentId, scanFrame, stopScanner])
+  }, [accessToken, resolvedStudentId, stopScanner, submitScannedToken])
 
-  useEffect(() => {
-    return () => {
-      stopScanner()
-    }
-  }, [stopScanner])
+  const handleManualSubmit = useCallback(
+    async (event) => {
+      event.preventDefault()
+      await submitScannedToken(manualToken, 'manual')
+    },
+    [manualToken, submitScannedToken],
+  )
+
+  useEffect(
+    () => () => {
+      void stopScanner()
+    },
+    [stopScanner],
+  )
 
   const requestPreview = useMemo(() => {
-    const rawValue = manualToken.trim() || ''
-    let parsed = { token: lastScannedToken || 'ADA_d4f8k9x1', qrContext: null }
+    const raw = manualToken.trim() || lastScannedForPreview
+    let sampleToken = 'eyJ...'
     try {
-      if (rawValue) parsed = parseAttendanceQrPayload(rawValue)
+      if (raw) {
+        const p = parseAttendanceQrPayload(raw)
+        sampleToken = p.token
+      }
     } catch {
-      // Keep token-only fallback preview for malformed input.
+      sampleToken = '…'
     }
-    const studentId = resolvedStudentId || '<studentId>'
+    const student = resolvedStudentId || '<studentId>'
+    const withPipe = String(sampleToken).includes('|') ? String(sampleToken) : `${String(sampleToken)}|${student}`
     return {
-      endpoint: `/api/students/${studentId}/attendance/qr/scan`,
-      body: JSON.stringify({
-        studentId,
-        token: parsed.token,
-        ...(parsed.qrContext ? { qrContext: parsed.qrContext } : {}),
-      }, null, 2),
+      endpoint: `/api/students/${student}/attendance/scan`,
+      body: JSON.stringify(
+        {
+          token: withPipe,
+          studentId: student,
+          deviceInfo: 'Web (preview)',
+        },
+        null,
+        2,
+      ),
     }
-  }, [lastScannedToken, manualToken, resolvedStudentId])
+  }, [lastScannedForPreview, manualToken, resolvedStudentId])
 
   return (
     <div className="attendance-student-scanner">
@@ -232,9 +227,8 @@ export default function AttendanceStudentScanner() {
             <p className="attendance-student-scanner__eyebrow">Student Attendance</p>
             <h1>Scan attendance QR</h1>
             <p className="attendance-student-scanner__subtitle">
-              The QR payload can be a plain token or a JSON object containing a token. Once
-              detected, the client extracts the token and posts it to the authenticated student
-              attendance scan endpoint.
+              The code is a short-lived JWT. The app posts <code>jwt|yourStudentId</code> to link the
+              token to your account, then shows the server result.
             </p>
           </div>
           <Link to="/" className="attendance-student-scanner__link">
@@ -244,7 +238,7 @@ export default function AttendanceStudentScanner() {
 
         <section className="attendance-student-scanner__grid">
           <div className="attendance-student-scanner__card">
-            <h2>1. Verify session context</h2>
+            <h2>1. Verify session &amp; camera</h2>
             <div className="attendance-student-scanner__meta">
               <div>
                 <span className="attendance-student-scanner__meta-label">JWT access token</span>
@@ -261,57 +255,51 @@ export default function AttendanceStudentScanner() {
               <input
                 type="text"
                 value={studentIdOverride}
-                onChange={(event) => setStudentIdOverride(event.target.value)}
-                placeholder="Optional if already available in auth context"
+                onChange={(e) => setStudentIdOverride(e.target.value)}
+                placeholder="Optional if your session already has student id"
               />
             </label>
 
             <div className="attendance-student-scanner__actions">
               <button type="button" onClick={() => void startScanner()} disabled={isSubmitting}>
-                Start camera scanner
+                Start camera
               </button>
-              <button type="button" onClick={stopScanner} disabled={!isCameraOpen}>
-                Stop scanner
+              <button type="button" onClick={() => void stopScanner()} disabled={!isCameraOpen && scannerStatus === 'idle'}>
+                Stop camera
               </button>
             </div>
 
-            <div className="attendance-student-scanner__camera">
-              {isCameraOpen ? (
-                <video ref={videoRef} muted playsInline className="attendance-student-scanner__video" />
-              ) : (
-                <div className="attendance-student-scanner__camera-placeholder">
-                  Camera preview appears here after you start scanning.
-                </div>
-              )}
+            <div
+              className="attendance-student-scanner__camera"
+              style={{ minHeight: 300, background: '#0f172a' }}
+            >
+              <div id={READER_ELEMENT_ID} className="attendance-student-scanner__video" />
             </div>
 
             <p className="attendance-student-scanner__status">
-              Scanner status: <strong>{scannerStatus}</strong>
+              Scanner: <strong>{scannerStatus}</strong> · repeat suppress: {REPEAT_WINDOW_MS}ms
             </p>
             <p className="attendance-student-scanner__hint">{scanMessage}</p>
             {cameraError ? <p className="attendance-student-scanner__error">{cameraError}</p> : null}
           </div>
 
           <div className="attendance-student-scanner__card">
-            <h2>2. Manual fallback</h2>
-            <p className="attendance-student-scanner__hint">
-              Use this when camera scanning is unavailable. The same validation runs before the
-              request is sent.
-            </p>
+            <h2>2. Manual (testing)</h2>
+            <p className="attendance-student-scanner__hint">Paste the raw QR string (JWT) or a full <code>jwt|studentGuid</code> line.</p>
 
             <form onSubmit={handleManualSubmit} className="attendance-student-scanner__form">
               <label className="attendance-student-scanner__field">
-                <span>Scanned QR token</span>
+                <span>Payload</span>
                 <input
                   type="text"
                   value={manualToken}
-                  onChange={(event) => setManualToken(event.target.value)}
-                  placeholder="Paste the plain token from the QR code"
+                  onChange={(e) => setManualToken(e.target.value)}
+                  placeholder="Paste from QR (JWT only, or legacy JSON)"
                 />
               </label>
 
               <button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Submitting...' : 'Submit attendance token'}
+                {isSubmitting ? 'Submitting…' : 'Submit check-in'}
               </button>
             </form>
 
@@ -321,47 +309,35 @@ export default function AttendanceStudentScanner() {
               </p>
             ) : null}
 
-            {result ? (
+            {result && result.success ? (
               <div className="attendance-student-scanner__success" role="status">
-                <strong>{result.message || 'Attendance marked successfully.'}</strong>
-                <span>Student: {resolvedStudentId || studentIdOverride}</span>
-                <span>Token: {lastScannedToken}</span>
-                <span>Recorded at: {formatRecordedAt(result.recordedAt) || 'Returned by server without timestamp'}</span>
+                <strong>{result.message || 'OK'}</strong>
+                {result.status != null ? <span>Status: {String(result.status)}</span> : null}
+                {result.round != null ? <span>Round: {String(result.round)}</span> : null}
+                {result.validScanCount != null ? (
+                  <span>Rounds completed (this session): {String(result.validScanCount)}</span>
+                ) : null}
+                <span>Token end: {tokenDebugTail(lastScannedForPreview || manualToken)}</span>
+                <span>Recorded: {formatRecordedAt(result.recordedAt) || '—'}</span>
               </div>
             ) : null}
           </div>
 
           <div className="attendance-student-scanner__card attendance-student-scanner__card--full">
-            <h2>3. Request preview</h2>
+            <h2>3. Request preview (shape)</h2>
             <p className="attendance-student-scanner__hint">
-              Example of a scanned token being posted to the endpoint after validation succeeds.
+              Production uses <code>POST /api/students/&#123;id&#125;/attendance/scan</code> with
+              <code>Authorization: Bearer &lt;access_token&gt;</code>
             </p>
-
             <div className="attendance-student-scanner__preview">
               <div>
-                <span className="attendance-student-scanner__meta-label">POST endpoint</span>
+                <span className="attendance-student-scanner__meta-label">POST</span>
                 <code>{requestPreview.endpoint}</code>
               </div>
               <div>
-                <span className="attendance-student-scanner__meta-label">Authorization</span>
-                <code>Bearer &lt;jwt_access_token&gt;</code>
-              </div>
-              <div>
-                <span className="attendance-student-scanner__meta-label">JSON body</span>
+                <span className="attendance-student-scanner__meta-label">Body</span>
                 <pre>{requestPreview.body}</pre>
               </div>
-            </div>
-
-            <div className="attendance-student-scanner__responses">
-              <span className="attendance-student-scanner__response attendance-student-scanner__response--success">
-                Success: attendance marked successfully
-              </span>
-              <span className="attendance-student-scanner__response attendance-student-scanner__response--error">
-                400: invalid or expired QR code
-              </span>
-              <span className="attendance-student-scanner__response attendance-student-scanner__response--warning">
-                401/403: unauthorized or wrong student
-              </span>
             </div>
           </div>
         </section>

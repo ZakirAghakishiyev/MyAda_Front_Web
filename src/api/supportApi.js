@@ -1,6 +1,17 @@
 import { authFetch } from '../auth'
 
-const SUPPORT_API_BASE = 'http://localhost:5007/api'
+const SUPPORT_API_BASES = (
+  import.meta.env.VITE_SUPPORT_API_BASE
+    ? [String(import.meta.env.VITE_SUPPORT_API_BASE).trim()]
+    : [
+        // Gateway-correct support route
+        'http://13.60.31.141:5000/support/api',
+        // Direct support service (diagnostics / fallback)
+        'http://localhost:5008/api',
+      ]
+)
+  .map((x) => x.replace(/\/$/, ''))
+  .filter(Boolean)
 
 const MOCK_MEMBERS = {
   3001: { fullName: 'John Member', email: 'john@example.com' },
@@ -20,6 +31,10 @@ const MOCK_DISPATCHERS = {
   8001: { fullName: 'Dispatcher One' },
 }
 
+const DISPATCHER_ROLE_USERS_BASE_URLS = [
+  'http://13.60.31.141:5000/api/auth/users-by-role',
+  'http://13.60.31.141:5001/api/auth/users-by-role',
+]
 const LOCATION_DATA = {
   buildings: [
     { id: 1, code: 'A' },
@@ -61,8 +76,23 @@ async function parseResponse(res) {
 }
 
 async function request(path, options = {}) {
-  const res = await authFetch(`${SUPPORT_API_BASE}${path}`, options)
-  return parseResponse(res)
+  let lastErr = null
+  for (const base of SUPPORT_API_BASES) {
+    try {
+      const res = await authFetch(`${base}${path}`, options)
+      if (res.status === 404) {
+        lastErr = new Error(`Not found: ${base}${path}`)
+        continue
+      }
+      return await parseResponse(res)
+    } catch (err) {
+      lastErr = err
+      const msg = String(err?.message || '')
+      const isNetwork = err instanceof TypeError || /failed to fetch|network|connection refused/i.test(msg)
+      if (isNetwork) continue
+    }
+  }
+  throw lastErr || new Error('Support API request failed.')
 }
 
 function toShortAge(iso) {
@@ -258,6 +288,60 @@ export function getMockPeople() {
   return { members: MOCK_MEMBERS, staff: MOCK_STAFF, dispatchers: MOCK_DISPATCHERS }
 }
 
+export async function getActiveDispatchers() {
+  const adminToken = String(import.meta.env.VITE_DISPATCHER_ROLE_TOKEN || '').trim()
+  for (const baseUrl of DISPATCHER_ROLE_USERS_BASE_URLS) {
+    try {
+      // Backend contract: role path is normalized lowercase and endpoint requires admin bearer token.
+      const url = `${baseUrl}/dispatcher`
+      const res = adminToken
+        ? await fetch(url, {
+            headers: {
+              accept: '*/*',
+              Authorization: `Bearer ${adminToken}`,
+            },
+          })
+        : await authFetch(url, {
+            headers: { accept: '*/*' },
+          })
+
+      const data = await parseResponse(res)
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.users)
+          ? data.users
+          : Array.isArray(data?.items)
+            ? data.items
+            : []
+
+      return list
+        .map((item, index) => {
+          const rawSub = item?.sub ?? item?.id ?? item?.userId ?? item?.memberId
+          const sub = rawSub != null && String(rawSub).trim() !== '' ? String(rawSub).trim() : ''
+          if (!sub) return null
+          return {
+            id: sub || index,
+            sub,
+            userId: sub,
+            memberId: sub,
+            name:
+              item.fullName ||
+              item.displayName ||
+              item.userName ||
+              item.username ||
+              item.email ||
+              `Dispatcher ${index + 1}`,
+            role: String(item.role || 'dispatcher').toLowerCase(),
+            isActive: item.isActive !== false,
+          }
+        })
+        .filter(Boolean)
+    } catch {
+      // Try next base URL.
+    }
+  }
+  return []
+}
 export function getMockLocations() {
   return LOCATION_DATA
 }
@@ -438,6 +522,44 @@ export async function getStaffStatusesByStatus(status) {
   return Array.isArray(result) ? result : []
 }
 
+export async function isDispatcherActiveByMemberId(memberId) {
+  if (memberId == null || String(memberId).trim() === '') return false
+  const target = String(memberId).trim().toLowerCase()
+  if (isDispatcherActiveByMemberId.supportStatusEndpointUnavailable === true) {
+    // Backend does not expose SupportStaffStatuses routes; skip noisy checks.
+    return true
+  }
+  const isActiveRow = (row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.isActive === true || row.active === true) return true
+    const status = String(row.status || row.state || '').toLowerCase()
+    return status === 'active' || status === 'available' || status === 'online'
+  }
+  const rowMatchesTarget = (row) => {
+    if (!row || typeof row !== 'object') return false
+    const candidates = [row.memberId, row.userId, row.staffId, row.id]
+      .map((v) => String(v ?? '').trim().toLowerCase())
+      .filter(Boolean)
+    return candidates.includes(target)
+  }
+
+  try {
+    const result = await request(`/SupportStaffStatuses/member/${memberId}`)
+    const rows = Array.isArray(result) ? result : [result]
+    if (rows.some((row) => rowMatchesTarget(row) && isActiveRow(row))) return true
+    return rows.some((row) => isActiveRow(row))
+  } catch (err) {
+    const msg = String(err?.message || '')
+    if (msg.includes('(404)') || /not found/i.test(msg)) {
+      // Disable this check after first 404 to avoid repeated console noise.
+      isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = true
+      return true
+    }
+    throw err
+  }
+}
+
+isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = false
 export function mapListItemToCard(item) {
   return {
     id: String(item.id),
