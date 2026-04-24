@@ -322,6 +322,139 @@
   margin-bottom: 12px;
 }
 
+.ap-session-picker--calendar {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.ap-calendar {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.ap-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.ap-calendar-month {
+  font-size: 14px;
+  color: #334155;
+}
+
+.ap-calendar-nav {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.ap-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ap-calendar-grid--weekday {
+  margin-bottom: 6px;
+}
+
+.ap-calendar-weekday {
+  font-size: 11px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.ap-calendar-day {
+  min-height: 42px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.ap-calendar-day--empty {
+  border: none;
+  background: transparent;
+}
+
+.ap-calendar-day--has-session {
+  color: #1e293b;
+  cursor: pointer;
+  border-color: #bfdbfe;
+}
+
+.ap-calendar-day--has-session:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.ap-calendar-day--focused {
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+}
+
+.ap-calendar-day--selected {
+  background: #2563eb;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+
+.ap-calendar-day small {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.ap-calendar-sessions {
+  margin-top: 10px;
+}
+
+.ap-calendar-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.ap-calendar-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ap-calendar-session-item {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.ap-calendar-session-item:hover {
+  background: #f1f5f9;
+}
+
+.ap-calendar-session-item--selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .ap-session-field {
   display: flex;
   flex-direction: column;

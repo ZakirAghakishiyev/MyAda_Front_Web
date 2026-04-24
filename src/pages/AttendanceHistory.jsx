@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as attendanceApi from '../api/attendance'
+import SessionCalendarPicker from '../components/SessionCalendarPicker'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 import './AttendanceStudents.css'
@@ -175,36 +176,16 @@ export default function AttendanceHistory() {
         </section>
 
         <div className="ap-history-card">
-          <ul className="ap-history-session-list">
-            {sessionsLoading ? (
-              <li className="ap-student-history-empty">Loading sessions…</li>
-            ) : sessionsError ? (
-              <li className="ap-student-history-empty" role="alert">{sessionsError}</li>
-            ) : sessions.length === 0 ? (
-              <li className="ap-student-history-empty">No sessions yet.</li>
-            ) : sessions.map((session) => {
-              const total = Number(session?.totalCount ?? session?.totalStudents ?? 0) || 0
-              const attended = Number(session?.registeredCount ?? session?.presentCount ?? 0) || 0
-              const rate = total ? Math.round((attended / total) * 100) : 0
-              return (
-                <li key={session.sessionId}>
-                  <button
-                    type="button"
-                    className={`ap-history-session-item ${String(selectedSessionId) === String(session.sessionId) ? 'ap-history-session-item--selected' : ''}`}
-                    onClick={() => setSelectedSessionId(String(selectedSessionId) === String(session.sessionId) ? null : String(session.sessionId))}
-                  >
-                    <span className="ap-history-session-date">{formatAttendanceDateFromIso(session.startTime)}</span>
-                    <span className="ap-history-session-meta">
-                      <span className="ap-history-session-time">
-                        {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="ap-history-session-rate">{attended}/{total} · {rate}%</span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+          <div className="ap-history-calendar-wrap">
+            <SessionCalendarPicker
+              sessions={sessions}
+              selectedSessionId={selectedSessionId}
+              loading={sessionsLoading}
+              onSelectSessionId={setSelectedSessionId}
+              emptyMessage="No sessions yet."
+            />
+            {sessionsError ? <p className="ap-controls-error" role="alert">{sessionsError}</p> : null}
+          </div>
 
           {selectedSession && (
             <div className="ap-history-detail">

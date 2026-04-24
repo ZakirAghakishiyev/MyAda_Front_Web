@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import * as attendanceApi from '../api/attendance'
+import SessionCalendarPicker from '../components/SessionCalendarPicker'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 
@@ -55,14 +56,6 @@ const IconLog = () => (
 function formatTime() {
   const d = new Date()
   return d.toTimeString().slice(0, 8)
-}
-
-function formatSessionLabel(session) {
-  const start = session?.startTime ? new Date(session.startTime) : null
-  const end = session?.endTime ? new Date(session.endTime) : null
-  const startLabel = start && !Number.isNaN(start.getTime()) ? start.toLocaleString() : String(session?.startTime || 'Unknown')
-  const endLabel = end && !Number.isNaN(end.getTime()) ? end.toLocaleString() : String(session?.endTime || 'Unknown')
-  return `${startLabel} - ${endLabel}${session?.isActive ? ' (active)' : ''}`
 }
 
 function toIsoFromLocal(value) {
@@ -587,25 +580,17 @@ export default function AttendancePortal() {
 
         <section className="ap-panel">
           <h2 className="ap-panel-title">Lesson sessions</h2>
-          <div className="ap-session-picker">
-            <label className="ap-session-field">
-              <span>Select existing session</span>
-              <select
-                value={selectedSessionId}
-                onChange={(e) => {
-                  setSelectedSessionId(e.target.value)
-                  setSessionInitialized(false)
-                }}
-                disabled={sessionOptionsLoading}
-              >
-                <option value="">{sessionOptionsLoading ? 'Loading sessions…' : 'Choose session…'}</option>
-                {sessionOptions.map((s) => (
-                  <option key={s.sessionId} value={String(s.sessionId)}>
-                    {formatSessionLabel(s)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="ap-session-picker ap-session-picker--calendar">
+            <SessionCalendarPicker
+              sessions={sessionOptions}
+              selectedSessionId={selectedSessionId}
+              loading={sessionOptionsLoading}
+              onSelectSessionId={(nextSessionId) => {
+                setSelectedSessionId(nextSessionId)
+                setSessionInitialized(false)
+              }}
+              emptyMessage="No sessions for this lesson yet."
+            />
             <button
               type="button"
               className="ap-btn ap-btn--secondary"
