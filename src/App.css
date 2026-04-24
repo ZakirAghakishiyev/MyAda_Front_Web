@@ -11,6 +11,16 @@
   background: white;
 }
 
+/* Unauthenticated home: let HomeLanding full-bleed (no white band) */
+.main-content--landing {
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
 /* When a popup is opened from admin, keep source page visible behind it */
 .popup-source-wrap {
   position: relative;

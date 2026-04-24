@@ -1,7 +1,7 @@
 import React from 'react'
 import './Card.css'
 
-const Card = ({ title, children, buttons = [], centerButtons = false }) => {
+const Card = ({ title, children, buttons = [], centerButtons = false, subTitle }) => {
   const hasManyButtons = buttons.length > 3
 
   return (
@@ -16,6 +16,7 @@ const Card = ({ title, children, buttons = [], centerButtons = false }) => {
         </div>
       </div>
       <div className="card-content">
+        {subTitle && !children && <p className="card__group-hint">{subTitle}</p>}
         {children}
         {buttons.length > 0 && (
           <div

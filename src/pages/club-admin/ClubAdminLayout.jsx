@@ -5,6 +5,7 @@ import { mapClubFromApi } from '../../api/clubMappers'
 import { userHasJwtAdminRole } from '../../auth/jwtRoles'
 import { roleMayManageClub } from '../../auth/clubStaffRoles'
 import { ClubAdminAccessContext } from '../../contexts/ClubAdminAccessContext'
+import { normalizeClubRouteKey } from '../../utils/clubRouteKey'
 import adaLogo from '../../assets/ada-logo.png'
 import './ClubAdmin.css'
 
@@ -162,7 +163,7 @@ export default function ClubAdminLayout() {
   const [manualClubId, setManualClubId] = useState('')
 
   const searchParams = new URLSearchParams(location.search)
-  const clubIdParam = searchParams.get('club')?.trim() || ''
+  const clubIdParam = normalizeClubRouteKey(searchParams.get('club')) || ''
 
   const [activeClub, setActiveClub] = useState(null)
 

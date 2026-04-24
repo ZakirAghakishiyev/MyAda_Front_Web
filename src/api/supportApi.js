@@ -1,17 +1,15 @@
 import { authFetch } from '../auth'
+import { getJwtUserId } from '../auth/jwtRoles'
+import { DISPATCHER_ROLE_USER_URLS, getSupportApiBases } from './supportConfig'
 
-const SUPPORT_API_BASES = (
-  import.meta.env.VITE_SUPPORT_API_BASE
-    ? [String(import.meta.env.VITE_SUPPORT_API_BASE).trim()]
-    : [
-        // Gateway-correct support route
-        'http://13.60.31.141:5000/support/api',
-        // Direct support service (diagnostics / fallback)
-        'http://localhost:5008/api',
-      ]
-)
-  .map((x) => x.replace(/\/$/, ''))
-  .filter(Boolean)
+/** Path segment: Support API uses GUIDs in paths (SUPPORT_API_DOC.md). */
+function sp(id) {
+  if (id == null) return ''
+  return encodeURIComponent(String(id).trim())
+}
+
+export const SUPPORT_PATH_MEMBER_PLACEHOLDER =
+  '00000000-0000-0000-0000-000000000000' /** path segment when `sub` should be applied server-side */
 
 const MOCK_MEMBERS = {
   3001: { fullName: 'John Member', email: 'john@example.com' },
@@ -31,10 +29,6 @@ const MOCK_DISPATCHERS = {
   8001: { fullName: 'Dispatcher One' },
 }
 
-const DISPATCHER_ROLE_USERS_BASE_URLS = [
-  'http://13.60.31.141:5000/api/auth/users-by-role',
-  'http://13.60.31.141:5001/api/auth/users-by-role',
-]
 const LOCATION_DATA = {
   buildings: [
     { id: 1, code: 'A' },
@@ -72,12 +66,15 @@ async function parseResponse(res) {
   if (!text) return null
   const data = JSON.parse(text)
   if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`)
+  if (data && typeof data === 'object' && data.isError) {
+    throw new Error(data?.message || data?.responseException || 'Support API error')
+  }
   return readEnvelope(data)
 }
 
 async function request(path, options = {}) {
   let lastErr = null
-  for (const base of SUPPORT_API_BASES) {
+  for (const base of getSupportApiBases().map((b) => String(b).replace(/\/+$/, ''))) {
     try {
       const res = await authFetch(`${base}${path}`, options)
       if (res.status === 404) {
@@ -137,6 +134,10 @@ function resolveRoomLabel(buildingId, roomId) {
 }
 
 function buildRequestLocation(item) {
+  const fromApi = String(
+    item?.location ?? item?.locationText ?? item?.address ?? item?.siteLocation ?? ''
+  ).trim()
+  if (fromApi) return fromApi
   const parts = []
   if (item?.isBuilding || item?.buildingId != null) {
     const building = resolveBuildingLabel(item.buildingId)
@@ -153,12 +154,19 @@ function buildRequestLocation(item) {
 }
 
 function resolveAssignedStaffName(item) {
-  if (item?.assignedTo) return item.assignedTo
-  const assignedId = Number(item?.assignedStaffId)
-  if (!assignedId) return null
-  const staff = MOCK_STAFF[assignedId]
-  if (staff?.fullName) return staff.fullName
-  return `Staff #${assignedId}`
+  const label =
+    item?.assignedToName ||
+    item?.assignedStaffName ||
+    item?.assigneeName ||
+    (typeof item?.assignedTo === 'string' ? item.assignedTo : null) ||
+    item?.staffName
+  if (label) return label
+  const assignedId = item?.assignedStaffId
+  if (assignedId == null || assignedId === '') return null
+  const n = Number(assignedId)
+  if (!Number.isNaN(n) && MOCK_STAFF[n]?.fullName) return MOCK_STAFF[n].fullName
+  if (String(assignedId).length > 12) return `Staff ${String(assignedId).slice(0, 8)}…`
+  return `Staff ${assignedId}`
 }
 
 function collectAttachmentUrls(item) {
@@ -240,8 +248,15 @@ function normalizeSupportRequest(item) {
   const completedAt = item.completedAt || item.completed || null
   const attachmentUrls = collectAttachmentUrls(item).map(resolveAttachmentDisplayUrl)
   const imageUrls = attachmentUrls.filter(isImageUrl)
+  const areaRaw = String(item.area || item.serviceArea || '').toLowerCase()
+  let service = item.service
+  if (service == null && areaRaw) {
+    if (areaRaw === 'fm' || areaRaw === 'facilities') service = 'FM'
+    else if (areaRaw === 'it') service = 'IT'
+  }
   return {
     ...item,
+    service,
     location: buildRequestLocation(item),
     assignedTo: resolveAssignedStaffName(item),
     attachmentUrls,
@@ -276,11 +291,21 @@ function normalizeTimelineItem(item) {
   }
 }
 
+/**
+ * Path params for Support API must be user GUIDs (JWT `sub`). Optional localStorage
+ * keys override for testing: support_member_id, support_staff_id, support_dispatcher_id.
+ * @returns {{ memberId: string | null, staffId: string | null, dispatcherId: string | null }}
+ */
 export function getCurrentUserIds() {
+  const fromJwt = getJwtUserId()
+  const o = (key) => {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null
+    return v && String(v).trim() ? String(v).trim() : null
+  }
   return {
-    memberId: Number(localStorage.getItem('support_member_id') || 3001),
-    staffId: Number(localStorage.getItem('support_staff_id') || 9001),
-    dispatcherId: Number(localStorage.getItem('support_dispatcher_id') || 8001),
+    memberId: o('support_member_id') || fromJwt || null,
+    staffId: o('support_staff_id') || fromJwt || null,
+    dispatcherId: o('support_dispatcher_id') || fromJwt || null,
   }
 }
 
@@ -290,7 +315,7 @@ export function getMockPeople() {
 
 export async function getActiveDispatchers() {
   const adminToken = String(import.meta.env.VITE_DISPATCHER_ROLE_TOKEN || '').trim()
-  for (const baseUrl of DISPATCHER_ROLE_USERS_BASE_URLS) {
+  for (const baseUrl of DISPATCHER_ROLE_USER_URLS) {
     try {
       // Backend contract: role path is normalized lowercase and endpoint requires admin bearer token.
       const url = `${baseUrl}/dispatcher`
@@ -346,12 +371,55 @@ export function getMockLocations() {
   return LOCATION_DATA
 }
 
-export function getStaffOptionsByArea(area) {
+function mockStaffOptionsByArea(area) {
   const raw = String(area || '').toUpperCase()
   const normalized = raw === 'FACILITIES' ? 'FM' : raw
   return Object.entries(MOCK_STAFF)
     .filter(([, item]) => item.area === normalized)
-    .map(([id, item]) => ({ id: Number(id), name: item.fullName, area: item.area }))
+    .map(([id, item]) => ({ id: String(id), name: item.fullName, area: item.area }))
+}
+
+/**
+ * Staff pickers: loads real support staff from `SupportStaffStatuses` (Online + OnBreak),
+ * filtered by IT vs FM when the row carries area metadata; otherwise shows all and falls back to mock.
+ * @returns {Promise<{ id: string, name: string, area: string }[]>}
+ */
+export async function fetchStaffOptionsByArea(area) {
+  const want =
+    String(area || '').toUpperCase() === 'FM' || String(area || '').toUpperCase() === 'FACILITIES'
+      ? 'FM'
+      : 'IT'
+  const rows = []
+  for (const st of ['Online', 'OnBreak']) {
+    try {
+      const batch = await getStaffStatusesByStatus(st)
+      if (Array.isArray(batch)) rows.push(...batch)
+    } catch {
+      /* use mock below */
+    }
+  }
+  const byId = new Map()
+  for (const row of rows) {
+    const id = row?.memberId ?? row?.staffId ?? row?.userId ?? row?.id
+    if (id == null || id === '') continue
+    const sid = String(id).trim()
+    if (byId.has(sid)) continue
+    const name =
+      row?.fullName ||
+      row?.displayName ||
+      row?.userName ||
+      row?.email ||
+      `Staff ${sid.slice(0, 8)}…`
+    const a = String(row?.area || row?.department || row?.team || '').toUpperCase()
+    let mapped = 'IT'
+    if (a.includes('FACILIT') || a === 'FM' || a.includes('MAINT') || a.includes('BUILD')) mapped = 'FM'
+    byId.set(sid, { id: sid, name, area: mapped })
+  }
+  const all = [...byId.values()]
+  const filtered = all.filter((o) => o.area === want)
+  const use = filtered.length > 0 ? filtered : all
+  if (use.length > 0) return use
+  return mockStaffOptionsByArea(area)
 }
 
 const MOCK_UPLOAD_FOLDER = 'support-ticket-uploads'
@@ -445,13 +513,17 @@ export async function saveAttachmentsToMockFolder(files = []) {
 }
 
 export async function getCategories(module) {
-  const path = module ? `/Categories/module/${module}` : '/Categories'
+  const path = module ? `/Categories/module/${sp(module)}` : '/Categories'
   const result = await request(path)
   return Array.isArray(result) ? result : []
 }
 
 export async function createSupportRequest(memberId, dto) {
-  return request(`/SupportRequests/member/${memberId}`, {
+  const pathId =
+    memberId != null && String(memberId).trim() !== ''
+      ? sp(memberId)
+      : sp(SUPPORT_PATH_MEMBER_PLACEHOLDER)
+  return request(`/SupportRequests/member/${pathId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(dto),
@@ -459,12 +531,17 @@ export async function createSupportRequest(memberId, dto) {
 }
 
 export async function getMemberRequests(memberId) {
-  const result = await request(`/SupportRequests/member/${memberId}`)
+  const pathId =
+    memberId != null && String(memberId).trim() !== ''
+      ? sp(memberId)
+      : sp(SUPPORT_PATH_MEMBER_PLACEHOLDER)
+  const result = await request(`/SupportRequests/member/${pathId}`)
   return Array.isArray(result) ? result.map(normalizeSupportRequest) : []
 }
 
 export async function getStaffRequests(staffId) {
-  const result = await request(`/SupportRequests/staff/${staffId}`)
+  if (staffId == null || String(staffId).trim() === '') return []
+  const result = await request(`/SupportRequests/staff/${sp(staffId)}`)
   return Array.isArray(result) ? result.map(normalizeSupportRequest) : []
 }
 
@@ -479,46 +556,78 @@ export async function getAllRequests(filters = {}) {
 }
 
 export async function getRequestDetail(requestId) {
-  const result = await request(`/SupportRequests/${requestId}`)
+  const result = await request(`/SupportRequests/${sp(requestId)}`)
   return normalizeSupportRequest(result)
 }
 
 export async function getRequestTimeline(requestId) {
-  const result = await request(`/SupportRequests/${requestId}/timeline`)
+  const result = await request(`/SupportRequests/${sp(requestId)}/timeline`)
   if (!Array.isArray(result)) return []
   return result.map(normalizeTimelineItem)
 }
 
 export async function cancelMemberRequest(requestId, memberId, reason) {
-  return request(`/SupportRequests/${requestId}/cancel/member/${memberId}`, {
+  return request(
+    `/SupportRequests/${sp(requestId)}/cancel/member/${sp(memberId)}`,
+    {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
-  })
+    }
+  )
 }
 
 export async function assignRequest(requestId, dispatcherId, staffId, dispatcherInstructions = '') {
-  return request(`/SupportRequests/${requestId}/assign/dispatcher/${dispatcherId}`, {
+  return request(
+    `/SupportRequests/${sp(requestId)}/assign/dispatcher/${sp(dispatcherId)}`,
+    {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ staffId, dispatcherInstructions }),
-  })
+    body: JSON.stringify({ staffId: String(staffId), dispatcherInstructions }),
+    }
+  )
+}
+
+export async function reassignRequest(requestId, dispatcherId, staffId, dispatcherInstructions = '') {
+  return request(
+    `/SupportRequests/${sp(requestId)}/reassign/dispatcher/${sp(dispatcherId)}`,
+    {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ staffId: String(staffId), dispatcherInstructions }),
+    }
+  )
+}
+
+export async function setDispatcherRequestInstructions(
+  requestId,
+  dispatcherId,
+  dispatcherInstructions
+) {
+  return request(
+    `/SupportRequests/${sp(requestId)}/dispatcher-instructions/dispatcher/${sp(dispatcherId)}`,
+    {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dispatcherInstructions }),
+    }
+  )
 }
 
 export async function markRequestStarted(requestId, staffId) {
-  return request(`/SupportRequests/${requestId}/start/staff/${staffId}`, { method: 'PUT' })
+  return request(`/SupportRequests/${sp(requestId)}/start/staff/${sp(staffId)}`, { method: 'PUT' })
 }
 
 export async function markRequestInProgress(requestId, staffId) {
-  return request(`/SupportRequests/${requestId}/in-progress/staff/${staffId}`, { method: 'PUT' })
+  return request(`/SupportRequests/${sp(requestId)}/in-progress/staff/${sp(staffId)}`, { method: 'PUT' })
 }
 
 export async function markRequestCompleted(requestId, staffId) {
-  return request(`/SupportRequests/${requestId}/complete/staff/${staffId}`, { method: 'PUT' })
+  return request(`/SupportRequests/${sp(requestId)}/complete/staff/${sp(staffId)}`, { method: 'PUT' })
 }
 
 export async function getStaffStatusesByStatus(status) {
-  const result = await request(`/SupportStaffStatuses/status/${status}`)
+  const result = await request(`/SupportStaffStatuses/status/${sp(status)}`)
   return Array.isArray(result) ? result : []
 }
 
@@ -544,7 +653,7 @@ export async function isDispatcherActiveByMemberId(memberId) {
   }
 
   try {
-    const result = await request(`/SupportStaffStatuses/member/${memberId}`)
+    const result = await request(`/SupportStaffStatuses/member/${sp(memberId)}`)
     const rows = Array.isArray(result) ? result : [result]
     if (rows.some((row) => rowMatchesTarget(row) && isActiveRow(row))) return true
     return rows.some((row) => isActiveRow(row))
@@ -561,6 +670,9 @@ export async function isDispatcherActiveByMemberId(memberId) {
 
 isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = false
 export function mapListItemToCard(item) {
+  const a = String(item?.area || '').toLowerCase()
+  const serviceFromArea =
+    a === 'fm' || a === 'facilities' ? 'FM' : a === 'it' ? 'IT' : ''
   return {
     id: String(item.id),
     description: item.title || item.description || 'Support Request',
@@ -577,7 +689,7 @@ export function mapListItemToCard(item) {
     cancelReason: item.cancelReason || null,
     rating: item.rating ?? null,
     ticketNo: item.ticketNo || null,
-    service: item.service || '',
+    service: item.service || serviceFromArea || '',
     unseen: Boolean(item.unseen),
   }
 }

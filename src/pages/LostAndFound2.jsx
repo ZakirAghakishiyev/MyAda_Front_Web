@@ -112,6 +112,18 @@ function computeDaysAgo(item) {
   return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 86400000))
 }
 
+/** Maps combined status (public + admin) to a card badge style. */
+function lostFoundStatusBadgeClass(status) {
+  const s = String(status || '').toLowerCase()
+  if (/\b(active|delivered|returned|completed|resolved|closed|claimed)\b/.test(s) || s === 'delivered' || s === 'returned') {
+    return 'active'
+  }
+  if (/\b(received|in office|in-office|ready for pickup|at office|stored)\b/.test(s) || s === 'received') {
+    return 'received'
+  }
+  return 'pending'
+}
+
 const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -287,6 +299,12 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       daysAgo: computeDaysAgo(item),
       location: item.location || 'Location not specified',
       description: item.description || '',
+      // normalizeLostFoundItem may only set on fetch; keep fallback
+      displayStatus: String(
+        (item.status != null && String(item.status).trim() !== '' && String(item.status).trim()) ||
+          (item.adminStatus != null && String(item.adminStatus).trim() !== '' && String(item.adminStatus).trim()) ||
+          'Pending'
+      ),
     }))
     return list
   }, [items])
@@ -847,8 +865,11 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
               onClick={() => navigate(`/lost-and-found/item/${item.id}`)}
               onKeyDown={e => e.key === 'Enter' && navigate(`/lost-and-found/item/${item.id}`)}
             >
-              <span className={`lf2-card-status lf2-card-status--${item.status === 'Active' ? 'active' : 'pending'}`}>
-                {item.status === 'Active' ? 'ACTIVE' : 'PENDING'}
+              <span
+                className={`lf2-card-status lf2-card-status--${lostFoundStatusBadgeClass(item.displayStatus)}`}
+                title={item.displayStatus}
+              >
+                {String(item.displayStatus).toUpperCase()}
               </span>
               <div className="lf2-card-image">
                 {item.image ? (

@@ -19,6 +19,10 @@ function normalizeMediaUrl(value) {
   return raw
 }
 
+/**
+ * Public listing `status` (e.g. Active) + workflow `adminStatus` (Pending, Received, Delivered).
+ * Cards and lists use `status` for display — prefer a non-empty public status, else admin.
+ */
 function normalizeLostFoundItem(item) {
   if (!item || typeof item !== 'object') return item
   const images = Array.isArray(item.images) ? item.images : []
@@ -26,9 +30,13 @@ function normalizeLostFoundItem(item) {
   const mappedImages = images.map(normalizeMediaUrl).filter(Boolean)
   const mappedImageUrls = imageUrls.map(normalizeMediaUrl).filter(Boolean)
   const image = normalizeMediaUrl(item.image || mappedImageUrls[0] || mappedImages[0])
+  const adminStatus = String(item.adminStatus != null && String(item.adminStatus).trim() !== '' ? item.adminStatus : 'Pending')
+  const publicStatus = item.status != null && String(item.status).trim() !== '' ? String(item.status).trim() : ''
+  const status = publicStatus || adminStatus
   return {
     ...item,
-    adminStatus: String(item.adminStatus || 'Pending'),
+    adminStatus,
+    status,
     image,
     imageUrls: mappedImageUrls.length ? mappedImageUrls : mappedImages,
     images: mappedImages,

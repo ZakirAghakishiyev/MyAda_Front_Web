@@ -10,7 +10,7 @@ import {
 
 const STAFF = Object.entries(getMockPeople().staff).map(([id, s]) => ({
   id,
-  memberId: Number(id),
+  memberId: String(id),
   name: s.fullName,
   role: s.area === 'IT' ? 'IT Support Staff' : 'Facilities Staff',
   specialization: s.area === 'IT' ? 'Technical Support' : 'Maintenance',
@@ -59,12 +59,41 @@ const SupportStaffDirectory = () => {
       getStaffStatusesByStatus('OnBreak').catch(() => []),
     ]).then(async ([online, offline, onBreak]) => {
       const statusByMember = {}
-      online.forEach((x) => { statusByMember[x.memberId] = 'Online' })
-      offline.forEach((x) => { statusByMember[x.memberId] = 'Offline' })
-      onBreak.forEach((x) => { statusByMember[x.memberId] = 'On Break' })
+      const setStatus = (arr, label) => {
+        ;(arr || []).forEach((x) => {
+          const mid = x?.memberId ?? x?.staffId ?? x?.userId ?? x?.id
+          if (mid == null) return
+          statusByMember[String(mid)] = label
+        })
+      }
+      setStatus(online, 'Online')
+      setStatus(offline, 'Offline')
+      setStatus(onBreak, 'On Break')
+
+      const fromApi = new Map()
+      ;[...(online || []), ...(offline || []), ...(onBreak || [])].forEach((x) => {
+        const mid = x?.memberId ?? x?.staffId ?? x?.userId ?? x?.id
+        if (mid == null) return
+        const sid = String(mid)
+        if (fromApi.has(sid)) return
+        const a = String(x?.area || x?.department || '').toUpperCase()
+        const area = a.includes('FM') || a.includes('MAINT') || a.includes('FACILIT') ? 'FM' : 'IT'
+        fromApi.set(sid, {
+          id: sid,
+          memberId: sid,
+          name: x?.fullName || x?.displayName || x?.userName || x?.email || `Staff ${sid.slice(0, 8)}…`,
+          role: area === 'IT' ? 'IT Support Staff' : 'Facilities Staff',
+          specialization: area === 'IT' ? 'Technical Support' : 'Maintenance',
+          area,
+          status: 'Offline',
+          activeTasks: 0,
+          loadPercent: 0,
+        })
+      })
+      const base = fromApi.size > 0 ? [...fromApi.values()] : STAFF
 
       const withTasks = await Promise.all(
-        STAFF.map(async (s) => {
+        base.map(async (s) => {
           const tasks = await getStaffRequests(s.memberId).catch(() => [])
           const activeTasks = tasks.filter((t) => ['New', 'Assigned', 'InProgress'].includes(t.status)).length
           return {

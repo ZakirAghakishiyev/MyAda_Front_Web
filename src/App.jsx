@@ -11,6 +11,7 @@ import Header from './components/Header'
 import LostAndFoundAdmin from './pages/LostAndFoundAdmin'
 import LostAndFoundAdminItemDetail from './pages/LostAndFoundAdminItemDetail'
 import Home from './pages/Home'
+import HomeOrLanding from './pages/HomeOrLanding'
 import SchedulingPage from './pages/SchedulingPage'
 import CoursePage from './pages/scheduling/CoursePage'
 import CourseDetailPage from './pages/scheduling/CourseDetailPage'
@@ -77,6 +78,7 @@ import StudentServicesEventDetail from './pages/StudentServicesEventDetail'
 import StudentServicesSuggestEvent from './pages/StudentServicesSuggestEvent'
 import CallerCallPage from './pages/call/CallerCallPage'
 import DispatcherCallPage from './pages/call/DispatcherCallPage'
+import { getAccessToken } from './auth/tokenStorage'
 import './App.css'
 
 const AppContent = () => {
@@ -140,18 +142,20 @@ const AppContent = () => {
   const isLF2FromAdmin =
     location.pathname === '/lost-and-found-2' && location.state?.from === 'admin'
 
+  const isLoggedOutHome = location.pathname === '/' && !getAccessToken()
   const hideHeader =
-    !isModalFromHome &&
-    !isModalFromAdmin &&
-    !isLF2FromAdmin &&
-    (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isSchedulingRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesNestedRoute)
+    isLoggedOutHome ||
+    (!isModalFromHome &&
+      !isModalFromAdmin &&
+      !isLF2FromAdmin &&
+      (hideHeaderOnRoutes.includes(location.pathname) || isClubAdminRoute || isStaffPortalRoute || isAttendanceRoute || isSchedulingRoute || isItemDetailRoute || isAdminItemDetailRoute || isRequestDetailRoute || isDispatcherTicketRoute || isClubDetailRoute || isProposeClubRoute || isJoinClubRoute || isVacancyDetailRoute || isApplyVacancyRoute || isEventDetailRoute || isEventTicketRoute || isStudentServicesNestedRoute))
 
   return (
     <div className="app">
       {!hideHeader && <Header />}
-      <main className="main-content">
+      <main className={isLoggedOutHome ? 'main-content main-content--landing' : 'main-content'}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<HomeOrLanding />} />
           <Route path="/scheduling" element={<SchedulingPage />} />
           <Route path="/scheduling/courses/:courseId" element={<CourseDetailPage />} />
           <Route path="/scheduling/courses" element={<CoursePage />} />

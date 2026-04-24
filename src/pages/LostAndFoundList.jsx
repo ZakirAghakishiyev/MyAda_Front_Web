@@ -29,6 +29,10 @@ function computeDaysAgo(item) {
 }
 
 function normalizeItem(item) {
+  const status =
+    (item?.status != null && String(item.status).trim() !== '' && String(item.status).trim()) ||
+    (item?.adminStatus != null && String(item.adminStatus).trim() !== '' && String(item.adminStatus).trim()) ||
+    'Pending Verification'
   return {
     ...item,
     title: item?.title || 'Untitled item',
@@ -36,7 +40,7 @@ function normalizeItem(item) {
     category: item?.category || 'Other',
     location: item?.location || 'Location not specified',
     type: item?.type || 'found',
-    status: item?.status || 'Pending Verification',
+    status,
     image: item?.image || item?.images?.[0] || null,
     daysAgo: computeDaysAgo(item),
   }

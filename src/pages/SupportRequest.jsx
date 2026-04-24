@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import './ITSupport.css'
+import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
 import {
   createSupportRequest,
   getCategories,
@@ -89,7 +90,25 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const [attachments, setAttachments] = useState([])
   const [showError, setShowError] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState([])
-  const locations = getMockLocations()
+  const [buildings, setBuildings] = useState(getMockLocations().buildings)
+  const [roomsByBuilding, setRoomsByBuilding] = useState(getMockLocations().roomsByBuildingId)
+  const locations = { buildings, roomsByBuildingId: roomsByBuilding }
+
+  useEffect(() => {
+    let isMounted = true
+    getBuildings()
+      .then((list) => {
+        if (!isMounted || !Array.isArray(list) || list.length === 0) return
+        setBuildings(list)
+        setRoomsByBuilding({})
+      })
+      .catch(() => {
+        /* keep mock from initial state */
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     const draft = getDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY)
@@ -107,9 +126,37 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     setUrgency(draft.urgency === 'critical' ? 'critical' : 'standard')
   }, [])
 
+  useEffect(() => {
+    if (locationType !== 'building' || !building) return
+    let isMounted = true
+    getRoomsByBuildingId(building)
+      .then((list) => {
+        if (!isMounted) return
+        if (Array.isArray(list) && list.length > 0) {
+          setRoomsByBuilding((prev) => ({ ...prev, [String(building)]: list }))
+        } else {
+          const mock = getMockLocations().roomsByBuildingId[Number(building)]
+          if (mock) {
+            setRoomsByBuilding((prev) => ({ ...prev, [String(building)]: mock }))
+          }
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return
+        const mock = getMockLocations().roomsByBuildingId[Number(building)]
+        if (mock) {
+          setRoomsByBuilding((prev) => ({ ...prev, [String(building)]: mock }))
+        }
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [locationType, building])
+
   const roomOptions = useMemo(() => {
     if (!building) return []
-    return locations.roomsByBuildingId[Number(building)] || []
+    const list = locations.roomsByBuildingId[String(building)] || locations.roomsByBuildingId[Number(building)]
+    return Array.isArray(list) ? list : []
   }, [building, locations.roomsByBuildingId])
 
   useEffect(() => {
@@ -161,7 +208,7 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     try {
       const attachmentUrls = await saveAttachmentsToMockFolder(attachments)
       await createSupportRequest(memberId, {
-        area,
+        area: area === 'fm' ? 'fm' : 'it',
         categoryId: Number(issueCategory),
         locationType,
         buildingId: locationType === 'building' ? Number(building) : null,
@@ -320,8 +367,8 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                         >
                           <option value="">Select building...</option>
                           {locations.buildings.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {`Building ${b.code}`}
+                            <option key={b.id} value={String(b.id)}>
+                              {b.name || (b.code != null ? `Building ${b.code}` : `Building ${b.id}`)}
                             </option>
                           ))}
                         </select>
@@ -369,8 +416,8 @@ const SupportRequest = ({ initialArea = 'it' }) => {
                               >
                                 <option value="">Select room...</option>
                                 {roomOptions.map((r) => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.code}
+                                  <option key={r.id} value={String(r.id)}>
+                                    {r.name || r.code || r.id}
                                   </option>
                                 ))}
                               </select>

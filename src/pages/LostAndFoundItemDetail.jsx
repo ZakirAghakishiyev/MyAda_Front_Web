@@ -67,7 +67,10 @@ const LostAndFoundItemDetail = () => {
       description: item?.description || 'No description',
       category: item?.category || 'Other',
       type: item?.type || 'found',
-      status: item?.status || 'Pending Verification',
+      status:
+        (item?.status != null && String(item.status).trim() !== '' && String(item.status).trim()) ||
+        (item?.adminStatus != null && String(item.adminStatus).trim() !== '' && String(item.adminStatus).trim()) ||
+        'Pending Verification',
       location: item?.location || 'Location not specified',
       image: item?.image || item?.images?.[0] || null,
       referenceNumber: item?.referenceNumber || '-',

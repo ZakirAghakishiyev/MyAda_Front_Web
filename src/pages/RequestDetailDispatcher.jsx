@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './RequestDetail.css'
 import {
   assignRequest,
+  fetchStaffOptionsByArea,
   getCurrentUserIds,
   getRequestDetail,
   getRequestTimeline,
-  getStaffOptionsByArea,
 } from '../api/supportApi'
 
 const IconBack = () => (
@@ -72,10 +72,21 @@ const RequestDetailDispatcher = () => {
   const [showContactModal, setShowContactModal] = useState(false)
   const [dispatcherAssignee, setDispatcherAssignee] = useState('')
   const [dispatcherNotes, setDispatcherNotes] = useState('')
-  const staffOptions = useMemo(
-    () => getStaffOptionsByArea(request?.service || 'IT'),
-    [request?.service]
-  )
+  const [staffOptions, setStaffOptions] = useState([])
+  useEffect(() => {
+    const area = request?.service || 'IT'
+    let cancelled = false
+    fetchStaffOptionsByArea(area)
+      .then((opts) => {
+        if (!cancelled) setStaffOptions(opts)
+      })
+      .catch(() => {
+        if (!cancelled) setStaffOptions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [request?.service])
   const loadData = useCallback((showLoader = false) => {
     if (showLoader) setLoading(true)
     Promise.all([getRequestDetail(id), getRequestTimeline(id)])
@@ -127,7 +138,11 @@ const RequestDetailDispatcher = () => {
   const handleConfirmAssignment = () => {
     if (!dispatcherAssignee) return
     const { dispatcherId } = getCurrentUserIds()
-    assignRequest(request.id, dispatcherId, Number(dispatcherAssignee), dispatcherNotes)
+    if (!dispatcherId) {
+      alert('Missing dispatcher id (sign in, or set support_dispatcher_id for dev).')
+      return
+    }
+    assignRequest(request.id, dispatcherId, String(dispatcherAssignee), dispatcherNotes)
       .then(() => navigate('/support-dispatcher'))
       .catch((err) => alert(err.message || 'Failed to assign ticket'))
   }

@@ -9,6 +9,7 @@ import {
 } from '../../api/clubApi'
 import { fetchAuthUserById } from '../../api/authUsersApi'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
+import { parseUserGuidString, pickMemberUserGuidFromApiDto } from '../../utils/userGuids'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -40,7 +41,7 @@ const ClubAdminMembers = () => {
         fetchClubAdminEmployees(clubId),
         fetchClubAdminPositions(clubId).catch(() => ({ items: [] })),
       ])
-      const memItems = memRes?.items ?? memRes ?? []
+      const memItems = memRes?.items ?? memRes?.Items ?? (Array.isArray(memRes) ? memRes : [])
       const empItems = empRes?.items ?? empRes ?? []
       const posItems = posRes?.items ?? posRes ?? []
       const positions = (Array.isArray(posItems) ? posItems : []).map((p, index) => ({
@@ -50,10 +51,12 @@ const ClubAdminMembers = () => {
       setPositionOptions(positions)
 
       const baseMembers = (Array.isArray(memItems) ? memItems : []).map((m, index) => {
-        const userId = m.userId ?? m.userID ?? m.applicantUserId ?? m.user?.id ?? m.studentId
+        // Only user GUIDs — never use studentId as a stand-in; it breaks DELETE path encoding.
+        const userGuid = pickMemberUserGuidFromApiDto(m)
         return {
-          id: String(m.id ?? m.memberId ?? `m-${index}`),
-          userId: userId != null ? String(userId) : '',
+          // DELETE /members/{memberId} — backend expects the same user GUID as the list DTO.
+          id: userGuid ?? `m-${index}`,
+          userId: userGuid ?? '',
           name: '—',
           surname: '',
           email: '',
@@ -174,8 +177,18 @@ const ClubAdminMembers = () => {
   const confirmRemove = async () => {
     if (removeConfirm.id == null) return
     if (removeConfirm.type === 'members') {
+      const member = members.find((m) => m.id === removeConfirm.id)
+      const idForApi =
+        pickMemberUserGuidFromApiDto(member?.raw) ||
+        parseUserGuidString(member?.id) ||
+        parseUserGuidString(member?.userId) ||
+        null
+      if (!idForApi) {
+        alert('Could not remove member: missing valid user id. Refresh the page and try again.')
+        return
+      }
       try {
-        await deleteClubAdminMember(clubId, removeConfirm.id)
+        await deleteClubAdminMember(clubId, idForApi)
       } catch (e) {
         alert(e?.message || 'Could not remove member.')
         return

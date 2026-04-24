@@ -87,6 +87,23 @@ export async function clubAuthJson(path, init = {}) {
   return unwrapApiResponse(data)
 }
 
+/** DELETE with empty or JSON error body; success is usually 204 No Content. */
+async function clubAuthDeleteExpectOk(path) {
+  const res = await clubAuthFetch(path, { method: 'DELETE' })
+  if (res.ok) return
+  const data = await readJsonSafe(res)
+  const msg =
+    typeof data === 'object' && data != null
+      ? data.message || data.title || data.detail || `Request failed (${res.status})`
+      : typeof data === 'string' && data
+        ? data
+        : `Request failed (${res.status})`
+  const err = new Error(String(msg))
+  err.status = res.status
+  err.body = data
+  throw err
+}
+
 /** Try canonical path; on 404 only, retry legacy path (no body stream reuse for multipart — use for GET/JSON only). */
 async function clubAuthJsonPrimaryOrFallback(primaryPath, fallbackPath, init = {}) {
   try {
@@ -538,9 +555,7 @@ export function fetchClubAdminMembers(clubId, params = {}) {
 }
 
 export function deleteClubAdminMember(clubId, memberId) {
-  return clubAuthFetch(clubAdminPath(clubId, `members/${encodeURIComponent(memberId)}`), {
-    method: 'DELETE',
-  })
+  return clubAuthDeleteExpectOk(clubAdminPath(clubId, `members/${encodeURIComponent(memberId)}`))
 }
 
 export function fetchClubAdminEmployees(clubId, params = {}) {
@@ -567,9 +582,7 @@ export function patchClubAdminEmployeesPositions(clubId, body) {
 }
 
 export function deleteClubAdminEmployee(clubId, employeeId) {
-  return clubAuthFetch(clubAdminPath(clubId, `employees/${encodeURIComponent(employeeId)}`), {
-    method: 'DELETE',
-  })
+  return clubAuthDeleteExpectOk(clubAdminPath(clubId, `employees/${encodeURIComponent(employeeId)}`))
 }
 
 export function fetchClubAdminEvents(clubId, params = {}) {

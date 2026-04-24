@@ -4,9 +4,9 @@ import adaLogo from '../assets/ada-logo.png'
 import './SupportDispatcher.css'
 import {
   assignRequest,
+  fetchStaffOptionsByArea,
   getAllRequests,
   getCurrentUserIds,
-  getStaffOptionsByArea,
   mapListItemToCard,
 } from '../api/supportApi'
 
@@ -75,7 +75,19 @@ const SupportDispatcher = () => {
       return acc
     }, {})
   )
+  const [staffByArea, setStaffByArea] = useState({ IT: [], FM: [] })
   const enhancedRequests = useMemo(() => requests, [requests])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([fetchStaffOptionsByArea('IT'), fetchStaffOptionsByArea('FM')]).then(([it, fm]) => {
+      if (cancelled) return
+      setStaffByArea({ IT: it, FM: fm })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const loadRequests = useCallback((showLoader = false) => {
     if (showLoader) setLoading(true)
@@ -148,10 +160,15 @@ const SupportDispatcher = () => {
     const rawStaffId = pendingAssignments[id]
     if (!rawStaffId) return
     const { dispatcherId } = getCurrentUserIds()
-    assignRequest(id, dispatcherId, Number(rawStaffId), '')
+    if (!dispatcherId) {
+      alert('Missing dispatcher id (sign in, or set support_dispatcher_id in localStorage for dev).')
+      return
+    }
+    assignRequest(id, dispatcherId, String(rawStaffId), '')
       .then(() => {
-        const option = Object.values(getStaffOptionsByArea('IT').concat(getStaffOptionsByArea('FM')))
-          .find((x) => x.id === Number(rawStaffId))
+        const option = Object.values(
+          (staffByArea.IT || []).concat(staffByArea.FM || [])
+        ).find((x) => String(x.id) === String(rawStaffId))
         setAssignments((prev) => ({ ...prev, [id]: option?.name || rawStaffId }))
         setPendingAssignments((prev) => ({ ...prev, [id]: '' }))
         loadRequests(false)
@@ -370,7 +387,7 @@ const SupportDispatcher = () => {
                         }
                       >
                         <option value="">{actionPlaceholder}</option>
-                        {getStaffOptionsByArea(area).map((s) => (
+                        {(area === 'FM' ? staffByArea.FM : staffByArea.IT).map((s) => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
                       </select>

@@ -299,6 +299,11 @@
   color: white;
 }
 
+.lf2-card-status--received {
+  background: #2563eb;
+  color: white;
+}
+
 .lf2-card-image {
   width: 100%;
   aspect-ratio: 16 / 10;

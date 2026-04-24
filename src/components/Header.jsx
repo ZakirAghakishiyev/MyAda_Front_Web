@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { useFilter } from '../contexts/FilterContext'
 import { logout } from '../auth'
+import { getAccessToken } from '../auth/tokenStorage'
+import { userHasJwtAdminRole } from '../auth/jwtRoles'
 import adaLogo from '../assets/ada-logo.png'
 import campusBanner from '../assets/campus-banner.png'
 import './Header.css'
@@ -13,6 +15,7 @@ const Header = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const profileMenuRef = useRef(null)
   const isHomePage = location.pathname === '/'
+  const showFilterNav = !isHomePage || !getAccessToken() || userHasJwtAdminRole()
 
   const handleFilterClick = (filterName) => {
     setActiveFilter(filterName)
@@ -40,7 +43,7 @@ const Header = () => {
   const handleLogout = async () => {
     await logout()
     setShowProfileMenu(false)
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (
@@ -100,26 +103,28 @@ const Header = () => {
         <div className="banner-image" style={{ backgroundImage: `url(${campusBanner})` }}></div>
         <div className="banner-overlay"></div>
       </div>
-      <nav className="filter-navbar">
-        <div className="filter-nav-links">
-          {filters.map((filter) => (
-            <button
-              key={filter.name}
-              className={`nav-link ${activeFilter === filter.name ? 'active' : ''}`}
-              onClick={() => handleFilterClick(filter.name)}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        <div className="view-all-cards">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="m21 21-4.35-4.35"></path>
-          </svg>
-          <span>VIEW ALL CARDS</span>
-        </div>
-      </nav>
+      {showFilterNav && (
+        <nav className="filter-navbar">
+          <div className="filter-nav-links">
+            {filters.map((filter) => (
+              <button
+                key={filter.name}
+                className={`nav-link ${activeFilter === filter.name ? 'active' : ''}`}
+                onClick={() => handleFilterClick(filter.name)}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          <div className="view-all-cards">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <span>VIEW ALL CARDS</span>
+          </div>
+        </nav>
+      )}
     </header>
   )
 }
