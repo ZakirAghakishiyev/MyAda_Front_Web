@@ -5,13 +5,6 @@ import { AUTH_API_BASE, authFetch, getAccessToken } from '../auth'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendanceCourseList.css'
 
-const DEMO_LESSONS = [
-  { lessonId: '10101', crn: '10101', code: 'CSCI 101', title: 'Computer Science I', section: 'A', academicYear: 2025, semester: 'Fall' },
-  { lessonId: '10102', crn: '10102', code: 'CSCI 101', title: 'Computer Science I', section: 'B', academicYear: 2025, semester: 'Spring' },
-  { lessonId: '18101', crn: '18101', code: 'CSCI 181', title: 'Data Structures', section: 'A', academicYear: 2026, semester: 'Fall' },
-  { lessonId: '20101', crn: '20101', code: 'MATH 201', title: 'Calculus II', section: 'A', academicYear: 2026, semester: 'Spring' },
-]
-
 function decodeJwtPayload(token) {
   if (!token || typeof token !== 'string') return null
   const parts = token.split('.')
@@ -94,12 +87,6 @@ const AttendanceCourseList = () => {
   useEffect(() => {
     async function load() {
       if (!instructorId) return
-      if (String(instructorId).trim().toLowerCase() === 'demo') {
-        setLessons(DEMO_LESSONS)
-        setLoadError('')
-        setLoading(false)
-        return
-      }
       setLoading(true)
       setLoadError('')
       try {
@@ -122,11 +109,6 @@ const AttendanceCourseList = () => {
         setInstructorDisplayName('')
         return
       }
-      if (normalizedId.toLowerCase() === 'demo') {
-        setInstructorDisplayName('Demo Instructor')
-        return
-      }
-
       const token = getAccessToken()
       const payload = decodeJwtPayload(token)
       const claimId = readUserIdFromClaims(payload)

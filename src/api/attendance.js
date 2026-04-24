@@ -1,7 +1,8 @@
 import { getAccessToken, authFetch } from '../auth'
+import { API_BASE } from './apiBase'
 
 const ATTENDANCE_API_BASE =
-  import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || 'http://localhost:5009'
+  import.meta.env.VITE_ATTENDANCE_API_BASE?.replace(/\/$/, '') || `${API_BASE}/attendance`
 
 /** Legacy / short opaque tokens (non-JWT) */
 const LEGACY_TOKEN_PATTERN = /^[A-Za-z0-9._~-]{6,1024}$/
@@ -375,7 +376,7 @@ function normalizeLessonSummary(item) {
 
 /**
  * Load lessons for an instructor for QR attendance entry page.
- * Tries instructor-scoped endpoint first; falls back to admin lesson list filtered by instructor id.
+ * Primary contract: GET /api/instructors/{instructorId}/lessons
  */
 export async function getInstructorLessons({ instructorId }) {
   const normalizedInstructorId = normalizeRouteUserId(instructorId)
@@ -384,30 +385,39 @@ export async function getInstructorLessons({ instructorId }) {
   }
 
   const headers = getAuthHeaders()
-  const candidates = [
-    `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/lessons`,
-    '/api/admin/lessons',
-  ]
+  const instructorPath = `/api/instructors/${encodeURIComponent(normalizedInstructorId)}/lessons`
 
-  let lastError = null
-  for (const path of candidates) {
+  // Instructor-scoped endpoint should already return only this instructor's lessons.
+  // Do not filter by instructorId field because some deployments omit it in each row.
+  try {
+    const data = await attendanceRequest(instructorPath, { headers })
+    const rows = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data?.result)
+          ? data.result
+          : []
+    return rows.map(normalizeLessonSummary).filter(Boolean)
+  } catch (primaryError) {
+    // Backward compatibility fallback for older gateways lacking instructor lessons endpoint.
     try {
-      const data = await attendanceRequest(path, { headers })
-      const rows = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.items)
-          ? data.items
-          : Array.isArray(data?.result)
-            ? data.result
+      const adminData = await attendanceRequest('/api/admin/lessons', { headers })
+      const adminRows = Array.isArray(adminData)
+        ? adminData
+        : Array.isArray(adminData?.items)
+          ? adminData.items
+          : Array.isArray(adminData?.result)
+            ? adminData.result
             : []
-      const normalized = rows.map(normalizeLessonSummary).filter(Boolean)
+      const normalized = adminRows.map(normalizeLessonSummary).filter(Boolean)
       return normalized.filter((x) => String(x.instructorId) === normalizedInstructorId)
-    } catch (error) {
-      lastError = error
+    } catch {
+      throw primaryError
     }
   }
 
-  throw lastError || makeAttendanceError('Could not load instructor lessons.')
+  throw makeAttendanceError('Could not load instructor lessons.')
 }
 
 function unwrapList(data) {

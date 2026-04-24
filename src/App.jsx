@@ -56,6 +56,7 @@ import ApplyVacancy from './pages/ApplyVacancy'
 import ClubEvents from './pages/ClubEvents'
 import EventDetail from './pages/EventDetail'
 import EventTicket from './pages/EventTicket'
+import EventTicketQrTestPage from './pages/EventTicketQrTestPage'
 import MyRegisteredEvents from './pages/MyRegisteredEvents'
 import MyVacancyApplications from './pages/MyVacancyApplications'
 import ClubAdminLayout from './pages/club-admin/ClubAdminLayout'
@@ -222,6 +223,8 @@ const AppContent = () => {
             <Route path="events" element={<Outlet />}>
               <Route index element={<ClubEvents />} />
               <Route path="my-registrations" element={<MyRegisteredEvents />} />
+              <Route path="qr-tickets" element={<EventTicketQrTestPage />} />
+              <Route path="ticket-test" element={<EventTicketQrTestPage />} />
               <Route path=":id" element={<Outlet />}>
                 <Route
                   index

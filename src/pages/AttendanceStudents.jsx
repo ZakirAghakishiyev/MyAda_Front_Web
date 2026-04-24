@@ -196,6 +196,13 @@ export default function AttendanceStudents() {
             <button type="button" className="ap-nav-link" onClick={() => navigate(lessonBase)}>
               Dashboard
             </button>
+            <button
+              type="button"
+              className="ap-nav-link"
+              onClick={() => navigate(`/attendance/${encodeURIComponent(instructorId || 'demo')}`)}
+            >
+              Lessons
+            </button>
             <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/history`)}>
               History
             </button>

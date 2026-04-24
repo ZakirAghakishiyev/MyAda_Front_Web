@@ -153,6 +153,13 @@ export default function AttendanceHistory() {
             <button type="button" className="ap-nav-link" onClick={() => navigate(lessonBase)}>
               Dashboard
             </button>
+            <button
+              type="button"
+              className="ap-nav-link"
+              onClick={() => navigate(`/attendance/${encodeURIComponent(instructorId || 'demo')}`)}
+            >
+              Lessons
+            </button>
             <span className="ap-nav-link ap-nav-link--active">History</span>
             <button type="button" className="ap-nav-link" onClick={() => navigate(`${lessonBase}/students`)}>
               Students

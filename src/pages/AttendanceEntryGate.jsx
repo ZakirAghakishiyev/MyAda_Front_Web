@@ -1,34 +1,11 @@
 import React from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { getAccessToken } from '../auth'
+import { decodeJwtPayload, readJwtRoleClaims, getJwtUserId, userHasJwtAdminRole } from '../auth/jwtRoles'
 
-function decodeJwtPayload(token) {
-  if (!token || typeof token !== 'string') return null
-  const parts = token.split('.')
-  if (parts.length < 2) return null
-  try {
-    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=')
-    return JSON.parse(atob(padded))
-  } catch {
-    return null
-  }
-}
-
-function readRoleClaims(payload) {
-  if (!payload || typeof payload !== 'object') return []
-  const raw = [
-    payload.role,
-    payload.roles,
-    payload.userType,
-    payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'],
-  ].flat()
-  return raw
-    .map((x) => String(x ?? '').trim())
-    .filter(Boolean)
-}
-
-function readUserIdClaim(payload) {
+function readUserIdFromPayload(payload) {
+  const fromHelper = getJwtUserId()
+  if (fromHelper) return fromHelper
   if (!payload || typeof payload !== 'object') return ''
   const candidates = [
     payload.userId,
@@ -41,15 +18,18 @@ function readUserIdClaim(payload) {
 }
 
 export default function AttendanceEntryGate() {
-  const location = useLocation()
-  const fromHome = Boolean(location.state?.fromHome)
-  if (!fromHome) return <Navigate to="/attendance/demo" replace />
-
   const token = getAccessToken()
+  if (!token) {
+    const q = new URLSearchParams()
+    q.set('redirect', '/attendance')
+    return <Navigate to={`/login?${q.toString()}`} replace />
+  }
+
   const payload = decodeJwtPayload(token)
-  const roles = readRoleClaims(payload).map((r) => r.toLowerCase())
-  const isAllowed = roles.includes('instructor') || roles.includes('admin')
-  if (!isAllowed) {
+  const roles = readJwtRoleClaims(payload).map((r) => r.toLowerCase())
+  const isInstructor = roles.includes('instructor')
+  const isAdmin = userHasJwtAdminRole() || roles.includes('admin') || roles.includes('administrator')
+  if (!isInstructor && !isAdmin) {
     return (
       <div style={{ padding: 24 }}>
         <h2>Access denied</h2>
@@ -58,7 +38,7 @@ export default function AttendanceEntryGate() {
     )
   }
 
-  const instructorId = readUserIdClaim(payload)
+  const instructorId = readUserIdFromPayload(payload)
   if (!instructorId) {
     return (
       <div style={{ padding: 24 }}>

@@ -38,6 +38,7 @@ function formatCallDuration(totalSeconds: number) {
 const GlobalCallUi: React.FC = () => {
   const location = useLocation()
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
+  const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null)
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null)
   const [rejectReason, setRejectReason] = useState('Busy')
   const [audioBlocked, setAudioBlocked] = useState(false)
@@ -152,6 +153,21 @@ const GlobalCallUi: React.FC = () => {
   }, [phase])
 
   useEffect(() => {
+    const ringtoneEl = ringtoneAudioRef.current
+    if (!ringtoneEl) return
+
+    const shouldRing = Boolean(incomingCall) && phase !== 'in-call' && phase !== 'accepted'
+    if (shouldRing) {
+      ringtoneEl.currentTime = 0
+      void ringtoneEl.play().catch(() => null)
+      return
+    }
+
+    ringtoneEl.pause()
+    ringtoneEl.currentTime = 0
+  }, [incomingCall, phase])
+
+  useEffect(() => {
     const shouldLockModal =
       phase === 'accepted' ||
       phase === 'in-call' ||
@@ -252,6 +268,13 @@ const GlobalCallUi: React.FC = () => {
         }}
         autoPlay
         playsInline
+        className="gc-active-audio"
+      />
+      <audio
+        ref={ringtoneAudioRef}
+        src="/audio/incoming-call-ringtone.mpeg"
+        preload="auto"
+        loop
         className="gc-active-audio"
       />
 
