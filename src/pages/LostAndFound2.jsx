@@ -150,6 +150,17 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     description: '',
     photos: []
   })
+  const selectedPhoto = reportForm.photos[0] || null
+  const selectedPhotoPreviewUrl = useMemo(
+    () => (selectedPhoto ? URL.createObjectURL(selectedPhoto) : ''),
+    [selectedPhoto]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (selectedPhotoPreviewUrl) URL.revokeObjectURL(selectedPhotoPreviewUrl)
+    }
+  }, [selectedPhotoPreviewUrl])
 
   useEffect(() => {
     if (!isReportOpen) return
@@ -382,16 +393,21 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   }
 
   const handlePhotoChange = (e) => {
-    const files = Array.from(e.target.files || [])
-    setReportForm(prev => ({ ...prev, photos: [...prev.photos, ...files] }))
+    const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'))
+    const firstImage = files[0] || null
+    setReportForm(prev => ({ ...prev, photos: firstImage ? [firstImage] : [] }))
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'))
-    setReportForm(prev => ({ ...prev, photos: [...prev.photos, ...files] }))
+    const firstImage = files[0] || null
+    setReportForm(prev => ({ ...prev, photos: firstImage ? [firstImage] : [] }))
   }
   const handleDragOver = (e) => e.preventDefault()
+  const handleRemovePhoto = () => {
+    setReportForm((prev) => ({ ...prev, photos: [] }))
+  }
 
   const reportTitle = view === 'report-lost' ? 'Report a Lost Item' : 'Report a Found Item'
   const reportSubtitle = view === 'report-lost'
@@ -692,18 +708,28 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                     <input
                       type="file"
                       accept="image/png,image/jpeg,image/jpg"
-                      multiple
                       required={view === 'report-found'}
                       onChange={handlePhotoChange}
                       className="lf2-dropzone-input"
                     />
                     <IconCloud />
-                    <span>Drag and drop images here</span>
-                    <span className="lf2-dropzone-hint">PNG, JPG up to 10MB</span>
-                    {reportForm.photos.length > 0 && (
-                      <span className="lf2-dropzone-count">{reportForm.photos.length} file(s) selected</span>
+                    <span>Drag and drop an image here</span>
+                    <span className="lf2-dropzone-hint">PNG, JPG up to 10MB (single image only)</span>
+                    {selectedPhoto && (
+                      <span className="lf2-dropzone-count">1 image selected</span>
                     )}
                   </label>
+                  {selectedPhoto ? (
+                    <div className="lf2-upload-preview">
+                      <img src={selectedPhotoPreviewUrl} alt="Selected upload preview" className="lf2-upload-preview-image" />
+                      <div className="lf2-upload-preview-actions">
+                        <span className="lf2-upload-preview-name">{selectedPhoto.name}</span>
+                        <button type="button" className="lf2-btn lf2-btn--draft" onClick={handleRemovePhoto}>
+                          Remove image
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               </>
             )}

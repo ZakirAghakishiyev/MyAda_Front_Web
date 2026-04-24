@@ -93,10 +93,13 @@ const statusIcon = (status) => {
 
 const mapApiAppStatus = (s) => {
   const x = String(s ?? '')
-  if (/pending/i.test(x)) return 'Under Review'
+  if (/interviewinvited/i.test(x)) return 'Called for Interview'
+  if (/interviewscheduled/i.test(x) || /interview\s*scheduled/i.test(x)) return 'Interview Scheduled'
+  if (/pending/i.test(x)) return 'Submitted'
+  if (/review/i.test(x)) return 'Under Review'
   if (/approv/i.test(x)) return 'Accepted'
   if (/reject/i.test(x)) return 'Declined'
-  return x || 'Submitted'
+  return x || 'Under Review'
 }
 
 function normalizeMembershipStatus(s) {
@@ -253,7 +256,7 @@ const MyMemberships = () => {
   }, [selectedApp, availableDatesForSelected, selectedInterviewDate])
 
   const canChooseInterviewSlot = (app) =>
-    app.applicationType === 'vacancy' && (app.status === 'Called for Interview' || app.status === 'Interview Scheduled')
+    app.applicationType === 'vacancy' && app.status === 'Called for Interview'
 
   const handleOpenInterviewPicker = (app) => {
     if (!canChooseInterviewSlot(app)) return

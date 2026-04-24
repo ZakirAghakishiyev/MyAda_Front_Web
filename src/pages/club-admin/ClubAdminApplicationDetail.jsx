@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { fetchAuthUserById } from '../../api/authUsersApi'
+import { fetchClubInterviewSlotById } from '../../api/clubApi'
+import { mapApiBookingToDisplay, formatInterviewTimeShort } from '../../api/clubApplicationMappers'
 import './ClubAdmin.css'
 
 const IconX = () => (
@@ -32,6 +34,13 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatYmdLocal(ymd) {
+  if (!ymd) return '—'
+  const d = new Date(String(ymd) + 'T12:00:00')
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function ExpandableText({ label, text, defaultExpanded = false }) {
@@ -80,6 +89,8 @@ const ClubAdminApplicationDetail = ({
   const [savingNote, setSavingNote] = useState(false)
   const [authUser, setAuthUser] = useState(null)
   const [authUserLoading, setAuthUserLoading] = useState(false)
+  const [fetchedSlot, setFetchedSlot] = useState(null)
+  const [fetchedSlotLoading, setFetchedSlotLoading] = useState(false)
 
   if (!application) return null
 
@@ -117,6 +128,66 @@ const ClubAdminApplicationDetail = ({
     })()
     return () => { cancelled = true }
   }, [app.studentId])
+
+  useEffect(() => {
+    if (!isJob) {
+      setFetchedSlot(null)
+      setFetchedSlotLoading(false)
+      return
+    }
+    const hasTimes = app.interviewStartsAt && String(app.interviewStartsAt).trim() !== ''
+    if (hasTimes) {
+      setFetchedSlot(null)
+      setFetchedSlotLoading(false)
+      return
+    }
+    const sid = app.interviewSlotId
+    if (!sid) {
+      setFetchedSlot(null)
+      return
+    }
+    let c = false
+    setFetchedSlotLoading(true)
+    setFetchedSlot(null)
+    ;(async () => {
+      try {
+        const raw = await fetchClubInterviewSlotById(sid)
+        if (c) return
+        setFetchedSlot(raw && typeof raw === 'object' ? raw : null)
+      } catch {
+        if (!c) setFetchedSlot(null)
+      } finally {
+        if (!c) setFetchedSlotLoading(false)
+      }
+    })()
+    return () => { c = true }
+  }, [isJob, app.interviewSlotId, app.interviewStartsAt])
+
+  const interviewTimeLabel = useMemo(() => {
+    if (!isJob) return null
+    if (app.interviewStartsAt) {
+      return formatInterviewTimeShort(app.interviewStartsAt, app.interviewEndsAt)
+    }
+    if (fetchedSlot) {
+      const s = mapApiBookingToDisplay({
+        startsAt: fetchedSlot.startsAt ?? fetchedSlot.startAt,
+        endsAt: fetchedSlot.endsAt ?? fetchedSlot.endAt,
+        slot: fetchedSlot,
+      })
+      if (s) {
+        return `${formatYmdLocal(s.date)} · ${s.startTime}${s.endTime ? ` – ${s.endTime}` : ''}`
+      }
+    }
+    if (fetchedSlotLoading) return 'Loading…'
+    if (app.interviewSlotId) return '—'
+    return 'Not set'
+  }, [isJob, app.interviewSlotId, app.interviewStartsAt, app.interviewEndsAt, fetchedSlot, fetchedSlotLoading])
+
+  const showInterviewBlock =
+    isJob &&
+    (Boolean(app.interviewSlotId) ||
+      Boolean(app.interviewStartsAt) ||
+      /interviewscheduled/i.test(String(app.status || '')))
 
   const handleApprove = () => onApprove(app.id, type)
   const handleDisapprove = () => onDisapprove(app.id, type)
@@ -205,6 +276,19 @@ const ClubAdminApplicationDetail = ({
               </div>
             </div>
           </section>
+
+          {showInterviewBlock && (
+            <section className="club-admin-detail-card">
+              <h3 className="club-admin-detail-card-title">Interview</h3>
+              <div className="club-admin-detail-row" style={{ alignItems: 'center', gap: 8 }}>
+                <span className="club-admin-detail-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <IconCalendar />
+                  Chosen time
+                </span>
+                <span className="club-admin-detail-value" style={{ fontWeight: 600 }}>{interviewTimeLabel}</span>
+              </div>
+            </section>
+          )}
 
           {/* Application Answers */}
           <section className="club-admin-detail-card">

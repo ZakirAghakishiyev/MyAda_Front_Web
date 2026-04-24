@@ -119,6 +119,11 @@ function toNumberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function toBooleanOrUndefined(value) {
+  if (value === undefined || value === null) return undefined
+  return Boolean(value)
+}
+
 function normalizeRouteUserId(value) {
   const normalized = String(value ?? '').trim()
   return normalized || null
@@ -132,6 +137,7 @@ function normalizeSession(item) {
   if (!item || typeof item !== 'object') return null
   const sessionId = toNumberOrNull(firstDefined(item.sessionId, item.id))
   if (sessionId == null) return null
+  const roundNo = toNumberOrNull(firstDefined(item.roundNo, item.round, item.roundNumber))
 
   return {
     sessionId,
@@ -141,7 +147,8 @@ function normalizeSession(item) {
     endTime: firstDefined(item.endTime, item.end_time, item.endsAt),
     topic: firstDefined(item.topic, item.name),
     status: String(firstDefined(item.status, item.sessionStatus, '') || '').toLowerCase(),
-    isActive: Boolean(firstDefined(item.isActive, item.active)),
+    isActive: Boolean(firstDefined(item.isAttendanceActive, item.isActive, item.active)),
+    roundNo: roundNo == null ? 0 : roundNo,
   }
 }
 
@@ -340,13 +347,29 @@ export async function getSessionState({ instructorId, lessonId }) {
     summary = null
   }
 
+  const closed = Boolean(firstDefined(summary?.closed, summary?.isClosed, false))
+  const summaryCurrentRound = toNumberOrNull(firstDefined(summary?.activeRound, summary?.currentRound))
+  const sessionRoundNo = toNumberOrNull(selectedSession?.roundNo) || 0
+  const sessionRoundActive = Boolean(selectedSession?.isActive)
+  const currentRound = summaryCurrentRound != null
+    ? summaryCurrentRound
+    : sessionRoundActive
+      ? sessionRoundNo || 1
+      : 0
+
+  const summaryRound1Completed = toBooleanOrUndefined(firstDefined(summary?.round1Completed, summary?.firstRoundCompleted))
+  const summaryRound2Completed = toBooleanOrUndefined(firstDefined(summary?.round2Completed, summary?.secondRoundCompleted))
+  const round1Completed = summaryRound1Completed ?? (!sessionRoundActive && sessionRoundNo >= 1)
+  const round2Completed = summaryRound2Completed ?? (!sessionRoundActive && sessionRoundNo >= 2)
+  const canActivate = !closed && !sessionRoundActive && sessionRoundNo < 2
+
   return {
     valid: true,
-    closed: Boolean(firstDefined(summary?.closed, summary?.isClosed, false)),
-    canActivate: !Boolean(firstDefined(summary?.closed, summary?.isClosed, false)),
-    currentRound: Number(firstDefined(summary?.activeRound, summary?.currentRound, 0)) || 0,
-    round1Completed: Boolean(firstDefined(summary?.round1Completed, summary?.firstRoundCompleted, false)),
-    round2Completed: Boolean(firstDefined(summary?.round2Completed, summary?.secondRoundCompleted, false)),
+    closed,
+    canActivate,
+    currentRound,
+    round1Completed,
+    round2Completed,
     registeredCount: Number(firstDefined(summary?.presentCount, summary?.registeredCount, summary?.markedCount, 0)) || 0,
     totalCount: Number(firstDefined(summary?.totalStudents, summary?.totalCount, summary?.enrolledCount, 0)) || 0,
     sessionId: selectedSession.sessionId,
@@ -431,12 +454,14 @@ function normalizeSessionSummary(item) {
   if (!item || typeof item !== 'object') return null
   const sessionId = toNumberOrNull(firstDefined(item.sessionId, item.id))
   if (sessionId == null) return null
+  const roundNo = toNumberOrNull(firstDefined(item.roundNo, item.round, item.roundNumber))
   return {
     sessionId,
     startTime: firstDefined(item.startTime, item.start_time, item.startsAt, item.date, ''),
     endTime: firstDefined(item.endTime, item.end_time, item.endsAt, ''),
     topic: firstDefined(item.topic, item.name, ''),
     isActive: Boolean(firstDefined(item.isAttendanceActive, item.isActive, item.active, false)),
+    roundNo: roundNo == null ? 0 : roundNo,
   }
 }
 
@@ -478,13 +503,29 @@ export async function getSessionStateForSession({ instructorId, lessonId, sessio
     summary = null
   }
 
+  const closed = Boolean(firstDefined(summary?.closed, summary?.isClosed, false))
+  const summaryCurrentRound = toNumberOrNull(firstDefined(summary?.activeRound, summary?.currentRound))
+  const sessionRoundNo = toNumberOrNull(selectedSession?.roundNo) || 0
+  const sessionRoundActive = Boolean(selectedSession?.isActive)
+  const currentRound = summaryCurrentRound != null
+    ? summaryCurrentRound
+    : sessionRoundActive
+      ? sessionRoundNo || 1
+      : 0
+
+  const summaryRound1Completed = toBooleanOrUndefined(firstDefined(summary?.round1Completed, summary?.firstRoundCompleted))
+  const summaryRound2Completed = toBooleanOrUndefined(firstDefined(summary?.round2Completed, summary?.secondRoundCompleted))
+  const round1Completed = summaryRound1Completed ?? (!sessionRoundActive && sessionRoundNo >= 1)
+  const round2Completed = summaryRound2Completed ?? (!sessionRoundActive && sessionRoundNo >= 2)
+  const canActivate = !closed && !sessionRoundActive && sessionRoundNo < 2
+
   return {
     valid: true,
-    closed: Boolean(firstDefined(summary?.closed, summary?.isClosed, false)),
-    canActivate: !Boolean(firstDefined(summary?.closed, summary?.isClosed, false)),
-    currentRound: Number(firstDefined(summary?.activeRound, summary?.currentRound, 0)) || 0,
-    round1Completed: Boolean(firstDefined(summary?.round1Completed, summary?.firstRoundCompleted, false)),
-    round2Completed: Boolean(firstDefined(summary?.round2Completed, summary?.secondRoundCompleted, false)),
+    closed,
+    canActivate,
+    currentRound,
+    round1Completed,
+    round2Completed,
     registeredCount: Number(firstDefined(summary?.presentCount, summary?.registeredCount, summary?.markedCount, 0)) || 0,
     totalCount: Number(firstDefined(summary?.totalStudents, summary?.totalCount, summary?.enrolledCount, 0)) || 0,
     sessionId: selectedSession.sessionId,

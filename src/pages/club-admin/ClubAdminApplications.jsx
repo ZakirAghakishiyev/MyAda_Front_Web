@@ -5,11 +5,13 @@ import {
   fetchClubAdminApplication,
   approveClubAdminApplication,
   rejectClubAdminApplication,
+  inviteClubAdminApplicationToInterview,
   requestChangesClubAdminApplication,
   clubAdminBulkDecision,
   addClubAdminApplicationNote,
 } from '../../api/clubApi'
 import { splitClubAdminApplications, mapClubAdminApplicationDetailFromApi } from '../../api/clubAdminMappers'
+import { formatInterviewTimeShort } from '../../api/clubApplicationMappers'
 import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import ClubAdminApplicationDetail from './ClubAdminApplicationDetail'
 import './ClubAdmin.css'
@@ -150,17 +152,21 @@ const ClubAdminApplications = () => {
   }
 
   const handleCallForInterview = async (id, typeOverride) => {
-    const changes = window.prompt('Note for applicant (optional)', 'Interview / follow-up requested') ?? ''
+    const t = typeOverride ?? appType
     try {
-      await requestChangesClubAdminApplication(clubId, id, changes || 'Review requested')
+      if (t === 'job') {
+        await inviteClubAdminApplicationToInterview(clubId, id)
+      } else {
+        const changes = window.prompt('Note for applicant (optional)', 'Please update your application') ?? ''
+        await requestChangesClubAdminApplication(clubId, id, changes || 'Review requested')
+      }
     } catch (e) {
       alert(e?.message || 'Could not update application.')
       return
     }
-    const t = typeOverride ?? appType
     setApplications((prev) => ({
       ...prev,
-      [t]: prev[t].map((a) => (a.id === id ? { ...a, status: 'Reviewing' } : a))
+      [t]: prev[t].map((a) => (a.id === id ? { ...a, status: t === 'job' ? 'InterviewInvited' : 'Reviewing' } : a))
     }))
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n })
     setDetailApplication(null)
@@ -272,6 +278,8 @@ const ClubAdminApplications = () => {
               <option value="All">Status: All</option>
               <option value="Pending">Pending</option>
               <option value="Reviewing">Reviewing</option>
+              <option value="InterviewInvited">InterviewInvited</option>
+              <option value="InterviewScheduled">InterviewScheduled</option>
               <option value="Approved">Approved</option>
               <option value="Rejected">Rejected</option>
             </select>
@@ -311,6 +319,7 @@ const ClubAdminApplications = () => {
                 <th>Student ID</th>
                 {activeTab === 'job' && <th>Role / Type</th>}
                 <th>Applied On</th>
+                {activeTab === 'job' && <th>Interview</th>}
                 {activeTab === 'job' && <th>Status</th>}
                 <th>Actions</th>
               </tr>
@@ -318,7 +327,7 @@ const ClubAdminApplications = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={activeTab === 'job' ? 7 : 6} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
+                  <td colSpan={activeTab === 'job' ? 8 : 6} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
                     Loading applications...
                   </td>
                 </tr>
@@ -345,6 +354,15 @@ const ClubAdminApplications = () => {
                   <td>{app.studentId}</td>
                   {activeTab === 'job' && <td>{app.roleType}</td>}
                   <td>{app.appliedOn}</td>
+                  {activeTab === 'job' && (
+                    <td style={{ fontSize: 13, color: '#475569', maxWidth: 200 }}>
+                      {app.interviewStartsAt
+                        ? formatInterviewTimeShort(app.interviewStartsAt, app.interviewEndsAt)
+                        : app.interviewSlotId
+                          ? 'See details'
+                          : '—'}
+                    </td>
+                  )}
                   {activeTab === 'job' && <td><span className={`club-admin-pill ${pillClass(app.status)}`}>{app.status}</span></td>}
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -370,7 +388,7 @@ const ClubAdminApplications = () => {
               ))}
               {!loading && filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'job' ? 7 : 6} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
+                  <td colSpan={activeTab === 'job' ? 8 : 6} style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
                     No applications found.
                   </td>
                 </tr>

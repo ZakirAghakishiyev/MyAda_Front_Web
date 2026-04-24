@@ -256,6 +256,27 @@
   color: #6b7280;
 }
 
+.et-loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.et-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #2563eb;
+  animation: et-spin 0.8s linear infinite;
+}
+
+@keyframes et-spin {
+  to { transform: rotate(360deg); }
+}
+
 .et-footer {
   margin-top: auto;
   padding-top: 32px;

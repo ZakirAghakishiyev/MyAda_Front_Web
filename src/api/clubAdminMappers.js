@@ -49,6 +49,23 @@ export function mapClubAdminApplicationFromApi(row) {
       })
     }
     if (Array.isArray(row.files)) files.push(...row.files)
+
+    const interviewSlotId =
+      row.interviewSlotId != null
+        ? String(row.interviewSlotId)
+        : j.interviewSlotId != null
+          ? String(j.interviewSlotId)
+          : j.interview?.slotId != null
+            ? String(j.interview.slotId)
+            : ''
+    const embedSlot = j.interviewSlot && typeof j.interviewSlot === 'object' ? j.interviewSlot : j.slot && typeof j.slot === 'object' ? j.slot : null
+    let interviewStartsAt = j.interviewStartsAt ?? j.interviewStartAt ?? j.scheduledStartAt
+    let interviewEndsAt = j.interviewEndsAt ?? j.scheduledEndAt
+    if (embedSlot) {
+      if (interviewStartsAt == null) interviewStartsAt = embedSlot.startsAt ?? embedSlot.startAt
+      if (interviewEndsAt == null) interviewEndsAt = embedSlot.endsAt ?? embedSlot.endAt
+    }
+
     return {
       id: String(id),
       applicationType: 'job',
@@ -62,6 +79,9 @@ export function mapClubAdminApplicationFromApi(row) {
       department: '—',
       year: '—',
       gpa: '—',
+      interviewSlotId: interviewSlotId || undefined,
+      interviewStartsAt: interviewStartsAt != null ? String(interviewStartsAt) : undefined,
+      interviewEndsAt: interviewEndsAt != null ? String(interviewEndsAt) : undefined,
       answers: {
         purposeOfApplication: purpose,
         additionalAnswers: [],

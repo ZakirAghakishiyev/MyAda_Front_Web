@@ -459,7 +459,7 @@ export default function AttendancePortal() {
         setRound2Completed(true)
         setCurrentRound(0)
         setAttendanceActive(false)
-        // Round 1 must be fully deactivated before round 2; call finalize when both rounds are done.
+        // Round 1 must be deactivated before round 2 can start.
         setCanActivate(false)
         setSessionState((s) => ({ ...(s || {}), round2Completed: true, currentRound: 0, canActivate: false }))
         persistProgress({
@@ -520,9 +520,12 @@ export default function AttendancePortal() {
   const canFinalizeSession =
     sessionInitialized &&
     round1Completed &&
-    round2Completed &&
     !attendanceActive &&
     !sessionFinalized
+  const showRound2Controls =
+    sessionInitialized &&
+    !sessionFinalized &&
+    (round1Completed || currentRound === 2 || round2Completed)
 
   const handleEndSession = useCallback(() => {
     if (!sessionInitialized || sessionFinalized) return
@@ -639,7 +642,7 @@ export default function AttendancePortal() {
         {!sessionInitialized && (
           <section className="ap-init-card">
             <h2 className="ap-init-title">Session not started</h2>
-            <p className="ap-init-text">Select a lesson session, initialize, then activate round 1 / round 2 in order. After both rounds are stopped, use Finalize to close attendance on the server.</p>
+            <p className="ap-init-text">Select a lesson session, initialize, and run round 1 first. Round 2 is optional and appears after round 1 ends. Use Finalize to close attendance on the server when no round is active.</p>
             <button
               type="button"
               className="ap-btn ap-btn--primary ap-init-btn"
@@ -694,7 +697,12 @@ export default function AttendancePortal() {
                     <QRCodeSVG value={String(qrPayload)} size={200} level="M" className="ap-qr-svg" />
                   ) : (
                     <div className="ap-qr-placeholder">
-                      {qrLoading ? 'Loading…' : attendanceActive ? 'Waiting for QR…' : 'Start a round to show QR'}
+                      {qrLoading ? (
+                        <div className="ap-loading-indicator" role="status" aria-live="polite">
+                          <span className="ap-loading-spinner" aria-hidden="true" />
+                          <span>Loading...</span>
+                        </div>
+                      ) : attendanceActive ? 'Waiting for QR…' : 'Start a round to show QR'}
                     </div>
                   )}
                   {attendanceActive && (
@@ -725,22 +733,26 @@ export default function AttendancePortal() {
                   >
                     <IconStop /> Stop Round 1
                   </button>
-                  <button
-                    type="button"
-                    className="ap-btn ap-btn--primary ap-btn--full"
-                    disabled={!canStartRound2 || roundActionLoading}
-                    onClick={handleStartRound}
-                  >
-                    <IconDoublePlay /> Start Round 2
-                  </button>
-                  <button
-                    type="button"
-                    className="ap-btn ap-btn--orange ap-btn--full"
-                    disabled={!canStopRound2 || roundActionLoading}
-                    onClick={handleEndRound}
-                  >
-                    <IconStop /> Stop Round 2
-                  </button>
+                  {showRound2Controls ? (
+                    <>
+                      <button
+                        type="button"
+                        className="ap-btn ap-btn--primary ap-btn--full"
+                        disabled={!canStartRound2 || roundActionLoading}
+                        onClick={handleStartRound}
+                      >
+                        <IconDoublePlay /> Start Round 2
+                      </button>
+                      <button
+                        type="button"
+                        className="ap-btn ap-btn--orange ap-btn--full"
+                        disabled={!canStopRound2 || roundActionLoading}
+                        onClick={handleEndRound}
+                      >
+                        <IconStop /> Stop Round 2
+                      </button>
+                    </>
+                  ) : null}
                   {finalizeError ? <p className="ap-controls-error">{finalizeError}</p> : null}
                   <button
                     type="button"

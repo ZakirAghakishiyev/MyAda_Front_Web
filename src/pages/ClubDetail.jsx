@@ -382,7 +382,10 @@ const ClubDetail = () => {
     return (
       <div className="club-detail-page club-detail-page--not-found">
         <div className="club-detail-container">
-          <p>Loading club…</p>
+          <div className="club-detail-loading-indicator" role="status" aria-live="polite">
+            <span className="club-detail-loading-spinner" aria-hidden="true" />
+            <span>Loading...</span>
+          </div>
         </div>
       </div>
     )

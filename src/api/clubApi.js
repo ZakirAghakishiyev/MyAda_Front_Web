@@ -268,17 +268,123 @@ export function submitClubProposal(body) {
 /* --- Applications (interview slots) --- */
 
 export function fetchApplicationInterviewSlots(applicationId) {
-  return clubAuthJson(`applications/${encodeURIComponent(applicationId)}/interview-slots`, {
-    method: 'GET',
-  })
+  const raw = String(applicationId ?? '').trim()
+  const candidates = []
+  if (raw) candidates.push(raw)
+  if (raw.includes(':')) {
+    const tail = raw.split(':').pop()?.trim()
+    if (tail && !candidates.includes(tail)) candidates.push(tail)
+  }
+  return (async () => {
+    let lastErr = null
+    for (const id of candidates) {
+      for (const path of [
+        `applications/${encodeURIComponent(id)}/interview-slots`,
+        `interviews/${encodeURIComponent(id)}/slots`,
+      ]) {
+        try {
+          return await clubAuthJson(path, { method: 'GET' })
+        } catch (e) {
+          lastErr = e
+          if (e?.status !== 404) throw e
+        }
+      }
+    }
+    if (lastErr) throw lastErr
+    const err = new Error('Invalid interview application id.')
+    err.status = 400
+    throw err
+  })()
 }
 
 export function selectInterviewSlot(applicationId, slotId) {
-  return clubAuthJson(`applications/${encodeURIComponent(applicationId)}/interview-slot`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slotId }),
-  })
+  const raw = String(applicationId ?? '').trim()
+  const candidates = []
+  if (raw) candidates.push(raw)
+  if (raw.includes(':')) {
+    const tail = raw.split(':').pop()?.trim()
+    if (tail && !candidates.includes(tail)) candidates.push(tail)
+  }
+  return (async () => {
+    let lastErr = null
+    for (const id of candidates) {
+      for (const path of [
+        `applications/${encodeURIComponent(id)}/interview-slot`,
+        `interviews/${encodeURIComponent(id)}/bookings`,
+      ]) {
+        try {
+          return await clubAuthJson(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slotId }),
+          })
+        } catch (e) {
+          lastErr = e
+          if (e?.status !== 404) throw e
+        }
+      }
+    }
+    if (lastErr) throw lastErr
+    const err = new Error('Invalid interview application id.')
+    err.status = 400
+    throw err
+  })()
+}
+
+export function fetchMyInterviewBooking(applicationId) {
+  const raw = String(applicationId ?? '').trim()
+  const candidates = []
+  if (raw) candidates.push(raw)
+  if (raw.includes(':')) {
+    const tail = raw.split(':').pop()?.trim()
+    if (tail && !candidates.includes(tail)) candidates.push(tail)
+  }
+  return (async () => {
+    let lastErr = null
+    for (const id of candidates) {
+      const res = await clubAuthFetch(`interviews/${encodeURIComponent(id)}/my-booking`, {
+        method: 'GET',
+      })
+      const data = await readJsonSafe(res)
+      if (res.status === 404) continue
+      if (!res.ok) {
+        const msg =
+          typeof data === 'object' && data != null
+            ? data.message || data.title || data.detail || `Request failed (${res.status})`
+            : typeof data === 'string' && data
+              ? data
+              : `Request failed (${res.status})`
+        const err = new Error(String(msg))
+        err.status = res.status
+        err.body = data
+        throw err
+      }
+      return unwrapApiResponse(data)
+    }
+    if (lastErr) throw lastErr
+    return null
+  })()
+}
+
+/** By slot id (admin or shared slot DTO) — for displaying booked times. */
+export function fetchClubInterviewSlotById(slotId) {
+  const id = String(slotId ?? '').trim()
+  if (!id) {
+    const err = new Error('Slot id required')
+    err.status = 400
+    throw err
+  }
+  return (async () => {
+    for (const path of [`slots/${encodeURIComponent(id)}`, `interview-slots/${encodeURIComponent(id)}`]) {
+      try {
+        return await clubAuthJson(path, { method: 'GET' })
+      } catch (e) {
+        if (e?.status === 404) continue
+        throw e
+      }
+    }
+    return null
+  })()
 }
 
 /* --- Club admin --- */
@@ -332,6 +438,17 @@ export function requestChangesClubAdminApplication(clubId, applicationId, change
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ changes }),
+    }
+  )
+}
+
+export function inviteClubAdminApplicationToInterview(clubId, applicationId) {
+  return clubAuthJson(
+    clubAdminPath(clubId, `applications/${encodeURIComponent(applicationId)}/invite-to-interview`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
     }
   )
 }

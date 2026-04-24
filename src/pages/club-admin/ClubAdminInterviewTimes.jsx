@@ -58,8 +58,8 @@ function vacancyLabel(vacancies, vacancyId) {
 }
 
 function mapSlotFromApi(s, idx, vacancies) {
-  const startsAt = s.startsAt ? new Date(s.startsAt) : null
-  const endsAt = s.endsAt ? new Date(s.endsAt) : null
+  const startsAt = (s.startsAt || s.startAt) ? new Date(s.startsAt || s.startAt) : null
+  const endsAt = (s.endsAt || s.endAt) ? new Date(s.endsAt || s.endAt) : null
   let date = ''
   let startTime = ''
   let endTime = ''
@@ -102,6 +102,7 @@ export default function ClubAdminInterviewTimes() {
 
   const [form, setForm] = useState({
     date: '',
+    endDate: '',
     startTime: '',
     endTime: '',
     interviewLength: 30,
@@ -174,6 +175,7 @@ export default function ClubAdminInterviewTimes() {
         endTime: form.endTime,
         interviewLength: Number(form.interviewLength) || 30,
       }
+      if (form.endDate && form.endDate >= form.date) body.endDate = form.endDate
       if (form.vacancyId) body.vacancy = form.vacancyId
       await generateClubAdminInterviewSlots(clubId, body)
       await loadSlots()
@@ -225,7 +227,7 @@ export default function ClubAdminInterviewTimes() {
       await Promise.all(
         ids.map((id) =>
           patchClubAdminInterviewSlot(clubId, id, {
-            vacancyId: bulkVacancyId || undefined,
+            vacancyId: bulkVacancyId || '',
           })
         )
       )
@@ -266,7 +268,7 @@ export default function ClubAdminInterviewTimes() {
       await patchClubAdminInterviewSlot(clubId, id, {
         startsAt,
         endsAt,
-        vacancyId: editingDraft.vacancyId || undefined,
+        vacancyId: editingDraft.vacancyId || '',
         capacity: editingDraft.capacity != null && editingDraft.capacity !== '' ? Number(editingDraft.capacity) : undefined,
       })
       await loadSlots()
@@ -308,6 +310,17 @@ export default function ClubAdminInterviewTimes() {
                   value={form.date}
                   onChange={(e) => updateForm('date', e.target.value)}
                   required
+                />
+              </div>
+
+              <div className="club-admin-field">
+                <label htmlFor="interview-end-date">End date (optional)</label>
+                <input
+                  id="interview-end-date"
+                  type="date"
+                  value={form.endDate}
+                  min={form.date || undefined}
+                  onChange={(e) => updateForm('endDate', e.target.value)}
                 />
               </div>
 

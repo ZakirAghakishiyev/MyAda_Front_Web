@@ -3,12 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import {
   fetchMyVacancyApplications,
   fetchApplicationInterviewSlots,
+  fetchMyInterviewBooking,
   selectInterviewSlot,
 } from '../api/clubApi'
 import {
   mapMeVacancyStatusToDisplay,
   mapInterviewSlotForStudent,
   normalizeInterviewSlotsResponse,
+  mapApiBookingToDisplay,
 } from '../api/clubApplicationMappers'
 import adaLogo from '../assets/ada-logo.png'
 import './MyVacancyApplications.css'
@@ -67,13 +69,23 @@ const IconBell = () => (
 function mapMeRowToApplication(row, index) {
   const submitted = row.submittedAt ? String(row.submittedAt) : ''
   const appliedOn = submitted ? submitted.slice(0, 10) : ''
+  const backendStatus = String(row.status ?? 'Pending')
   return {
     id: String(row.applicationId ?? row.id ?? `app-${index}`),
     vacancyId: row.vacancyId != null ? String(row.vacancyId) : '',
     position: String(row.vacancyTitle ?? row.title ?? row.position ?? 'Role'),
     clubName: String(row.clubName ?? '—'),
-    status: mapMeVacancyStatusToDisplay(row.status),
+    status: mapMeVacancyStatusToDisplay(backendStatus),
+    backendStatus,
     appliedOn,
+    interviewSlotId:
+      row.interviewSlotId != null
+        ? String(row.interviewSlotId)
+        : row.interview?.slotId != null
+          ? String(row.interview.slotId)
+          : row.jobApplication?.interviewSlotId != null
+            ? String(row.jobApplication.interviewSlotId)
+            : '',
   }
 }
 
@@ -114,6 +126,7 @@ const MyVacancyApplications = () => {
   const [selectedAppId, setSelectedAppId] = useState(null)
   const [selectedInterviewDate, setSelectedInterviewDate] = useState('')
   const [draftSlotId, setDraftSlotId] = useState(null)
+  const [bookingByApplicationId, setBookingByApplicationId] = useState({})
 
   useEffect(() => {
     let cancelled = false
@@ -136,6 +149,40 @@ const MyVacancyApplications = () => {
     })()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    const scheduledApps = applications.filter((a) => /^interviewscheduled$/i.test(a.backendStatus))
+    if (!scheduledApps.length) {
+      setBookingByApplicationId({})
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      const entries = await Promise.all(
+        scheduledApps.map(async (app) => {
+          try {
+            const booking = await fetchMyInterviewBooking(app.id)
+            return [app.id, mapApiBookingToDisplay(booking)]
+          } catch {
+            return [app.id, null]
+          }
+        })
+      )
+      if (cancelled) return
+      setBookingByApplicationId((prev) => {
+        const next = { ...prev }
+        entries.forEach(([id, booking]) => {
+          if (booking) next[id] = booking
+        })
+        return next
+      })
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [applications])
 
   useEffect(() => {
     if (!selectedAppId) {
@@ -200,7 +247,7 @@ const MyVacancyApplications = () => {
   }, [selectedApp, availableDatesForSelected, selectedInterviewDate])
 
   const handleOpenInterviewPicker = (app) => {
-    if (app.status !== 'Called for Interview') return
+    if (!/^interviewinvited$/i.test(app.backendStatus)) return
     setSelectedAppId(app.id)
   }
 
@@ -208,7 +255,7 @@ const MyVacancyApplications = () => {
     if (!location.state?.openInterviewPicker) return
     if (selectedAppId) return
 
-    const target = applications.find((app) => app.status === 'Called for Interview')
+    const target = applications.find((app) => /^interviewinvited$/i.test(app.backendStatus))
 
     if (target) {
       setSelectedAppId(target.id)
@@ -225,17 +272,50 @@ const MyVacancyApplications = () => {
     if (!selectedApp || !slotId) return
     setChoosingSlot(true)
     setSlotsError('')
+    const slotPicked = modalSlots.find((s) => String(s.id) === String(slotId))
+    const appId = selectedApp.id
     try {
-      await selectInterviewSlot(selectedApp.id, slotId)
+      await selectInterviewSlot(appId, slotId)
+      if (slotPicked) {
+        setBookingByApplicationId((prev) => ({
+          ...prev,
+          [appId]: { date: slotPicked.date, startTime: slotPicked.startTime, endTime: slotPicked.endTime },
+        }))
+      }
+      try {
+        const booking = await fetchMyInterviewBooking(appId)
+        const fromApi = mapApiBookingToDisplay(booking)
+        if (fromApi) {
+          setBookingByApplicationId((prev) => ({ ...prev, [appId]: fromApi }))
+        }
+      } catch {
+        // keep slot-based display
+      }
       setApplications((prev) =>
         prev.map((app) =>
-          app.id === selectedApp.id ? { ...app, status: 'Interview Scheduled' } : app
+          app.id === appId
+            ? {
+                ...app,
+                status: 'Interview Scheduled',
+                backendStatus: 'InterviewScheduled',
+                interviewSlotId: String(slotId),
+              }
+            : app
         )
       )
       setSelectedAppId(null)
       setDraftSlotId(null)
     } catch (e) {
       setSlotsError(e?.message || 'Could not reserve this slot.')
+      if (e?.status === 409 && selectedApp) {
+        try {
+          const raw = await fetchApplicationInterviewSlots(selectedApp.id)
+          const list = normalizeInterviewSlotsResponse(raw)
+          setModalSlots(list.map((s, i) => mapInterviewSlotForStudent(s, i)).filter(Boolean))
+        } catch {
+          // ignore refresh failure, keep existing error
+        }
+      }
     } finally {
       setChoosingSlot(false)
     }
@@ -323,11 +403,11 @@ const MyVacancyApplications = () => {
           {!listLoading && applications.map((app) => (
             <article
               key={app.id}
-              className={`mva-card ${app.status === 'Called for Interview' ? 'mva-card--clickable' : ''}`}
+              className={`mva-card ${/^interviewinvited$/i.test(app.backendStatus) ? 'mva-card--clickable' : ''}`}
               onClick={() => handleOpenInterviewPicker(app)}
               onKeyDown={(e) => e.key === 'Enter' && handleOpenInterviewPicker(app)}
-              role={app.status === 'Called for Interview' ? 'button' : undefined}
-              tabIndex={app.status === 'Called for Interview' ? 0 : undefined}
+              role={/^interviewinvited$/i.test(app.backendStatus) ? 'button' : undefined}
+              tabIndex={/^interviewinvited$/i.test(app.backendStatus) ? 0 : undefined}
             >
               <div className="mva-card-icon">
                 <IconBriefcase />
@@ -347,11 +427,15 @@ const MyVacancyApplications = () => {
                     Applied on {app.appliedOn ? formatDate(app.appliedOn) : '—'}
                   </span>
                   <span className="mva-card-id">Application ID: {app.id}</span>
-                  {app.status === 'Called for Interview' && (
+                  {/^interviewinvited$/i.test(app.backendStatus) && (
                     <span className="mva-card-link">Click to choose interview slot</span>
                   )}
-                  {app.status === 'Interview Scheduled' && (
-                    <span className="mva-card-link">Interview time confirmed</span>
+                  {/^interviewscheduled$/i.test(app.backendStatus) && (
+                    <span className="mva-card-link">
+                      {bookingByApplicationId[app.id]
+                        ? `Interview confirmed: ${formatDate(bookingByApplicationId[app.id].date)} ${bookingByApplicationId[app.id].startTime}${bookingByApplicationId[app.id].endTime ? ` - ${bookingByApplicationId[app.id].endTime}` : ''}`
+                        : 'Interview time confirmed'}
+                    </span>
                   )}
                 </div>
               </div>

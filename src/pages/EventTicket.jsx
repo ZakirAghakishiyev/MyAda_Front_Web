@@ -68,11 +68,14 @@ const EventTicket = () => {
   const [ticketPayload, setTicketPayload] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [qrError, setQrError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       if (!id) return
+      setLoading(true)
+      setLoadError(null)
       try {
         const [rawEv, ticket] = await Promise.all([
           fetchEvent(id),
@@ -86,10 +89,25 @@ const EventTicket = () => {
           setEvent(null)
           setLoadError(e?.message || 'Could not load ticket.')
         }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     })()
     return () => { cancelled = true }
   }, [id])
+
+  if (loading) {
+    return (
+      <div className="et-page">
+        <div className="et-not-found">
+          <div className="et-loading-indicator" role="status" aria-live="polite">
+            <span className="et-loading-spinner" aria-hidden="true" />
+            <span>Loading...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loadError || !event) {
     return (
