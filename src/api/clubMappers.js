@@ -18,6 +18,69 @@ function firstNonEmptyLink(...candidates) {
   return undefined
 }
 
+/**
+ * Human-readable role for a club officer from `GET /clubs/{id}` `officers[]` item.
+ * Prefers nested `position` title, then role/title/position* string fields (avoids showing raw numeric ids).
+ */
+export function officerRoleLabelFromApiDto(o) {
+  if (!o || typeof o !== 'object') return ''
+  const pick = (v) => {
+    if (v == null) return ''
+    const s = String(v).trim()
+    return s || ''
+  }
+  const pos = o.position
+  if (pos && typeof pos === 'object') {
+    const fromPos = pick(
+      pos.title ?? pos.Title ?? pos.name ?? pos.Name ?? pos.positionTitle ?? pos.positionName ?? pos.role ?? pos.Role
+    )
+    if (fromPos) return fromPos
+  }
+  const flat = [
+    o.role,
+    o.Role,
+    o.title,
+    o.Title,
+    o.positionTitle,
+    o.PositionTitle,
+    o.positionName,
+    o.PositionName,
+    o.jobTitle,
+    o.JobTitle,
+    o.officerTitle,
+    o.OfficerTitle,
+    o.officerRole,
+    o.OfficerRole,
+    o.roleName,
+    o.RoleName,
+  ]
+  for (const v of flat) {
+    const s = pick(v)
+    if (s && !/^\d+$/.test(s)) return s
+  }
+  if (typeof pos === 'string') {
+    const s = pick(pos)
+    if (s && !/^\d+$/.test(s)) return s
+  }
+  return ''
+}
+
+/** True if this officer row represents the club president (API labels or legacy positionId 1). */
+export function officerLooksLikePresident(raw, positionLabel) {
+  if (!raw || typeof raw !== 'object') return false
+  if (raw.isPresident === true || raw.IsPresident === true) return true
+  const blob = `${pickStr(raw.role)} ${pickStr(raw.Role)} ${pickStr(raw.title)} ${pickStr(raw.Title)} ${pickStr(positionLabel)}`.toLowerCase()
+  if (blob.includes('president')) return true
+  const pid = raw.positionId ?? raw.PositionId ?? raw.position?.id ?? raw.position?.Id
+  if (pid != null && String(pid).trim() === '1') return true
+  return false
+}
+
+function pickStr(v) {
+  if (v == null) return ''
+  return String(v).trim()
+}
+
 function mapEmailFromApi(dto) {
   if (dto.email == null) return null
   const t = String(dto.email).trim()

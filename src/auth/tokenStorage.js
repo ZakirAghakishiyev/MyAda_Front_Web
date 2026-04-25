@@ -1,7 +1,5 @@
 const ACCESS_STORAGE_KEY = 'accessToken'
 const REFRESH_COOKIE_NAME = 'refreshToken'
-/** ~180 days; refresh invalidation is enforced server-side */
-const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 180
 
 function getCookie(name) {
   const match = document.cookie.match(
@@ -10,9 +8,17 @@ function getCookie(name) {
   return match ? decodeURIComponent(match[1]) : null
 }
 
+/**
+ * @param {string} name
+ * @param {string} value
+ * @param {number} [maxAgeSeconds] — if omitted, cookie is a **session** cookie (cleared when the browser is closed).
+ */
 function setCookie(name, value, maxAgeSeconds) {
   const secure = typeof window !== 'undefined' && window.location.protocol === 'https:'
-  let cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax`
+  let cookie = `${name}=${encodeURIComponent(value)}; Path=/; SameSite=Lax`
+  if (maxAgeSeconds != null && Number.isFinite(maxAgeSeconds) && maxAgeSeconds > 0) {
+    cookie += `; Max-Age=${maxAgeSeconds}`
+  }
   if (secure) cookie += '; Secure'
   document.cookie = cookie
 }
@@ -30,8 +36,9 @@ export function getRefreshToken() {
 }
 
 export function setTokens(accessToken, refreshToken) {
+  /** Access JWT: cleared when the tab/window session ends. Refresh: session cookie (no Max-Age) so both go away on full browser close. */
   sessionStorage.setItem(ACCESS_STORAGE_KEY, accessToken)
-  setCookie(REFRESH_COOKIE_NAME, refreshToken, REFRESH_COOKIE_MAX_AGE)
+  setCookie(REFRESH_COOKIE_NAME, refreshToken)
 }
 
 export function clearTokens() {

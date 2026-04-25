@@ -74,3 +74,37 @@ export function getJwtUserId() {
   if (id == null || id === '') return null
   return String(id)
 }
+
+/** Email from access token (common claim names across IdPs). */
+export function getJwtEmail() {
+  const payload = decodeJwtPayload(getAccessToken())
+  if (!payload || typeof payload !== 'object') return null
+  const candidates = [
+    payload.email,
+    payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'],
+    payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn'],
+    payload.upn,
+    payload.preferred_username,
+    payload.preferredUsername,
+    payload.unique_name,
+    payload.name,
+  ]
+  for (const raw of candidates) {
+    if (raw == null || raw === '') continue
+    const s = String(raw).trim()
+    if (s.includes('@')) return s
+  }
+  return null
+}
+
+/** One or two letters for the header avatar. */
+export function getJwtProfileInitial() {
+  const payload = decodeJwtPayload(getAccessToken())
+  if (!payload || typeof payload !== 'object') return 'U'
+  const fn = String(payload.firstName ?? '').trim()
+  const ln = String(payload.lastName ?? '').trim()
+  if (fn) return (fn[0] + (ln[0] || fn[1] || '')).toUpperCase().slice(0, 2)
+  const email = String(payload.email ?? payload.unique_name ?? '').trim()
+  if (email) return email[0].toUpperCase()
+  return 'U'
+}

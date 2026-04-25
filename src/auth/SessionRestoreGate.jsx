@@ -3,7 +3,7 @@ import { getAccessToken, getRefreshToken } from './tokenStorage'
 import { refreshSession } from './authClient'
 
 /**
- * sessionStorage is per-tab; refresh token is in a cookie (shared).
+ * Access token in sessionStorage; refresh token in a **session** cookie (no Max-Age), both cleared when the browser session ends.
  * Before rendering protected UI, restore access from refresh when needed.
  */
 export function SessionRestoreGate({ children }) {

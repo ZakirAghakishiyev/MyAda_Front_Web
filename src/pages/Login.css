@@ -94,6 +94,58 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
+.login-field--readonly,
+.login-field:read-only {
+  cursor: default;
+  opacity: 0.92;
+  user-select: text;
+}
+
+.login-field--readonly:focus,
+.login-field:read-only:focus {
+  border-color: var(--login-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.login-field-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.login-field--with-toggle {
+  padding-left: 3rem;
+  padding-right: 3rem;
+  text-align: center;
+}
+
+.login-password-toggle {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--login-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.login-password-toggle:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.login-password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .login-submit {
   margin-top: 0.35rem;
   padding: 0.9rem 1rem;
@@ -115,6 +167,38 @@
 .login-submit:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+/* Filled CTA — stands apart from ghost-bordered inputs (e.g. reset password). */
+.login-submit.login-submit--solid {
+  margin-top: 0.85rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  color: #0c1c30;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  letter-spacing: 0.14em;
+}
+
+.login-submit.login-submit--solid:hover:not(:disabled) {
+  background: #e8f4ff;
+  border-color: #e8f4ff;
+  color: #0c1c30;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.login-submit.login-submit--solid:disabled {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: rgba(12, 28, 48, 0.55);
+  box-shadow: none;
+}
+
+/* Long reset codes: align left inside toggle field. */
+.login-field--reset-token {
+  text-align: left;
+  font-size: 0.875rem;
 }
 
 .login-error {
@@ -157,6 +241,30 @@
 .login-forgot a:hover {
   border-bottom-color: rgba(255, 255, 255, 0.5);
   opacity: 0.95;
+}
+
+.login-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: #fff;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.login-link-btn:hover {
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+  opacity: 0.95;
+}
+
+.login-forgot-sep {
+  color: var(--login-muted);
+  font-size: 0.9rem;
 }
 
 .visually-hidden {

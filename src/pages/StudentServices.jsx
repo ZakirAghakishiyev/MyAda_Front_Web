@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
-import { fetchAuthUserById } from '../api/authUsersApi'
+import { displayNameFromAuthUserDto, fetchAuthUserForClubRoster } from '../api/authUsersApi'
 import {
   fetchStudentServicesClubProposals,
   fetchStudentServicesEventProposals,
@@ -41,7 +41,15 @@ import './club-admin/ClubAdmin.css'
 
 function mapSsMemberRow(row, index) {
   if (!row || typeof row !== 'object') return null
-  const userId = row.userId ?? row.userID ?? row.applicantUserId ?? row.user?.id ?? row.studentId
+  const userId =
+    row.userId ??
+    row.userID ??
+    row.UserId ??
+    row.applicantUserId ??
+    row.user?.id ??
+    row.organizationalId ??
+    row.OrganizationalId ??
+    row.studentId
   return {
     id: row.id ?? row.memberId ?? `ss-m-${index}`,
     userId: userId != null ? String(userId) : '',
@@ -2257,7 +2265,9 @@ const StudentServices = () => {
         // Enrich members via auth microservice (name/email).
         const uniqueUserIds = Array.from(new Set(baseMembers.map((m) => m.userId).filter(Boolean)))
         if (uniqueUserIds.length) {
-          const profiles = await Promise.all(uniqueUserIds.map((uid) => fetchAuthUserById(uid)))
+          const profiles = await Promise.all(
+            uniqueUserIds.map((uid) => fetchAuthUserForClubRoster(uid).catch(() => null))
+          )
           const byId = new Map()
           uniqueUserIds.forEach((uid, i) => {
             const p = profiles[i]
@@ -2268,11 +2278,22 @@ const StudentServices = () => {
               prev.map((m) => {
                 const p = m.userId ? byId.get(m.userId) : null
                 if (!p) return m
+                const first = String(p.firstName ?? p.FirstName ?? '').trim()
+                const last = String(p.lastName ?? p.LastName ?? '').trim()
+                const full = displayNameFromAuthUserDto(p)
+                if (first || last) {
+                  return {
+                    ...m,
+                    name: first || m.name,
+                    surname: last,
+                    email: String(p.email ?? p.Email ?? '').trim() || m.email,
+                  }
+                }
                 return {
                   ...m,
-                  name: String(p.firstName ?? '').trim() || String(p.userName ?? '').trim() || m.name,
-                  surname: String(p.lastName ?? '').trim() || m.surname,
-                  email: String(p.email ?? '').trim() || m.email,
+                  name: full || m.name,
+                  surname: '',
+                  email: String(p.email ?? p.Email ?? '').trim() || m.email,
                 }
               })
             )

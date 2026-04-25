@@ -3,6 +3,37 @@ import { getAccessToken } from '../auth/tokenStorage'
 import { getJwtUserId } from '../auth/jwtRoles'
 import { fetchCurrentUserOrganizationalId } from './authUsersApi'
 import { clubUrl } from './clubConfig'
+import { CLUB_POSITION_CATEGORIES, positionCategoryOptionsFromApi } from '../data/clubAdminData'
+
+/**
+ * Club-admin position POST/PATCH: API expects `category` (string enum), not `categoryId`.
+ * Maps legacy 1-based `categoryId` to the same order as `CLUB_POSITION_CATEGORIES`.
+ */
+function buildClubAdminPositionJsonPayload(body) {
+  const b = body && typeof body === 'object' ? body : {}
+  const title = String(b.title ?? b.name ?? '').trim()
+  const name = String(b.name ?? b.title ?? '').trim() || title
+  let category = String(b.category ?? '').trim()
+  if (!category && b.categoryId != null && b.categoryId !== '') {
+    const idx = Number(b.categoryId)
+    if (!Number.isNaN(idx) && idx >= 1 && idx <= CLUB_POSITION_CATEGORIES.length) {
+      category = CLUB_POSITION_CATEGORIES[idx - 1]
+    }
+  }
+  if (category) {
+    const exact = CLUB_POSITION_CATEGORIES.find((c) => c === category)
+    if (exact) category = exact
+    else {
+      const lower = category.toLowerCase()
+      const ci = CLUB_POSITION_CATEGORIES.find((c) => c.toLowerCase() === lower)
+      if (ci) category = ci
+    }
+  }
+  const requirements = Array.isArray(b.requirements)
+    ? b.requirements.map((r) => String(r).trim()).filter(Boolean)
+    : []
+  return { title, name, category, requirements }
+}
 
 async function readJsonSafe(res) {
   const text = await res.text()
@@ -767,19 +798,30 @@ export function fetchClubAdminPositions(clubId, params = {}) {
   return clubAuthJson(clubAdminPath(clubId, `positions?${q}`), { method: 'GET' })
 }
 
+/** Category strings for position create/edit: API enum plus any values already used on this club's positions. */
+export async function fetchClubAdminPositionCategoryOptions(clubId) {
+  const res = await fetchClubAdminPositions(clubId, { page: 1, limit: 200 })
+  const items = res?.items ?? res ?? []
+  const list = Array.isArray(items) ? items : []
+  const seen = list.map((p) => p?.categoryName ?? p?.category).filter(Boolean)
+  return positionCategoryOptionsFromApi(seen)
+}
+
 export function createClubAdminPosition(clubId, body) {
+  const payload = buildClubAdminPositionJsonPayload(body)
   return clubAuthJson(clubAdminPath(clubId, 'positions'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   })
 }
 
 export function patchClubAdminPosition(clubId, positionId, body) {
+  const payload = buildClubAdminPositionJsonPayload(body)
   return clubAuthJson(clubAdminPath(clubId, `positions/${encodeURIComponent(positionId)}`), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   })
 }
 

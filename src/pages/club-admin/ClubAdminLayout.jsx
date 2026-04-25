@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { fetchClub, fetchClubAdminDashboard, fetchMyClubMemberships, postClubAdminAnnouncement } from '../../api/clubApi'
+import { fetchClub, fetchClubAdminDashboard, fetchClubs, fetchMyClubMemberships, postClubAdminAnnouncement } from '../../api/clubApi'
 import { mapClubFromApi } from '../../api/clubMappers'
 import { userHasJwtAdminRole } from '../../auth/jwtRoles'
 import { roleMayManageClub } from '../../auth/clubStaffRoles'
@@ -87,7 +87,22 @@ const IconClose = () => (
   </svg>
 )
 
-function ClubAdminClubPicker({ onChoose, membershipsLoading, membershipOptions, manualId, setManualId }) {
+function ClubAdminClubPicker({
+  onChoose,
+  membershipsLoading,
+  membershipOptions,
+  manualId,
+  setManualId,
+  isGlobalAdmin,
+  adminClubsLoading,
+  adminClubs,
+  adminClubsError,
+  adminClubSearch,
+  setAdminClubSearch,
+  selectedAdminClubId,
+  setSelectedAdminClubId,
+  onRetryAdminClubs,
+}) {
   return (
     <div className="club-admin-content" style={{ maxWidth: 560, margin: '48px auto', padding: 24 }}>
       <div className="club-admin-card">
@@ -117,30 +132,86 @@ function ClubAdminClubPicker({ onChoose, membershipsLoading, membershipOptions, 
               </li>
             ))}
           </ul>
+        ) : isGlobalAdmin ? (
+          <p style={{ color: '#64748b', fontSize: 14 }}>Choose a club from the directory below.</p>
         ) : (
-          <p style={{ color: '#64748b', fontSize: 14 }}>No memberships loaded. Sign in or open admin with a club id below.</p>
+          <p style={{ color: '#64748b', fontSize: 14 }}>No memberships loaded. Sign in or enter a club id below.</p>
         )}
-        <div className="club-admin-field" style={{ marginTop: 24 }}>
-          <label htmlFor="club-admin-manual-id">Club id (numeric)</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+        {isGlobalAdmin ? (
+          <div className="club-admin-field" style={{ marginTop: 24 }}>
+            <label htmlFor="club-admin-admin-search">Search by name</label>
             <input
-              id="club-admin-manual-id"
-              type="text"
-              inputMode="numeric"
-              placeholder="e.g. 3"
-              value={manualId}
-              onChange={(e) => setManualId(e.target.value)}
+              id="club-admin-admin-search"
+              type="search"
+              placeholder="Filter clubs…"
+              value={adminClubSearch}
+              onChange={(e) => setAdminClubSearch(e.target.value)}
+              autoComplete="off"
             />
-            <button
-              type="button"
-              className="club-admin-btn-primary"
-              disabled={!manualId.trim()}
-              onClick={() => onChoose(manualId.trim())}
-            >
-              Open
-            </button>
+            {adminClubsLoading ? (
+              <p style={{ color: '#64748b', marginTop: 12, fontSize: 14 }}>Loading clubs…</p>
+            ) : null}
+            {adminClubsError ? (
+              <div style={{ marginTop: 12 }}>
+                <p style={{ fontSize: 14, color: '#b91c1c' }}>{adminClubsError}</p>
+                <button type="button" className="club-admin-btn-secondary" style={{ marginTop: 8 }} onClick={onRetryAdminClubs}>
+                  Retry
+                </button>
+              </div>
+            ) : null}
+            {!adminClubsLoading && !adminClubsError ? (
+              <>
+                <label htmlFor="club-admin-admin-select" style={{ display: 'block', marginTop: 16 }}>
+                  Club
+                </label>
+                <select
+                  id="club-admin-admin-select"
+                  value={selectedAdminClubId}
+                  onChange={(e) => setSelectedAdminClubId(e.target.value)}
+                  style={{ width: '100%', marginTop: 6, padding: '10px 12px', fontSize: 15, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                >
+                  <option value="">— Select a club —</option>
+                  {adminClubs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="club-admin-btn-primary"
+                  style={{ marginTop: 16 }}
+                  disabled={!selectedAdminClubId}
+                  onClick={() => onChoose(selectedAdminClubId)}
+                >
+                  Open
+                </button>
+              </>
+            ) : null}
           </div>
-        </div>
+        ) : (
+          <div className="club-admin-field" style={{ marginTop: 24 }}>
+            <label htmlFor="club-admin-manual-id">Club id (numeric)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                id="club-admin-manual-id"
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g. 3"
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+              />
+              <button
+                type="button"
+                className="club-admin-btn-primary"
+                disabled={!manualId.trim()}
+                onClick={() => onChoose(manualId.trim())}
+              >
+                Open
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -158,6 +229,40 @@ export default function ClubAdminLayout() {
   const [membershipsLoading, setMembershipsLoading] = useState(true)
   const [membershipOptions, setMembershipOptions] = useState([])
   const [manualClubId, setManualClubId] = useState('')
+  const isGlobalAdmin = userHasJwtAdminRole()
+  const [adminClubsLoading, setAdminClubsLoading] = useState(false)
+  const [adminClubs, setAdminClubs] = useState([])
+  const [adminClubsError, setAdminClubsError] = useState('')
+  const [selectedAdminClubId, setSelectedAdminClubId] = useState('')
+  const [adminClubSearch, setAdminClubSearch] = useState('')
+
+  const loadAdminClubDirectory = useCallback(async (search) => {
+    if (!isGlobalAdmin) return
+    setAdminClubsLoading(true)
+    setAdminClubsError('')
+    try {
+      const data = await fetchClubs({ search: search?.trim() || undefined, page: 1, limit: 250 })
+      const items = data?.items ?? []
+      const mapped = items
+        .map((row) => mapClubFromApi(row))
+        .filter(Boolean)
+      const rows = mapped
+        .map((c) => ({
+          id: normalizeClubRouteKey(String(c.id)) || String(c.id),
+          name: c.name?.trim() ? c.name : `Club ${c.id}`,
+        }))
+        .filter((r) => r.id)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+      setAdminClubs(rows)
+      setSelectedAdminClubId((prev) => (rows.some((r) => r.id === prev) ? prev : ''))
+    } catch (e) {
+      setAdminClubs([])
+      setAdminClubsError(e?.message || 'Could not load clubs.')
+      setSelectedAdminClubId('')
+    } finally {
+      setAdminClubsLoading(false)
+    }
+  }, [isGlobalAdmin])
 
   const searchParams = new URLSearchParams(location.search)
   const clubIdParam = normalizeClubRouteKey(searchParams.get('club')) || ''
@@ -187,6 +292,18 @@ export default function ClubAdminLayout() {
     })()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!isGlobalAdmin || access !== 'need-club') return undefined
+    if (!adminClubSearch.trim()) {
+      void loadAdminClubDirectory('')
+      return undefined
+    }
+    const t = setTimeout(() => {
+      void loadAdminClubDirectory(adminClubSearch)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [isGlobalAdmin, access, adminClubSearch, loadAdminClubDirectory])
 
   useEffect(() => {
     let cancelled = false
@@ -361,6 +478,15 @@ export default function ClubAdminLayout() {
               membershipOptions={membershipOptions}
               manualId={manualClubId}
               setManualId={setManualClubId}
+              isGlobalAdmin={isGlobalAdmin}
+              adminClubsLoading={adminClubsLoading}
+              adminClubs={adminClubs}
+              adminClubsError={adminClubsError}
+              adminClubSearch={adminClubSearch}
+              setAdminClubSearch={setAdminClubSearch}
+              selectedAdminClubId={selectedAdminClubId}
+              setSelectedAdminClubId={setSelectedAdminClubId}
+              onRetryAdminClubs={() => void loadAdminClubDirectory(adminClubSearch)}
             />
           ) : null}
           {access === 'denied' ? (

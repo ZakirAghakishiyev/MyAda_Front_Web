@@ -132,7 +132,35 @@ export const mockJobVacancyApplications = [
   }
 ]
 
-export const VACANCY_CATEGORIES = ['Marketing', 'Technology', 'Events', 'Finance', 'Outreach', 'Content', 'Other']
+/** API `ClubPositionCategory` JSON string enum for club-admin positions (see CLUB_API_DOC). */
+export const CLUB_POSITION_CATEGORIES = Object.freeze([
+  'Marketing',
+  'Technology',
+  'Events',
+  'Finance',
+  'Outreach',
+  'Content',
+  'Other',
+])
+
+/** Same as `CLUB_POSITION_CATEGORIES` (vacancy copy uses the same labels). */
+export const VACANCY_CATEGORIES = CLUB_POSITION_CATEGORIES
+
+/**
+ * Dropdown options: documented enum order, plus any category strings already returned by the API for this club.
+ */
+export function positionCategoryOptionsFromApi(seenLabels) {
+  const known = new Set(CLUB_POSITION_CATEGORIES)
+  const extras = []
+  for (const raw of seenLabels || []) {
+    const s = String(raw ?? '').trim()
+    if (!s || known.has(s)) continue
+    known.add(s)
+    extras.push(s)
+  }
+  extras.sort((a, b) => a.localeCompare(b))
+  return [...CLUB_POSITION_CATEGORIES, ...extras]
+}
 
 // Member positions (status) in the club
 // In this UI we treat all regular members as having the same status: "Member"

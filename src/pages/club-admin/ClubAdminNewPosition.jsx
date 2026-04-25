@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { VACANCY_CATEGORIES } from '../../data/clubAdminData'
-import { createClubAdminPosition } from '../../api/clubApi'
+import { CLUB_POSITION_CATEGORIES } from '../../data/clubAdminData'
+import { createClubAdminPosition, fetchClubAdminPositionCategoryOptions } from '../../api/clubApi'
 import { useClubAdminClubId, useClubAdminSearch } from '../../hooks/useClubAdminClubId'
 import './ClubAdmin.css'
 
@@ -29,26 +29,50 @@ const ClubAdminNewPosition = () => {
     'Excellent communication and teamwork skills.',
     'Enthusiasm for university events and student life.'
   ])
+  const [categoryOptions, setCategoryOptions] = useState([...CLUB_POSITION_CATEGORIES])
 
-  const categoryId = useMemo(() => {
-    const idx = VACANCY_CATEGORIES.findIndex((c) => c === category)
-    return idx >= 0 ? idx + 1 : null
-  }, [category])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const opts = await fetchClubAdminPositionCategoryOptions(clubId)
+        if (!cancelled) setCategoryOptions(opts)
+      } catch {
+        if (!cancelled) setCategoryOptions([...CLUB_POSITION_CATEGORIES])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [clubId])
 
   const handleCreate = async (e) => {
     e.preventDefault()
     const trimmed = title.trim()
-    if (!trimmed || !categoryId) return
+    const cat = category.trim()
+    if (!trimmed || !cat) return
     try {
       await createClubAdminPosition(clubId, {
         title: trimmed,
-        // backend may accept `name` as fallback
         name: trimmed,
-        categoryId,
+        category: cat,
         requirements: (requirements || []).map((r) => String(r).trim()).filter(Boolean),
       })
     } catch (err) {
-      alert(err?.message || 'Could not create position.')
+      const body = err?.body
+      let msg = err?.message || 'Could not create position.'
+      if (body && typeof body === 'object') {
+        const v = body.message || body.title || body.detail
+        if (typeof v === 'string' && v.trim()) msg = v.trim()
+        const errs = body.errors
+        if (errs && typeof errs === 'object') {
+          const lines = Object.entries(errs).map(
+            ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`
+          )
+          if (lines.length) msg = `${msg}\n${lines.join('\n')}`
+        }
+      }
+      alert(msg)
       return
     }
     navigate(`/club-admin/positions${clubQs}`)
@@ -107,7 +131,7 @@ const ClubAdminNewPosition = () => {
                   onChange={(e) => setCategory(e.target.value)}
                 >
                   <option value="">Select a category</option>
-                  {VACANCY_CATEGORIES.map((c) => (
+                  {categoryOptions.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

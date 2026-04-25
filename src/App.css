@@ -11,7 +11,7 @@
   background: white;
 }
 
-/* Unauthenticated home: let HomeLanding full-bleed (no white band) */
+/* Legacy: unauthenticated `/` used a full-bleed landing; guests now redirect to `/login`. */
 .main-content--landing {
   background: transparent;
   padding: 0;

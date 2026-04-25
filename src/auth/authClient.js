@@ -117,8 +117,15 @@ export async function forgotPassword(email) {
   })
   const data = await parseJsonSafe(res)
   if (!res.ok) {
-    const err = new Error(data.message || 'Request failed.')
+    const msg =
+      typeof data === 'object' && data != null
+        ? data.message || data.title || data.detail
+        : typeof data === 'string' && data
+          ? data
+          : 'Request failed.'
+    const err = new Error(String(msg || 'Request failed.'))
     err.status = res.status
+    err.body = data
     throw err
   }
   return data
@@ -156,10 +163,20 @@ export async function changePassword(email, oldPassword, newPassword) {
     /* plain string body */
   }
   if (!res.ok) {
-    const err = new Error(
-      typeof data === 'string' ? data : data?.message || 'Change password failed.'
-    )
+    let msg =
+      typeof data === 'string' && data.trim()
+        ? data.trim()
+        : typeof data === 'object' && data != null
+          ? data.message || data.title || data.detail
+          : ''
+    if (!msg && res.status === 404) msg = 'No account found for this email.'
+    if (!msg && Array.isArray(data)) msg = data.map(String).join(' ')
+    if (!msg && typeof data === 'object' && data != null && Array.isArray(data.errors)) {
+      msg = data.errors.map(String).join(' ')
+    }
+    const err = new Error(msg || 'Change password failed.')
     err.status = res.status
+    err.body = data
     throw err
   }
   return data

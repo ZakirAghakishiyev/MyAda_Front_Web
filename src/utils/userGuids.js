@@ -18,20 +18,33 @@ export function parseUserGuidString(value) {
 }
 
 /**
- * Member list DTO (club-admin): `id` and `userId` are the same user GUID (see backend ClubAdminMemberDto).
+ * User GUID for auth profile lookup (`GET /api/auth/users/{guid}`).
+ * Prefer explicit `userId` / `employeeUserId` over row `id` (employee row ids may not be user GUIDs).
+ * @param {Record<string, unknown>} row
+ * @returns {string | null}
+ */
+export function pickUserGuidForAuthLookup(row) {
+  if (!row || typeof row !== 'object') return null
+  return (
+    parseUserGuidString(row.userId) ||
+    parseUserGuidString(row.userID) ||
+    parseUserGuidString(row.UserId) ||
+    parseUserGuidString(row.employeeUserId) ||
+    parseUserGuidString(row.EmployeeUserId) ||
+    parseUserGuidString(row.applicantUserId) ||
+    parseUserGuidString(row.user?.id) ||
+    parseUserGuidString(row.user?.userId) ||
+    parseUserGuidString(row.id) ||
+    parseUserGuidString(row.Id) ||
+    null
+  )
+}
+
+/**
+ * Member list DTO (club-admin): `userId` / `id` as user GUID (see backend ClubAdminMemberDto).
  * @param {Record<string, unknown>} m
  * @returns {string | null}
  */
 export function pickMemberUserGuidFromApiDto(m) {
-  if (!m || typeof m !== 'object') return null
-  return (
-    parseUserGuidString(m.id) ||
-    parseUserGuidString(m.Id) ||
-    parseUserGuidString(m.userId) ||
-    parseUserGuidString(m.userID) ||
-    parseUserGuidString(m.UserId) ||
-    parseUserGuidString(m.applicantUserId) ||
-    parseUserGuidString(m.user?.id) ||
-    null
-  )
+  return pickUserGuidForAuthLookup(m)
 }

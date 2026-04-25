@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { VACANCY_CATEGORIES } from '../../data/clubAdminData'
+import { CLUB_POSITION_CATEGORIES, positionCategoryOptionsFromApi } from '../../data/clubAdminData'
 import {
   fetchClubAdminPositions,
   patchClubAdminPosition,
@@ -55,18 +55,21 @@ const ClubAdminPositions = () => {
       const res = await fetchClubAdminPositions(clubId)
       const items = res?.items ?? res ?? []
       setPositions(
-        (Array.isArray(items) ? items : []).map((p, index) => ({
+        (Array.isArray(items) ? items : []).map((p, index) => {
+          const fromApi = String(p.categoryName ?? p.category ?? '').trim()
+          const legacyIdx = Number(p.categoryId)
+          const legacy =
+            !Number.isNaN(legacyIdx) && legacyIdx >= 1 && legacyIdx <= CLUB_POSITION_CATEGORIES.length
+              ? CLUB_POSITION_CATEGORIES[legacyIdx - 1]
+              : ''
+          const category = (fromApi || legacy || 'Other').trim() || 'Other'
+          return {
           id: p.id ?? p.positionId ?? `p-${index}`,
           title: p.title ?? p.name ?? p.positionTitle ?? 'Position',
-          categoryId: p.categoryId != null ? Number(p.categoryId) : undefined,
-          category:
-            p.categoryName ??
-            p.category ??
-            (p.categoryId != null && VACANCY_CATEGORIES[Number(p.categoryId) - 1]) ??
-            'Other',
+          category,
           requirements: Array.isArray(p.requirements) ? p.requirements : [],
           raw: p,
-        }))
+        }})
       )
     } catch (e) {
       setPositions([])
@@ -79,6 +82,11 @@ const ClubAdminPositions = () => {
   useEffect(() => {
     loadPositions()
   }, [loadPositions])
+
+  const categoryOptions = useMemo(
+    () => positionCategoryOptionsFromApi(positions.map((p) => p.category)),
+    [positions]
+  )
 
   const filteredPositions = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -120,13 +128,11 @@ const ClubAdminPositions = () => {
   const saveEdit = async (e) => {
     e.preventDefault()
     if (!editing || !title.trim() || !category) return
-    const catIdx = VACANCY_CATEGORIES.findIndex((c) => c === category)
-    const categoryId = catIdx >= 0 ? catIdx + 1 : undefined
     try {
       await patchClubAdminPosition(clubId, editing, {
         title: title.trim(),
         name: title.trim(),
-        categoryId,
+        category: category.trim(),
         requirements: (requirements || []).map((r) => String(r).trim()).filter(Boolean),
       })
       await loadPositions()
@@ -187,7 +193,7 @@ const ClubAdminPositions = () => {
                   onChange={(e) => setCategory(e.target.value)}
                 >
                   <option value="">Select a category</option>
-                  {VACANCY_CATEGORIES.map((c) => (
+                  {categoryOptions.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

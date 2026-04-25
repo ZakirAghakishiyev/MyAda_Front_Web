@@ -1,19 +1,48 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { useFilter } from '../contexts/FilterContext'
-import { logout } from '../auth'
+import { logout, changePassword } from '../auth'
 import { getAccessToken } from '../auth/tokenStorage'
-import { userHasJwtAdminRole } from '../auth/jwtRoles'
+import { userHasJwtAdminRole, getJwtProfileInitial } from '../auth/jwtRoles'
+import { fetchCurrentUserEmail } from '../api/authUsersApi'
 import adaLogo from '../assets/ada-logo.png'
 import campusBanner from '../assets/campus-banner.png'
 import './Header.css'
+
+const IconEye = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+
+const IconEyeOff = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+)
 
 const Header = () => {
   const { activeFilter, setActiveFilter } = useFilter()
   const location = useLocation()
   const navigate = useNavigate()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [cpEmail, setCpEmail] = useState('')
+  const [cpOld, setCpOld] = useState('')
+  const [cpNew, setCpNew] = useState('')
+  const [cpConfirm, setCpConfirm] = useState('')
+  const [cpError, setCpError] = useState('')
+  const [cpSuccess, setCpSuccess] = useState('')
+  const [cpLoading, setCpLoading] = useState(false)
+  const [cpResolvingEmail, setCpResolvingEmail] = useState(false)
+  const [showCpOld, setShowCpOld] = useState(false)
+  const [showCpNew, setShowCpNew] = useState(false)
+  const [showCpConfirm, setShowCpConfirm] = useState(false)
   const profileMenuRef = useRef(null)
+  const loggedIn = Boolean(getAccessToken())
   const isHomePage = location.pathname === '/'
   const showFilterNav = !isHomePage || !getAccessToken() || userHasJwtAdminRole()
 
@@ -40,13 +69,276 @@ const Header = () => {
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [])
 
+  useEffect(() => {
+    if (!showChangePassword) return
+    let cancelled = false
+    setCpEmail('')
+    setCpResolvingEmail(true)
+    ;(async () => {
+      try {
+        const em = await fetchCurrentUserEmail()
+        if (!cancelled && em) setCpEmail(em)
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setCpResolvingEmail(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showChangePassword])
+
+  useEffect(() => {
+    if (!showChangePassword) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setShowChangePassword(false)
+        setCpError('')
+        setCpSuccess('')
+        setCpLoading(false)
+        setCpResolvingEmail(false)
+        setShowCpOld(false)
+        setShowCpNew(false)
+        setShowCpConfirm(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showChangePassword])
+
   const handleLogout = async () => {
     await logout()
     setShowProfileMenu(false)
-    navigate('/', { replace: true })
+    navigate('/login', { replace: true })
   }
 
+  const openChangePassword = () => {
+    setShowProfileMenu(false)
+    setCpError('')
+    setCpSuccess('')
+    setCpOld('')
+    setCpNew('')
+    setCpConfirm('')
+    setCpEmail('')
+    setShowCpOld(false)
+    setShowCpNew(false)
+    setShowCpConfirm(false)
+    setShowChangePassword(true)
+  }
+
+  const closeChangePassword = () => {
+    setShowChangePassword(false)
+    setCpError('')
+    setCpSuccess('')
+    setCpLoading(false)
+    setCpResolvingEmail(false)
+    setShowCpOld(false)
+    setShowCpNew(false)
+    setShowCpConfirm(false)
+  }
+
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault()
+    setCpError('')
+    setCpSuccess('')
+    if (cpResolvingEmail) return
+    const email = cpEmail.trim()
+    if (!email) {
+      setCpError('Email is required. Sign in again, or enter your email above.')
+      return
+    }
+    if (!cpConfirm.trim()) {
+      setCpError('Please confirm your new password.')
+      return
+    }
+    if (cpNew !== cpConfirm) {
+      setCpError('New password and confirmation do not match.')
+      return
+    }
+    setCpLoading(true)
+    try {
+      await changePassword(email, cpOld, cpNew)
+      setCpSuccess('Password changed successfully. Use your new password next time you sign in.')
+      setCpOld('')
+      setCpNew('')
+      setCpConfirm('')
+    } catch (err) {
+      setCpError(err.message || 'Could not change password.')
+    } finally {
+      setCpLoading(false)
+    }
+  }
+
+  const changePasswordModal =
+    typeof document !== 'undefined' && showChangePassword
+      ? createPortal(
+          <div className="header-modal-overlay" role="presentation" onClick={closeChangePassword}>
+            <div
+              className="header-modal header-modal--password"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="header-change-password-title"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              <div className="header-modal-hero">
+                <div className="header-modal-hero-icon" aria-hidden>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <div className="header-modal-hero-text">
+                  <h2 id="header-change-password-title" className="header-modal-title">
+                    Change password
+                  </h2>
+                  <p className="header-modal-subtitle">Use your current password, then enter your new password twice.</p>
+                </div>
+                <button type="button" className="header-modal-close" aria-label="Close" onClick={closeChangePassword}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <form className="header-modal-form" onSubmit={handleChangePasswordSubmit}>
+                <p className="header-modal-section-label">Account</p>
+                {cpResolvingEmail ? (
+                  <p className="header-modal-muted" role="status">
+                    Looking up your account email…
+                  </p>
+                ) : cpEmail ? (
+                  <p className="header-modal-muted">
+                    Request will use <span className="header-modal-email-strong">{cpEmail}</span>.
+                  </p>
+                ) : (
+                  <label className="header-modal-label" htmlFor="header-cp-email">
+                    Email (required — not found on your session)
+                    <input
+                      id="header-cp-email"
+                      type="email"
+                      className="header-modal-input"
+                      value={cpEmail}
+                      onChange={(e) => setCpEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </label>
+                )}
+                <p className="header-modal-section-label">Passwords</p>
+                <label className="header-modal-label" htmlFor="header-cp-old">
+                  Current password
+                  <span className="header-modal-field-wrap">
+                    <input
+                      id="header-cp-old"
+                      type={showCpOld ? 'text' : 'password'}
+                      className="header-modal-input header-modal-input--with-toggle"
+                      value={cpOld}
+                      onChange={(e) => setCpOld(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="header-modal-toggle-vis"
+                      onClick={() => setShowCpOld((v) => !v)}
+                      aria-label={showCpOld ? 'Hide current password' : 'Show current password'}
+                      aria-pressed={showCpOld}
+                    >
+                      {showCpOld ? <IconEyeOff /> : <IconEye />}
+                    </button>
+                  </span>
+                </label>
+                <label className="header-modal-label" htmlFor="header-cp-new">
+                  New password
+                  <span className="header-modal-field-wrap">
+                    <input
+                      id="header-cp-new"
+                      type={showCpNew ? 'text' : 'password'}
+                      className="header-modal-input header-modal-input--with-toggle"
+                      value={cpNew}
+                      onChange={(e) => setCpNew(e.target.value)}
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="header-modal-toggle-vis"
+                      onClick={() => setShowCpNew((v) => !v)}
+                      aria-label={showCpNew ? 'Hide new password' : 'Show new password'}
+                      aria-pressed={showCpNew}
+                    >
+                      {showCpNew ? <IconEyeOff /> : <IconEye />}
+                    </button>
+                  </span>
+                </label>
+                <label className="header-modal-label" htmlFor="header-cp-confirm">
+                  Confirm new password
+                  <span className="header-modal-field-wrap">
+                    <input
+                      id="header-cp-confirm"
+                      type={showCpConfirm ? 'text' : 'password'}
+                      className="header-modal-input header-modal-input--with-toggle"
+                      value={cpConfirm}
+                      onChange={(e) => setCpConfirm(e.target.value)}
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="header-modal-toggle-vis"
+                      onClick={() => setShowCpConfirm((v) => !v)}
+                      aria-label={showCpConfirm ? 'Hide confirmation' : 'Show confirmation'}
+                      aria-pressed={showCpConfirm}
+                    >
+                      {showCpConfirm ? <IconEyeOff /> : <IconEye />}
+                    </button>
+                  </span>
+                </label>
+                {!cpError && cpConfirm.length > 0 && cpNew !== cpConfirm ? (
+                  <p className="header-modal-error" role="alert">
+                    New password and confirmation do not match.
+                  </p>
+                ) : null}
+                {cpError ? (
+                  <p className="header-modal-error" role="alert">
+                    {cpError}
+                  </p>
+                ) : null}
+                {cpSuccess ? (
+                  <p className="header-modal-success" role="status">
+                    {cpSuccess}
+                  </p>
+                ) : null}
+                <div className="header-modal-actions">
+                  <button type="button" className="header-modal-btn secondary" onClick={closeChangePassword}>
+                    {cpSuccess ? 'Close' : 'Cancel'}
+                  </button>
+                  {!cpSuccess ? (
+                    <button
+                      type="submit"
+                      className="header-modal-btn primary"
+                      disabled={
+                        cpLoading ||
+                        cpResolvingEmail ||
+                        !cpNew.trim() ||
+                        !cpConfirm.trim() ||
+                        cpNew !== cpConfirm
+                      }
+                    >
+                      {cpLoading ? 'Saving…' : 'Update password'}
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )
+      : null
+
   return (
+    <>
     <header className="header">
       <div className="header-top">
         <div className="header-left">
@@ -78,7 +370,7 @@ const Header = () => {
             </svg>
             <span className="notification-badge"></span>
           </button>
-          {isHomePage && (
+          {isHomePage && loggedIn && (
             <div className="profile-wrap" ref={profileMenuRef}>
               <button
                 type="button"
@@ -86,10 +378,14 @@ const Header = () => {
                 aria-label="Open profile menu"
                 onClick={() => setShowProfileMenu((prev) => !prev)}
               >
-                Z
+                {getJwtProfileInitial()}
               </button>
               {showProfileMenu && (
                 <div className="profile-menu">
+                  <button type="button" className="profile-menu-item" onClick={openChangePassword}>
+                    Change password
+                  </button>
+                  <div className="profile-menu-divider" role="separator" />
                   <button type="button" className="profile-menu-item" onClick={handleLogout}>
                     Log out
                   </button>
@@ -126,6 +422,8 @@ const Header = () => {
         </nav>
       )}
     </header>
+    {changePasswordModal}
+    </>
   )
 }
 

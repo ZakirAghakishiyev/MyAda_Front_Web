@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { fetchClub, fetchClubMembers, fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
-import { mapClubFromApi, mapEventFromApi } from '../api/clubMappers'
-import { fetchAuthUserById } from '../api/authUsersApi'
+import {
+  mapClubFromApi,
+  mapEventFromApi,
+  officerRoleLabelFromApiDto,
+  officerLooksLikePresident,
+} from '../api/clubMappers'
+import { fetchAuthUserForClubRoster } from '../api/authUsersApi'
+import { pickUserGuidForAuthLookup } from '../utils/userGuids'
 import { ClubFocusAreaIcon } from '../components/club/ClubFocusAreaIcon'
 import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ClubVacancies.css'
@@ -65,6 +71,37 @@ const formatEventDate = (dateStr) => {
 
 const trimStr = (v) => (v != null ? String(v).trim() : '')
 
+const emailFromAuthUserDto = (user) => {
+  if (!user || typeof user !== 'object') return ''
+  return trimStr(user.email ?? user.Email)
+}
+
+/**
+ * Display name strictly from `firstName` + `lastName` on the auth user DTO
+ * (AUTH_API_DOC §4 response shape). Other fields (id, userName, email, ...)
+ * are intentionally ignored: the club detail UI only renders the person's name.
+ */
+const firstLastNameFromAuthUserDto = (user) => {
+  if (!user || typeof user !== 'object') return ''
+  const first = trimStr(user.firstName ?? user.FirstName)
+  const last = trimStr(user.lastName ?? user.LastName)
+  return [first, last].filter(Boolean).join(' ').trim()
+}
+
+const fetchAuthProfilesByLookupKey = async (lookupKeys) => {
+  const keys = Array.from(new Set(lookupKeys.map(trimStr).filter(Boolean)))
+  if (!keys.length) return new Map()
+  const profiles = await Promise.all(
+    keys.map((key) => fetchAuthUserForClubRoster(key).catch(() => null))
+  )
+  const byKey = new Map()
+  keys.forEach((key, index) => {
+    const profile = profiles[index]
+    if (profile && typeof profile === 'object') byKey.set(key, profile)
+  })
+  return byKey
+}
+
 const toAbsoluteUrl = (raw) => {
   const s = trimStr(raw)
   if (!s) return ''
@@ -125,27 +162,31 @@ const ClubDetail = () => {
           }
         )
 
-        // Officers (from club detail DTO): resolve president (positionId === 1) + enrich with auth user.
+        // Officers (from club detail DTO): resolve president from API labels + enrich with auth user.
         const rawOfficers = Array.isArray(rawClub?.officers) ? rawClub.officers : (Array.isArray(mapped?.raw?.officers) ? mapped.raw.officers : [])
         const normalizedOfficers = rawOfficers
           .map((o, idx) => {
             if (!o || typeof o !== 'object') return null
-            const userId = o.userId ?? o.userID ?? o.studentId ?? o.user?.id
             const positionId = o.positionId ?? o.positionID ?? o.position?.id ?? o.position
             const pid = positionId != null ? String(positionId) : ''
-            const uid = userId != null ? String(userId) : ''
+            const uid = pickUserGuidForAuthLookup(o) || ''
+            const positionLabel = officerRoleLabelFromApiDto(o)
+            const explicitRole = String(o.role ?? o.title ?? o.Title ?? '').trim()
             return {
               _idx: idx,
               id: String(o.id ?? `${idx}`),
               userId: uid,
               positionId: pid,
-              role: String(o.role ?? o.title ?? ''),
+              positionLabel,
+              role: explicitRole || positionLabel,
+              name: firstLastNameFromAuthUserDto(o) || '',
               raw: o,
             }
           })
           .filter(Boolean)
 
-        const presidentRow = normalizedOfficers.find((o) => String(o.positionId) === '1') || null
+        const presidentRow =
+          normalizedOfficers.find((o) => officerLooksLikePresident(o.raw, o.positionLabel)) || null
         const restRows = normalizedOfficers.filter((o) => !presidentRow || o !== presidentRow)
         setOfficerRows(restRows)
         setPresident(null)
@@ -155,65 +196,61 @@ const ClubDetail = () => {
           new Set([presidentRow?.userId, ...restRows.map((r) => r.userId)].filter(Boolean))
         )
         if (idsToFetch.length) {
-          const profiles = await Promise.all(idsToFetch.map((uid) => fetchAuthUserById(uid).catch(() => null)))
-          const byId = new Map()
-          idsToFetch.forEach((uid, i) => {
-            const p = profiles[i]
-            if (p && typeof p === 'object') byId.set(uid, p)
-          })
-          const nameFor = (uid) => {
-            const p = uid ? byId.get(uid) : null
-            if (!p) return ''
-            const first = String(p.firstName ?? '').trim()
-            const last = String(p.lastName ?? '').trim()
-            return [first, last].filter(Boolean).join(' ').trim() || String(p.userName ?? '').trim()
-          }
+          const byId = await fetchAuthProfilesByLookupKey(idsToFetch)
+          const nameFor = (uid) =>
+            firstLastNameFromAuthUserDto(uid ? byId.get(uid) : null)
           if (!cancelled) {
             if (presidentRow) {
               setPresident({
                 userId: presidentRow.userId,
-                name: nameFor(presidentRow.userId) || '—',
+                name:
+                  nameFor(presidentRow.userId) ||
+                  firstLastNameFromAuthUserDto(presidentRow.raw) ||
+                  '',
               })
             }
             setOfficerRows((prev) =>
               prev.map((r) => ({
                 ...r,
-                name: nameFor(r.userId) || r.name,
-                role: r.role || (String(r.positionId) === '1' ? 'President' : ''),
+                name:
+                  nameFor(r.userId) ||
+                  firstLastNameFromAuthUserDto(r.raw) ||
+                  '',
+                role:
+                  r.role ||
+                  r.positionLabel ||
+                  officerRoleLabelFromApiDto(r.raw) ||
+                  '',
               }))
             )
           }
         } else if (presidentRow && !cancelled) {
-          setPresident({ userId: presidentRow.userId, name: '—' })
+          setPresident({
+            userId: presidentRow.userId,
+            name: firstLastNameFromAuthUserDto(presidentRow.raw) || '',
+          })
         }
 
         const mItems = rawMembers?.items ?? rawMembers ?? []
         const baseMembers = (Array.isArray(mItems) ? mItems : []).map((m, index) => {
-          const userId = m.userId ?? m.userID ?? m.applicantUserId ?? m.user?.id ?? m.studentId
-          return { ...m, _userId: userId != null ? String(userId) : '', _idx: index }
+          const userGuid = pickUserGuidForAuthLookup(m) || ''
+          return { ...m, _userId: userGuid, _idx: index }
         })
         setMemberRows(baseMembers)
         const uniqueUserIds = Array.from(new Set(baseMembers.map((m) => m._userId).filter(Boolean)))
         if (uniqueUserIds.length) {
-          const profiles = await Promise.all(uniqueUserIds.map((uid) => fetchAuthUserById(uid)))
-          const byId = new Map()
-          uniqueUserIds.forEach((uid, i) => {
-            const p = profiles[i]
-            if (p && typeof p === 'object') byId.set(uid, p)
-          })
+          const byId = await fetchAuthProfilesByLookupKey(uniqueUserIds)
           if (!cancelled) {
             setMemberRows((prev) =>
               prev.map((m) => {
                 const p = m._userId ? byId.get(m._userId) : null
-                if (!p) return m
-                const first = String(p.firstName ?? '').trim()
-                const last = String(p.lastName ?? '').trim()
-                const fullName = [first, last].filter(Boolean).join(' ').trim() || String(p.userName ?? '').trim()
+                const fullName = firstLastNameFromAuthUserDto(p) || firstLastNameFromAuthUserDto(m)
+                if (!p && !fullName) return m
                 return {
                   ...m,
                   name: fullName || m.name,
                   fullName: fullName || m.fullName,
-                  email: String(p.email ?? '').trim() || m.email,
+                  email: emailFromAuthUserDto(p) || m.email,
                 }
               })
             )
@@ -262,10 +299,10 @@ const ClubDetail = () => {
   const members = useMemo(() => {
     if (!club) return []
     if (memberRows.length > 0) {
-      return memberRows.map((m, index) => ({
-        name: m.name ?? m.fullName ?? m.studentName ?? `Member ${index + 1}`,
-        role: m.role ?? m.position ?? 'Member',
-        department: m.department ?? m.program ?? club.category,
+      return memberRows.map((m) => ({
+        name: firstLastNameFromAuthUserDto(m) || trimStr(m.name ?? m.fullName) || 'Member',
+        role: m.role ?? m.position ?? m.Position ?? 'Member',
+        department: m.department ?? m.program ?? m.Program ?? club.category,
       }))
     }
     const offs = Array.isArray(club.officers) ? club.officers : []
@@ -275,8 +312,8 @@ const ClubDetail = () => {
       ]
     }
     return offs.map((officer) => ({
-      name: officer.name ?? officer.studentName ?? 'Officer',
-      role: officer.role ?? officer.title ?? '',
+      name: firstLastNameFromAuthUserDto(officer) || 'Officer',
+      role: officerRoleLabelFromApiDto(officer) || officer.role || officer.title || '',
       department: club.category,
     }))
   }, [club, memberRows])
@@ -291,12 +328,17 @@ const ClubDetail = () => {
 
   const officersList = useMemo(() => {
     const rest = officerRows
-      .map((o) => ({
-        name: o.name || '—',
-        role:
+      .map((o) => {
+        const role =
           o.role ||
-          (String(o.positionId) === '1' ? 'President' : `Position ${o.positionId || '—'}`),
-      }))
+          o.positionLabel ||
+          officerRoleLabelFromApiDto(o.raw) ||
+          'Officer'
+        return {
+          name: trimStr(o.name) || role || 'Officer',
+          role,
+        }
+      })
       .filter((o) => o.name || o.role)
     if (!rest.length) return []
     const limit = 3
