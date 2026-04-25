@@ -1,13 +1,12 @@
-import { CLUB_MEDIA_BASE, clubGatewayOrigin } from './clubConfig'
+import {
+  CLUB_MEDIA_BASE,
+  clubGatewayOrigin,
+  resolveClubMediaUrl,
+  resolveProposedClubImageDisplayUrls,
+  resolvePublishedClubImageDisplayUrls,
+} from './clubConfig'
 
-export function resolveClubMediaUrl(path) {
-  if (path == null || path === '') return null
-  const s = String(path).trim()
-  if (/^https?:\/\//i.test(s)) return s
-  const isDefaultPlaceholder = /^\/clubs\/default\.png$/i.test(s) || /^clubs\/default\.png$/i.test(s)
-  const base = (isDefaultPlaceholder ? clubGatewayOrigin() : CLUB_MEDIA_BASE).replace(/\/+$/, '')
-  return `${base}${s.startsWith('/') ? s : `/${s}`}`
-}
+export { resolveClubMediaUrl } from './clubConfig'
 
 function firstNonEmptyLink(...candidates) {
   for (const v of candidates) {
@@ -184,6 +183,20 @@ export function mapEventFromApi(dto) {
 }
 
 /** @param {Record<string, unknown>} dto */
+function normalizeClubProposalOtherMembers(dto) {
+  const raw = dto?.otherMembers ?? dto?.otherMembersJson
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 /** Student Services dashboard: map API club proposal to UI row shape */
 export function mapStudentServicesClubProposal(p, index = 0) {
   if (!p || typeof p !== 'object') return null
@@ -206,7 +219,7 @@ export function mapStudentServicesClubProposal(p, index = 0) {
       : String(p.submittedAt ?? '—'),
     status: String(p.status ?? 'pending_review').toLowerCase().replace(/\s+/g, '_'),
     primaryOfficers: Array.isArray(p.primaryOfficers) ? p.primaryOfficers : [],
-    otherMembers: Array.isArray(p.otherMembers) ? p.otherMembers : [],
+    otherMembers: normalizeClubProposalOtherMembers(p),
     alignment: String(p.alignment ?? ''),
     vision: String(p.vision ?? ''),
     commitment: p.commitment ?? 'yes',
@@ -280,9 +293,40 @@ export function mapStudentServicesDirectoryClub(c) {
     if (v === 'inactive') return 'Inactive'
     return 'Active'
   }
-  const rawProfile = firstNonEmptyLink(c.profileImageUrl, c.ProfileImageUrl, c.image, c.Image)
-  const profileImageUrl = rawProfile ? resolveClubMediaUrl(rawProfile) || rawProfile : undefined
-  const rawProposed = firstNonEmptyLink(c.proposedProfileImageUrl, c.ProposedProfileImageUrl)
+  const rawProfile = firstNonEmptyLink(
+    c.profileImageUrl,
+    c.ProfileImageUrl,
+    c.image,
+    c.Image,
+    typeof c.club === 'object' && c.club ? c.club.profileImageUrl : undefined,
+    typeof c.club === 'object' && c.club ? c.club.ProfileImageUrl : undefined
+  )
+  const pubDisplay = rawProfile ? resolvePublishedClubImageDisplayUrls(rawProfile) : { primary: null, alt: null }
+  const profileImageUrl = pubDisplay.primary ?? undefined
+  const profileImageUrlAlt = pubDisplay.alt ?? undefined
+  const nestedClub =
+    typeof c.club === 'object' && c.club && !Array.isArray(c.club)
+      ? /** @type {Record<string, unknown>} */ (c.club)
+      : null
+  const rawProposed = firstNonEmptyLink(
+    c.proposedProfileImageUrl,
+    c.ProposedProfileImageUrl,
+    c.proposedProfileImageURL,
+    c.ProposedProfileImageURL,
+    c.pendingProfileImageUrl,
+    c.PendingProfileImageUrl,
+    c.pendingProfileImage,
+    c.proposed_profile_image_url,
+    c.pending_profile_image_url,
+    c.proposedImageUrl,
+    c.ProposedImageUrl,
+    nestedClub?.proposedProfileImageUrl,
+    nestedClub?.ProposedProfileImageUrl,
+    nestedClub?.pendingProfileImageUrl,
+    c.Result?.proposedProfileImageUrl,
+    c.result?.proposedProfileImageUrl
+  )
+  const propDisplay = rawProposed ? resolveProposedClubImageDisplayUrls(rawProposed) : { primary: null, alt: null }
   return {
     id: String(c.id),
     name: String(c.name ?? ''),
@@ -294,7 +338,9 @@ export function mapStudentServicesDirectoryClub(c) {
     status: normalizeStatus(c.status),
     iconColor: c.iconColor ?? 'blue',
     profileImageUrl,
-    proposedProfileImageUrl: rawProposed ? resolveClubMediaUrl(rawProposed) || rawProposed : undefined,
+    profileImageUrlAlt,
+    proposedProfileImageUrl: propDisplay.primary ?? undefined,
+    proposedProfileImageUrlAlt: propDisplay.alt ?? undefined,
     raw: c,
   }
 }

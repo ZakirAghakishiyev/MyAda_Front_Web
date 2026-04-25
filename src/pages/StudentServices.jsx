@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
 import { fetchAuthUserById } from '../api/authUsersApi'
@@ -18,6 +18,7 @@ import {
   fetchStudentServicesClubMembers,
   fetchStudentServicesClubEmployees,
   patchStudentServicesClub,
+  fetchStudentServicesClub,
   uploadStudentServicesClubProfileImage,
   approveStudentServicesClubProfileImage,
   deleteStudentServicesClubMember,
@@ -104,6 +105,28 @@ const getDraftCookie = (key) => {
 const clearDraftCookie = (key) => {
   if (typeof document === 'undefined') return
   document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+}
+
+/** Club profile / proposed images: try gateway vs S3 with automatic fallback on load error. */
+function ClubDualPhoto({ primary, alt, className, width, height, style, altText = '' }) {
+  const [src, setSrc] = React.useState(primary || '')
+  React.useEffect(() => {
+    setSrc(primary || '')
+  }, [primary])
+  if (!primary && !alt) return null
+  return (
+    <img
+      className={className}
+      width={width}
+      height={height}
+      style={style}
+      src={src || primary || alt || ''}
+      alt={altText}
+      onError={() => {
+        if (alt && src !== alt) setSrc(alt)
+      }}
+    />
+  )
 }
 
 const IconOverview = () => (
@@ -749,6 +772,16 @@ const StudentServices = () => {
   const [clubEditDescription, setClubEditDescription] = useState('')
   const [clubEditImage, setClubEditImage] = useState(null)
   const [clubEditImageUploadState, setClubEditImageUploadState] = useState({ uploading: false, error: '' })
+  const clubSettingsLogoInputRef = useRef(null)
+  const clubEditImagePreviewUrl = useMemo(() => {
+    if (!clubEditImage) return ''
+    return URL.createObjectURL(clubEditImage)
+  }, [clubEditImage])
+  useEffect(() => {
+    return () => {
+      if (clubEditImagePreviewUrl) URL.revokeObjectURL(clubEditImagePreviewUrl)
+    }
+  }, [clubEditImagePreviewUrl])
 
   const [ssDataLoadState, setSsDataLoadState] = useState({ loading: true, error: '' })
 
@@ -860,6 +893,39 @@ const StudentServices = () => {
   useEffect(() => {
     refreshStudentServicesFromApi()
   }, [refreshStudentServicesFromApi])
+
+  /** GET /student-services/clubs/{id} often includes profile + proposed image URLs omitted from the list payload. */
+  useEffect(() => {
+    if (!directorySelectedClubId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const raw = await fetchStudentServicesClub(directorySelectedClubId)
+        if (cancelled || !raw) return
+        const m = mapStudentServicesDirectoryClub(raw)
+        if (!m) return
+        setDirectoryClubs((prev) =>
+          prev.map((c) =>
+            String(c.id) === String(directorySelectedClubId)
+              ? {
+                  ...c,
+                  profileImageUrl: m.profileImageUrl,
+                  profileImageUrlAlt: m.profileImageUrlAlt,
+                  proposedProfileImageUrl: m.proposedProfileImageUrl,
+                  proposedProfileImageUrlAlt: m.proposedProfileImageUrlAlt,
+                  raw: m.raw,
+                }
+              : c
+          )
+        )
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [directorySelectedClubId])
 
   useEffect(() => {
     if (!addEventOpen) return
@@ -1171,7 +1237,7 @@ const StudentServices = () => {
     return <Icon />
   }
 
-  const selectedDirectoryClub = directoryClubs.find((c) => c.id === directorySelectedClubId)
+  const selectedDirectoryClub = directoryClubs.find((c) => String(c.id) === String(directorySelectedClubId ?? ''))
   const filteredDirectoryClubs = useMemo(() => {
     const q = clubsSearch.trim().toLowerCase()
     if (!q) return directoryClubs
@@ -1188,6 +1254,10 @@ const StudentServices = () => {
       )
     })
   }, [directoryClubs, clubsSearch])
+  const clubsPendingProfileImage = useMemo(
+    () => directoryClubs.filter((c) => Boolean(c.proposedProfileImageUrl)),
+    [directoryClubs]
+  )
   const filteredClubMembers = useMemo(() => {
     const q = clubMemberSearch.trim().toLowerCase()
     if (!q) return clubMembers
@@ -1230,32 +1300,41 @@ const StudentServices = () => {
         ? String(selectedDirectoryClub.raw.description ?? selectedDirectoryClub.raw.about ?? '').trim()
         : '') ||
       name
+    const hasStagedLogo = clubEditImage instanceof File
+    if (hasStagedLogo) {
+      setClubEditImageUploadState({ uploading: true, error: '' })
+    }
     try {
+      if (hasStagedLogo) {
+        await uploadStudentServicesClubProfileImage(cid, clubEditImage)
+        try {
+          await approveStudentServicesClubProfileImage(cid)
+        } catch {
+          /* no pending row (e.g. already applied via club-admin PATCH) */
+        }
+        setClubEditImage(null)
+        if (clubSettingsLogoInputRef.current) clubSettingsLogoInputRef.current.value = ''
+      }
       await patchStudentServicesClub(cid, { name, description, status })
-    } catch (e) {
-      alert(e?.message || 'Could not save club.')
-      return
-    }
-    try {
       await refreshStudentServicesFromApi()
-    } catch {
-      /* ignore */
+      setDirectorySelectedClubId(cid)
+      setClubEditImageUploadState({ uploading: false, error: '' })
+    } catch (e) {
+      if (hasStagedLogo) {
+        setClubEditImageUploadState({ uploading: false, error: e?.message || 'Could not save club or upload logo.' })
+      }
+      alert(e?.message || 'Could not save club settings.')
     }
-    setDirectorySelectedClubId(cid)
   }
 
-  const handleUploadClubLogo = async (file) => {
-    if (!selectedDirectoryClub) return
-    if (!(file instanceof File)) return
-    setClubEditImage(file)
-    setClubEditImageUploadState({ uploading: true, error: '' })
+  const handleQuickApproveClubProfileImage = async (clubId) => {
+    const ok = window.confirm('Approve this club logo for publication?')
+    if (!ok) return
     try {
-      await uploadStudentServicesClubProfileImage(selectedDirectoryClub.id, file)
-      setClubEditImageUploadState({ uploading: false, error: '' })
-      // Refresh so proposedProfileImageUrl appears immediately.
-      refreshStudentServicesFromApi()
+      await approveStudentServicesClubProfileImage(String(clubId))
+      await refreshStudentServicesFromApi()
     } catch (e) {
-      setClubEditImageUploadState({ uploading: false, error: e?.message || 'Could not upload club logo.' })
+      alert(e?.message || 'Could not approve logo.')
     }
   }
 
@@ -1271,17 +1350,19 @@ const StudentServices = () => {
     }
     setDirectoryClubs((prev) =>
       prev.map((c) =>
-        c.id === selectedDirectoryClub.id
+        String(c.id) === String(selectedDirectoryClub.id)
           ? {
               ...c,
               profileImageUrl: selectedDirectoryClub.proposedProfileImageUrl,
+              profileImageUrlAlt: selectedDirectoryClub.proposedProfileImageUrlAlt,
               proposedProfileImageUrl: null,
+              proposedProfileImageUrlAlt: null,
             }
           : c
       )
     )
     alert('Proposed logo approved.')
-    refreshStudentServicesFromApi()
+    await refreshStudentServicesFromApi()
   }
 
   const handleAddEmployee = async () => {
@@ -1360,10 +1441,19 @@ const StudentServices = () => {
           <header className="ss-cc-club-header">
             <div className="ss-cc-club-header-left">
               <div className="ss-cc-club-avatar-wrap">
-                {clubEditImage ? (
-                  <img src={URL.createObjectURL(clubEditImage)} alt="" className="ss-cc-club-avatar-img" />
-                ) : selectedDirectoryClub.profileImageUrl ? (
-                  <img src={selectedDirectoryClub.profileImageUrl} alt="" className="ss-cc-club-avatar-img" />
+                {clubEditImage && clubEditImagePreviewUrl ? (
+                  <img src={clubEditImagePreviewUrl} alt="" className="ss-cc-club-avatar-img" />
+                ) : selectedDirectoryClub.profileImageUrl || selectedDirectoryClub.proposedProfileImageUrl ? (
+                  <ClubDualPhoto
+                    className="ss-cc-club-avatar-img"
+                    primary={selectedDirectoryClub.profileImageUrl || selectedDirectoryClub.proposedProfileImageUrl}
+                    alt={
+                      selectedDirectoryClub.profileImageUrl
+                        ? selectedDirectoryClub.profileImageUrlAlt
+                        : selectedDirectoryClub.proposedProfileImageUrlAlt
+                    }
+                    altText=""
+                  />
                 ) : (
                   <span className={`ss-cc-club-icon-lg ss-cc-club-icon--${selectedDirectoryClub.iconColor}`}>{getClubIcon(selectedDirectoryClub.iconColor)}</span>
                 )}
@@ -1635,15 +1725,25 @@ const StudentServices = () => {
                 </div>
                 <div className="club-admin-field">
                   <label>Club logo</label>
+                  <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748b' }}>
+                    Choose an image file, then click <strong>Save changes</strong> to upload and publish it (same as the club API).
+                  </p>
                   <input
+                    ref={clubSettingsLogoInputRef}
                     type="file"
                     accept="image/*"
                     disabled={clubEditImageUploadState.uploading}
-                    onChange={(e) => handleUploadClubLogo(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f instanceof File) {
+                        setClubEditImage(f)
+                        setClubEditImageUploadState({ uploading: false, error: '' })
+                      }
+                    }}
                   />
-                  {clubEditImage && <span className="ss-cc-settings-filename">{clubEditImage.name}</span>}
+                  {clubEditImage ? <span className="ss-cc-settings-filename">Selected: {clubEditImage.name}</span> : null}
                   {clubEditImageUploadState.uploading && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: '#2563eb' }}>Uploading logo…</div>
+                    <div style={{ marginTop: 6, fontSize: 12, color: '#2563eb' }}>Saving logo and settings…</div>
                   )}
                   {clubEditImageUploadState.error && (
                     <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c' }}>{clubEditImageUploadState.error}</div>
@@ -1653,9 +1753,10 @@ const StudentServices = () => {
                   <div className="club-admin-field">
                     <label>Proposed profile image</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      <img
-                        src={selectedDirectoryClub.proposedProfileImageUrl}
-                        alt="Proposed club logo"
+                      <ClubDualPhoto
+                        primary={selectedDirectoryClub.proposedProfileImageUrl}
+                        alt={selectedDirectoryClub.proposedProfileImageUrlAlt}
+                        altText="Proposed club logo"
                         style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0' }}
                       />
                       <button type="button" className="club-admin-btn-primary" onClick={handleApproveProposedClubImage}>
@@ -1666,7 +1767,14 @@ const StudentServices = () => {
                 )}
                 <div className="ss-cc-settings-actions">
                   <button type="button" className="club-admin-btn-secondary" onClick={() => setDirectorySelectedClubId(null)}>Cancel</button>
-                  <button type="button" className="club-admin-btn-primary" onClick={handleSaveClubSettings}>Save changes</button>
+                  <button
+                    type="button"
+                    className="club-admin-btn-primary"
+                    onClick={() => void handleSaveClubSettings()}
+                    disabled={clubEditImageUploadState.uploading}
+                  >
+                    Save changes
+                  </button>
                 </div>
               </div>
             </div>
@@ -1696,6 +1804,53 @@ const StudentServices = () => {
           Register New Club
         </button>
       </header>
+
+      {clubsPendingProfileImage.length > 0 ? (
+        <section className="ss-card" style={{ marginTop: 16, padding: '16px 20px', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 12 }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: 16, color: '#92400e' }}>Club logos pending review</h3>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#78350f' }}>
+            These clubs have a new logo awaiting approval. Use Approve to publish, or open Settings for a larger preview.
+          </p>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {clubsPendingProfileImage.map((c) => (
+              <li
+                key={c.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  padding: '10px 0',
+                  borderTop: '1px solid #fcd34d',
+                }}
+              >
+                <ClubDualPhoto
+                  primary={c.proposedProfileImageUrl}
+                  alt={c.proposedProfileImageUrlAlt}
+                  width={56}
+                  height={56}
+                  style={{ borderRadius: 10, objectFit: 'cover', border: '1px solid #e2e8f0' }}
+                  altText=""
+                />
+                <span style={{ flex: '1 1 140px', fontWeight: 600, color: '#0f172a' }}>{c.name}</span>
+                <button
+                  type="button"
+                  className="club-admin-btn-secondary"
+                  onClick={() => {
+                    setDirectorySelectedClubId(c.id)
+                    setDirectoryClubTab('settings')
+                  }}
+                >
+                  Open settings
+                </button>
+                <button type="button" className="club-admin-btn-primary" onClick={() => void handleQuickApproveClubProfileImage(c.id)}>
+                  Approve logo
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="ss-cc-kpis">
         <div className="ss-cc-kpi">
@@ -2026,7 +2181,7 @@ const StudentServices = () => {
 
   useEffect(() => {
     if (!directorySelectedClubId) return
-    const club = directoryClubs.find((c) => c.id === directorySelectedClubId)
+    const club = directoryClubs.find((c) => String(c.id) === String(directorySelectedClubId ?? ''))
     if (club) {
       setClubEditName(club.name)
       setClubEditStatus(club.status)
@@ -2802,6 +2957,57 @@ const StudentServices = () => {
         <div className="ss-card" style={{ marginTop: 20 }}>
           <h2>Approved Clubs</h2>
           <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>Click a club row to open its detail page (members, employees, settings).</p>
+          {clubsPendingProfileImage.length > 0 ? (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '14px 18px',
+                border: '1px solid #fde68a',
+                background: '#fffbeb',
+                borderRadius: 12,
+              }}
+            >
+              <h3 style={{ margin: '0 0 6px', fontSize: 15, color: '#92400e' }}>Club logos pending review ({clubsPendingProfileImage.length})</h3>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {clubsPendingProfileImage.map((c) => (
+                  <li
+                    key={c.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      flexWrap: 'wrap',
+                      padding: '8px 0',
+                      borderTop: '1px solid #fcd34d',
+                    }}
+                  >
+                    <ClubDualPhoto
+                      primary={c.proposedProfileImageUrl}
+                      alt={c.proposedProfileImageUrlAlt}
+                      width={48}
+                      height={48}
+                      style={{ borderRadius: 8, objectFit: 'cover' }}
+                      altText=""
+                    />
+                    <span style={{ flex: '1 1 120px', fontWeight: 600 }}>{c.name}</span>
+                    <button
+                      type="button"
+                      className="club-admin-btn-secondary"
+                      onClick={() => {
+                        setDirectorySelectedClubId(c.id)
+                        setDirectoryClubTab('settings')
+                      }}
+                    >
+                      Open settings
+                    </button>
+                    <button type="button" className="club-admin-btn-primary" onClick={() => void handleQuickApproveClubProfileImage(c.id)}>
+                      Approve
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <input
               className="ss-search"

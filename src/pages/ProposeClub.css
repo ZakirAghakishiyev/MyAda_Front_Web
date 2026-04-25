@@ -278,6 +278,27 @@
   display: block;
 }
 
+.propose-word-count--warn {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.propose-word-count--ok {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.propose-continue-blocked {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+}
+
 .propose-field-label-row {
   display: flex;
   align-items: center;

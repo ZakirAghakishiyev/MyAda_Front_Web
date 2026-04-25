@@ -268,10 +268,15 @@ export function markClubNotificationRead(notificationId) {
  */
 export function submitClubProposal(body) {
   const userId = getJwtUserId()
+  const base = body && typeof body === 'object' ? { ...body } : {}
+  // Many backends model this property as a JSON string (name ends with "Json").
+  if (Array.isArray(base.otherMembersJson)) {
+    base.otherMembersJson = JSON.stringify(base.otherMembersJson)
+  }
   const normalizedBody = {
-    ...(body && typeof body === 'object' ? body : {}),
+    ...base,
     // Legacy alias reads submitter from payload id.
-    id: String((body && body.id) || userId || '').trim() || undefined,
+    id: String((base.id != null && base.id !== '' ? base.id : userId) || '').trim() || undefined,
   }
   const init = {
     method: 'POST',
@@ -882,14 +887,27 @@ export function patchStudentServicesClub(clubId, body) {
   })
 }
 
-/** Pending club logo for Student Services review. Multipart field name: `logoFile` (per API). */
-export function uploadStudentServicesClubProfileImage(clubId, file) {
+/**
+ * Club logo upload for Student Services / directory.
+ * Preferred: `POST /api/v1/student-services/clubs/{id}/profile-image` (pending → approve for public URL).
+ * Fallback: `PATCH /api/v1/club-admin/{id}/profile` with multipart `logoFile` (persists to profile immediately).
+ */
+export async function uploadStudentServicesClubProfileImage(clubId, file) {
   const fd = new FormData()
   fd.append('logoFile', file)
-  return clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/profile-image`, {
-    method: 'POST',
-    body: fd,
-  })
+  try {
+    return await clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/profile-image`, {
+      method: 'POST',
+      body: fd,
+    })
+  } catch (e) {
+    if (e?.status === 403 || e?.status === 404) {
+      const fd2 = new FormData()
+      fd2.append('logoFile', file)
+      return patchClubAdminProfile(clubId, fd2)
+    }
+    throw e
+  }
 }
 
 /**

@@ -5,11 +5,21 @@ import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ProposeClub.css'
 
 const STEPS = 4
-const STEP_LABELS = ['DETAILS', 'LEADERSHIP', 'FACULTY', 'REVIEW']
+const STEP_LABELS = ['DETAILS', 'LEADERSHIP', 'ALIGNMENT', 'REVIEW']
 const DESC_MAX = 500
 const MIN_ALIGNMENT_WORDS = 200
 const POSITION_OPTIONS = ['Select Position', 'Secretary', 'Treasurer', 'Social Media Manager', 'Event Coordinator', 'Outreach Officer', 'Other']
 const STUDENT_ID_REGEX = /^\d{8}$/
+/** Standard UUID string (e.g. from directory / SSO user id) */
+const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const INVALID_MEMBER_ID_MSG = 'Use an 8-digit student ID or a GUID (e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890)'
+
+function isValidProposalMemberId(raw) {
+  const s = String(raw || '').trim()
+  if (!s) return false
+  return STUDENT_ID_REGEX.test(s) || GUID_REGEX.test(s)
+}
 
 const PROPOSE_CLUB_DRAFT_COOKIE_KEY = 'clubs_propose_club_draft'
 
@@ -154,6 +164,7 @@ const ProposeClub = () => {
   const [vpStatus, setVpStatus] = useState('')
   const [otherMemberId, setOtherMemberId] = useState('')
   const [otherMemberPosition, setOtherMemberPosition] = useState('')
+  const [otherMemberIdError, setOtherMemberIdError] = useState('')
   const [otherMembers, setOtherMembers] = useState([])
   const [alignment, setAlignment] = useState('')
   const [vision, setVision] = useState('')
@@ -218,24 +229,29 @@ const ProposeClub = () => {
 
   const validatePresidentId = (val) => {
     if (!val) return ''
-    return STUDENT_ID_REGEX.test(val.trim()) ? '' : 'Student ID must be 8 digits'
+    return isValidProposalMemberId(val) ? '' : INVALID_MEMBER_ID_MSG
   }
   const validateVpId = (val) => {
     if (!val) return ''
-    return STUDENT_ID_REGEX.test(val.trim()) ? '' : 'Student ID must be 8 digits'
+    return isValidProposalMemberId(val) ? '' : INVALID_MEMBER_ID_MSG
   }
 
   const onPresidentBlur = () => setPresidentError(validatePresidentId(presidentId))
   const onVpBlur = () => {
     setVpError(validateVpId(vicePresidentId))
-    if (vicePresidentId && STUDENT_ID_REGEX.test(vicePresidentId.trim())) setVpStatus('Waitlisted for verification')
+    if (vicePresidentId && isValidProposalMemberId(vicePresidentId)) setVpStatus('Waitlisted for verification')
     else setVpStatus('')
   }
 
   const addOtherMember = () => {
     const id = otherMemberId.trim()
     const pos = otherMemberPosition && otherMemberPosition !== 'Select Position' ? otherMemberPosition : null
+    setOtherMemberIdError('')
     if (!id || !pos) return
+    if (!isValidProposalMemberId(id)) {
+      setOtherMemberIdError(INVALID_MEMBER_ID_MSG)
+      return
+    }
     setOtherMembers((prev) => [...prev, { studentId: id, position: pos }])
     setOtherMemberId('')
     setOtherMemberPosition('')
@@ -253,6 +269,19 @@ const ProposeClub = () => {
     (step === 2 && canContinueStep2) ||
     (step === 3 && canContinueStep3) ||
     (step === 4 && canContinueStep4)
+
+  const step3BlockedMessage =
+    step === 3 && !canContinueStep3
+      ? !alignment.trim()
+        ? 'Continue stays off until you write your mission alignment (below).'
+        : alignmentWords < MIN_ALIGNMENT_WORDS
+          ? `Mission alignment must be at least ${MIN_ALIGNMENT_WORDS} words. You have ${alignmentWords} — add about ${MIN_ALIGNMENT_WORDS - alignmentWords} more.`
+          : !vision.trim()
+            ? 'Continue stays off until you fill in long-term vision (3–5 years).'
+            : commitment !== 'yes'
+              ? 'Continue stays off until you select “Yes, I commit”.'
+              : null
+      : null
 
   const deadlinePassed = isAfterDeadline(policy.deadline)
 
@@ -457,12 +486,32 @@ const ProposeClub = () => {
               </div>
               <div className="propose-field">
                 <label>President Student ID <span className="propose-required">*</span></label>
-                <input type="text" placeholder="e.g. 12345678" value={presidentId} onChange={(e) => setPresidentId(e.target.value)} onBlur={onPresidentBlur} className={presidentError ? 'propose-input-error' : ''} />
+                <input
+                  type="text"
+                  placeholder="e.g. 12345678 or GUID"
+                  value={presidentId}
+                  onChange={(e) => {
+                    setPresidentId(e.target.value)
+                    if (presidentError) setPresidentError('')
+                  }}
+                  onBlur={onPresidentBlur}
+                  className={presidentError ? 'propose-input-error' : ''}
+                />
                 {presidentError && <span className="propose-field-error"><span className="propose-field-error-icon">!</span> {presidentError}</span>}
               </div>
               <div className="propose-field">
                 <label>Vice President Student ID <span className="propose-required">*</span></label>
-                <input type="text" placeholder="e.g. 87654321" value={vicePresidentId} onChange={(e) => setVicePresidentId(e.target.value)} onBlur={onVpBlur} className={vpError ? 'propose-input-error' : ''} />
+                <input
+                  type="text"
+                  placeholder="e.g. 87654321 or GUID"
+                  value={vicePresidentId}
+                  onChange={(e) => {
+                    setVicePresidentId(e.target.value)
+                    if (vpError) setVpError('')
+                  }}
+                  onBlur={onVpBlur}
+                  className={vpError ? 'propose-input-error' : ''}
+                />
                 {vpError && <span className="propose-field-error"><span className="propose-field-error-icon">!</span> {vpError}</span>}
                 {vpStatus && !vpError && <span className="propose-field-hint">{vpStatus}</span>}
               </div>
@@ -475,7 +524,21 @@ const ProposeClub = () => {
               <div className="propose-add-row">
                 <div className="propose-field propose-field--inline">
                   <label>STUDENT ID</label>
-                  <input type="text" placeholder="ID Number" value={otherMemberId} onChange={(e) => setOtherMemberId(e.target.value)} />
+                  <input
+                    type="text"
+                    placeholder="8 digits or GUID"
+                    value={otherMemberId}
+                    onChange={(e) => {
+                      setOtherMemberId(e.target.value)
+                      if (otherMemberIdError) setOtherMemberIdError('')
+                    }}
+                    className={otherMemberIdError ? 'propose-input-error' : ''}
+                  />
+                  {otherMemberIdError ? (
+                    <span className="propose-field-error" style={{ display: 'block', marginTop: 6 }}>
+                      <span className="propose-field-error-icon">!</span> {otherMemberIdError}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="propose-field propose-field--inline">
                   <label>POSITION</label>
@@ -530,7 +593,14 @@ const ProposeClub = () => {
                   <span className="propose-hint-right">MIN 200 WORDS</span>
                 </div>
                 <textarea placeholder="Describe how your club's goals and activities directly support ADA University's core values and strategic pillars..." value={alignment} onChange={(e) => setAlignment(e.target.value)} rows={5} />
-                {alignment.trim() && <span className="propose-word-count">{alignmentWords} words</span>}
+                <span
+                  className={`propose-word-count ${
+                    alignmentWords >= MIN_ALIGNMENT_WORDS ? 'propose-word-count--ok' : 'propose-word-count--warn'
+                  }`}
+                >
+                  {alignmentWords} / {MIN_ALIGNMENT_WORDS} words required
+                  {alignmentWords >= MIN_ALIGNMENT_WORDS ? ' — you can continue' : ''}
+                </span>
               </div>
               <div className="propose-field propose-field--hint">
                 <div className="propose-field-label-row">
@@ -557,6 +627,11 @@ const ProposeClub = () => {
                   <span>I am not ready to commit</span>
                 </label>
               </div>
+              {step3BlockedMessage ? (
+                <p className="propose-continue-blocked" role="status">
+                  {step3BlockedMessage}
+                </p>
+              ) : null}
               <div className="propose-actions propose-actions--footer">
                 <button type="button" className="propose-btn-secondary" onClick={handleBack}><IconBack /> Back</button>
                 <button type="button" className="propose-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>

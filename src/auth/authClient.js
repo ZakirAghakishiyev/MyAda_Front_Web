@@ -172,15 +172,17 @@ export async function changePassword(email, oldPassword, newPassword) {
  * On refresh failure: clears storage and redirects to /login.
  */
 export async function authFetch(input, init = {}) {
-  const hadRetry = Boolean(init._authRetry)
-  const headers = new Headers(init.headers ?? undefined)
+  const safeInit = init && typeof init === 'object' ? init : {}
+  const { _authRetry, ...fetchInit } = safeInit
+  const hadRetry = Boolean(_authRetry)
+  const headers = new Headers(fetchInit.headers ?? undefined)
   const accessToken = getAccessToken()
 
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`)
   }
 
-  const response = await fetch(input, { ...init, headers })
+  const response = await fetch(input, { ...fetchInit, headers })
   const hadBearer = Boolean(accessToken)
 
   if (
@@ -190,9 +192,9 @@ export async function authFetch(input, init = {}) {
   ) {
     const newAccess = await refreshSession()
     if (newAccess) {
-      const retryHeaders = new Headers(init.headers ?? undefined)
+      const retryHeaders = new Headers(fetchInit.headers ?? undefined)
       retryHeaders.set('Authorization', `Bearer ${newAccess}`)
-      return fetch(input, { ...init, headers: retryHeaders, _authRetry: true })
+      return fetch(input, { ...fetchInit, headers: retryHeaders })
     }
     forceLogoutAndRedirectLogin()
     const err = new Error('Session expired. Please sign in again.')
