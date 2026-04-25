@@ -2,6 +2,7 @@ import {
   CLUB_MEDIA_BASE,
   clubGatewayOrigin,
   resolveClubMediaUrl,
+  resolveClubMediaViaGateway,
   resolveProposedClubImageDisplayUrls,
   resolvePublishedClubImageDisplayUrls,
 } from './clubConfig'
@@ -197,12 +198,118 @@ function normalizeClubProposalOtherMembers(dto) {
   return []
 }
 
+/** Logo / cover image path from various API shapes (string URL or nested). */
+function extractClubProposalLogoPath(p) {
+  if (!p || typeof p !== 'object') return ''
+  const lf = p.logoFile
+  const logoFileStr =
+    typeof lf === 'string' ? lf.trim() : lf && typeof lf === 'object' ? String(lf.url ?? lf.path ?? '').trim() : ''
+  return firstNonEmptyLink(
+    p.logoUrl,
+    p.logoFileUrl,
+    p.clubLogoUrl,
+    p.logoImageUrl,
+    p.profileImageUrl,
+    p.ProfileImageUrl,
+    p.image,
+    p.Image,
+    logoFileStr,
+    p?.logo?.url,
+    p?.clubLogo?.url
+  )
+}
+
+/** Constitution PDF path from various API shapes. */
+function extractClubProposalConstitutionPath(p) {
+  if (!p || typeof p !== 'object') return ''
+  const cf = p.constitutionFile
+  const constitutionFileStr =
+    typeof cf === 'string' ? cf.trim() : cf && typeof cf === 'object' ? String(cf.url ?? cf.path ?? '').trim() : ''
+  return firstNonEmptyLink(
+    p.constitutionUrl,
+    p.constitutionFileUrl,
+    p.constitutionPdfUrl,
+    p.constitutionDocumentUrl,
+    p.pdfUrl,
+    p.documentUrl,
+    constitutionFileStr,
+    p?.constitutionDoc?.url,
+    p?.constitution?.url,
+    p?.documents?.constitutionUrl
+  )
+}
+
+function proposalDocumentDisplayUrl(raw) {
+  const s = raw != null ? String(raw).trim() : ''
+  if (!s) return null
+  if (/^https?:\/\//i.test(s)) return s
+  if (/^data:/i.test(s)) return s
+  const gw = resolveClubMediaViaGateway(s)
+  const s3 = resolveClubMediaUrl(s)
+  return gw || s3 || null
+}
+
+function filenameFromUrlOrPath(url) {
+  const s = String(url ?? '').trim()
+  if (!s) return null
+  try {
+    const noQuery = s.split('?')[0]
+    const seg = noQuery.split('/').filter(Boolean).pop()
+    return seg && /\.[a-z0-9]+$/i.test(seg) ? seg : null
+  } catch {
+    return null
+  }
+}
+
+function formatProposalDocSize(v) {
+  if (v == null || v === '') return '—'
+  if (typeof v === 'string' && /[km]b|bytes?/i.test(v)) return v
+  const n = Number(v)
+  if (!Number.isFinite(n) || n < 0) return '—'
+  if (n < 1024) return `${Math.round(n)} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function buildPrimaryOfficersFromProposal(p) {
+  if (Array.isArray(p.primaryOfficers) && p.primaryOfficers.length) return p.primaryOfficers
+  const out = []
+  const pres = p.presidentStudentId ?? p.presidentId ?? p.PresidentStudentId
+  const vp = p.vicePresidentStudentId ?? p.vicePresidentId ?? p.VicePresidentStudentId
+  if (pres != null && String(pres).trim()) out.push({ role: 'President', studentId: String(pres).trim() })
+  if (vp != null && String(vp).trim()) out.push({ role: 'Vice President', studentId: String(vp).trim() })
+  return out
+}
+
+function buildConstitutionDocForProposal(p) {
+  const nested = p.constitutionDoc && typeof p.constitutionDoc === 'object' ? p.constitutionDoc : {}
+  const rawPath = extractClubProposalConstitutionPath(p) || (nested.url ? String(nested.url) : '')
+  const url = proposalDocumentDisplayUrl(rawPath) || proposalDocumentDisplayUrl(nested.url)
+  const name =
+    String(nested.name || nested.fileName || filenameFromUrlOrPath(rawPath) || filenameFromUrlOrPath(url) || '').trim() ||
+    (url ? 'Constitution.pdf' : '')
+  const size = formatProposalDocSize(
+    nested.size ?? nested.fileSize ?? p.constitutionFileSize ?? p.constitutionSizeBytes
+  )
+  const uploadedAt =
+    nested.uploadedAt != null
+      ? String(nested.uploadedAt)
+      : p.submittedAt
+        ? new Date(p.submittedAt).toLocaleDateString()
+        : '—'
+  if (!url && !name) return null
+  return { name: name || 'Constitution.pdf', size, uploadedAt, url: url || null }
+}
+
 /** Student Services dashboard: map API club proposal to UI row shape */
 export function mapStudentServicesClubProposal(p, index = 0) {
   if (!p || typeof p !== 'object') return null
   const id = String(p.id ?? index)
-  const proposalId = String(p.proposalId ?? p.proposalID ?? id)
+  const proposalId = String(p.proposalId ?? p.proposalID ?? p.id ?? id)
   const desc = String(p.description ?? p.shortDesc ?? '')
+  const rawLogo = extractClubProposalLogoPath(p)
+  const { primary: logoImageUrl, alt: logoImageUrlAlt } = resolveProposedClubImageDisplayUrls(rawLogo)
+  const constitutionDoc = buildConstitutionDocForProposal(p)
   return {
     id,
     proposalId,
@@ -218,12 +325,14 @@ export function mapStudentServicesClubProposal(p, index = 0) {
       ? new Date(p.submittedAt).toLocaleDateString()
       : String(p.submittedAt ?? '—'),
     status: String(p.status ?? 'pending_review').toLowerCase().replace(/\s+/g, '_'),
-    primaryOfficers: Array.isArray(p.primaryOfficers) ? p.primaryOfficers : [],
+    primaryOfficers: buildPrimaryOfficersFromProposal(p),
     otherMembers: normalizeClubProposalOtherMembers(p),
     alignment: String(p.alignment ?? ''),
     vision: String(p.vision ?? ''),
     commitment: p.commitment ?? 'yes',
-    constitutionDoc: p.constitutionDoc ?? { name: 'constitution.pdf', size: '—', uploadedAt: '—' },
+    logoImageUrl: logoImageUrl || null,
+    logoImageUrlAlt: logoImageUrlAlt || null,
+    constitutionDoc: constitutionDoc ?? { name: '', size: '—', uploadedAt: '—', url: null },
     raw: p,
   }
 }

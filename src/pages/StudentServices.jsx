@@ -19,6 +19,7 @@ import {
   fetchStudentServicesClubEmployees,
   patchStudentServicesClub,
   fetchStudentServicesClub,
+  fetchStudentServicesClubProposal,
   uploadStudentServicesClubProfileImage,
   approveStudentServicesClubProfileImage,
   deleteStudentServicesClubMember,
@@ -691,6 +692,10 @@ const StudentServices = () => {
     if (allowed.has(next)) setSection(next)
   }, [location.state?.section])
   const [clubProposals, setClubProposals] = useState(INITIAL_CLUB_PROPOSALS)
+  const clubProposalsRef = useRef(clubProposals)
+  useEffect(() => {
+    clubProposalsRef.current = clubProposals
+  }, [clubProposals])
   const [selectedProposalId, setSelectedProposalId] = useState('')
   const [proposalSearch, setProposalSearch] = useState('')
   const [rejectModal, setRejectModal] = useState({ open: false, reason: '' })
@@ -893,6 +898,33 @@ const StudentServices = () => {
   useEffect(() => {
     refreshStudentServicesFromApi()
   }, [refreshStudentServicesFromApi])
+
+  /** Single-proposal GET often includes `logoFile` / `constitutionFile` URLs missing from the list response. */
+  useEffect(() => {
+    if (section !== 'club-proposals' || !selectedProposalId) return
+    const row = clubProposalsRef.current.find((p) => p.id === selectedProposalId)
+    const fetchId = String(row?.proposalId ?? row?.raw?.id ?? row?.id ?? selectedProposalId).trim()
+    if (!fetchId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const raw = await fetchStudentServicesClubProposal(fetchId)
+        if (cancelled || !raw || typeof raw !== 'object') return
+        const mapped = mapStudentServicesClubProposal(raw, 0)
+        if (!mapped) return
+        setClubProposals((prev) =>
+          prev.map((p) =>
+            p.id === selectedProposalId ? { ...mapped, id: p.id, proposalId: mapped.proposalId || p.proposalId } : p
+          )
+        )
+      } catch {
+        /* list row may already include file URLs */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [section, selectedProposalId])
 
   /** GET /student-services/clubs/{id} often includes profile + proposed image URLs omitted from the list payload. */
   useEffect(() => {
@@ -2355,6 +2387,17 @@ const StudentServices = () => {
                     <h1 className="ss-cp-detail-title">{selectedProposal.clubName}</h1>
                     <p className="ss-cp-detail-meta">ID: {selectedProposal.proposalId} • Submitted by {selectedProposal.submittedBy}</p>
                   </div>
+                  {selectedProposal.logoImageUrl ? (
+                    <img
+                      src={selectedProposal.logoImageUrl}
+                      alt=""
+                      className="ss-cp-detail-proposal-logo"
+                      onError={(e) => {
+                        const alt = selectedProposal.logoImageUrlAlt
+                        if (alt && e.currentTarget.src !== alt) e.currentTarget.src = alt
+                      }}
+                    />
+                  ) : null}
                 </div>
                 <div className="ss-cp-detail-actions">
                   <button type="button" className="ss-cp-btn ss-cp-btn--reject" onClick={() => setRejectModal({ open: true, reason: '' })}>
@@ -2402,14 +2445,18 @@ const StudentServices = () => {
 
                 <section className="ss-cp-section">
                   <h2 className="ss-cp-section-title"><IconPeople /> PRIMARY OFFICERS</h2>
-                  <ul className="ss-cp-officers-list">
-                    {selectedProposal.primaryOfficers.map((o, i) => (
-                      <li key={i}>
-                        <span className="ss-cp-officer-role">{o.role}:</span>
-                        <span className="ss-cp-officer-id">{o.studentId}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {(selectedProposal.primaryOfficers || []).length ? (
+                    <ul className="ss-cp-officers-list">
+                      {(selectedProposal.primaryOfficers || []).map((o, i) => (
+                        <li key={i}>
+                          <span className="ss-cp-officer-role">{o.role}:</span>
+                          <span className="ss-cp-officer-id">{o.studentId}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="ss-cp-field-value">No officer list in this payload.</p>
+                  )}
                 </section>
 
                 <section className="ss-cp-section">
@@ -2422,7 +2469,7 @@ const StudentServices = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedProposal.otherMembers.map((m, i) => (
+                      {(selectedProposal.otherMembers || []).map((m, i) => (
                         <tr key={i}>
                           <td>{m.studentId}</td>
                           <td>{m.position}</td>
@@ -2444,17 +2491,54 @@ const StudentServices = () => {
                   </div>
                 </section>
 
-                {selectedProposal.constitutionDoc && (
+                {(selectedProposal.logoImageUrl ||
+                  selectedProposal.constitutionDoc?.url ||
+                  (selectedProposal.constitutionDoc && selectedProposal.constitutionDoc.name)) && (
                   <section className="ss-cp-section">
                     <h2 className="ss-cp-section-title">Required documents</h2>
-                    <div className="ss-cp-doc-row">
-                      <div className="ss-cp-doc-icon" />
-                      <div className="ss-cp-doc-body">
-                        <div className="ss-cp-doc-name">{selectedProposal.constitutionDoc.name}</div>
-                        <div className="ss-cp-doc-meta">{selectedProposal.constitutionDoc.uploadedAt} • {selectedProposal.constitutionDoc.size}</div>
+                    {selectedProposal.logoImageUrl ? (
+                      <div className="ss-cp-doc-row">
+                        <div className="ss-cp-doc-icon ss-cp-doc-icon--logo" aria-hidden />
+                        <div className="ss-cp-doc-body">
+                          <div className="ss-cp-doc-name">Proposed club logo</div>
+                          <div className="ss-cp-doc-meta">Image from proposal</div>
+                        </div>
+                        <a
+                          href={selectedProposal.logoImageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ss-cp-btn ss-cp-btn--ghost"
+                        >
+                          Open
+                        </a>
                       </div>
-                      <button type="button" className="ss-cp-btn ss-cp-btn--ghost">View</button>
-                    </div>
+                    ) : null}
+                    {selectedProposal.constitutionDoc &&
+                    (selectedProposal.constitutionDoc.url || selectedProposal.constitutionDoc.name) ? (
+                      <div className="ss-cp-doc-row">
+                        <div className="ss-cp-doc-icon" aria-hidden />
+                        <div className="ss-cp-doc-body">
+                          <div className="ss-cp-doc-name">{selectedProposal.constitutionDoc.name || 'Constitution.pdf'}</div>
+                          <div className="ss-cp-doc-meta">
+                            {selectedProposal.constitutionDoc.uploadedAt} • {selectedProposal.constitutionDoc.size}
+                          </div>
+                        </div>
+                        {selectedProposal.constitutionDoc.url ? (
+                          <a
+                            href={selectedProposal.constitutionDoc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ss-cp-btn ss-cp-btn--ghost"
+                          >
+                            View PDF
+                          </a>
+                        ) : (
+                          <button type="button" className="ss-cp-btn ss-cp-btn--ghost" disabled title="No file URL in API response">
+                            View PDF
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
                   </section>
                 )}
               </div>

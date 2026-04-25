@@ -1706,6 +1706,16 @@
   color: #64748b;
 }
 
+.ss-cp-detail-proposal-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  background: #f8fafc;
+}
+
 .ss-cp-detail-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1766,6 +1776,15 @@
 .ss-cp-btn--ghost:hover {
   background: #f1f5f9;
   color: #334155;
+}
+
+a.ss-cp-btn--ghost {
+  text-decoration: none;
+}
+
+.ss-cp-btn--ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .ss-cp-btn--icon {
@@ -1940,6 +1959,10 @@
   border-radius: 8px;
   background: #e2e8f0;
   flex-shrink: 0;
+}
+
+.ss-cp-doc-icon--logo {
+  background: linear-gradient(135deg, #bfdbfe, #3b82f6);
 }
 
 .ss-cp-doc-name {

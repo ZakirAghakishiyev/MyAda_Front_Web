@@ -1,4 +1,5 @@
 import { AUTH_API_BASE, authFetch } from '../auth'
+import { getJwtUserId } from '../auth/jwtRoles'
 
 async function readJsonSafe(res) {
   const text = await res.text()
@@ -47,8 +48,20 @@ export function getOrganizationalIdFromAuthUser(user) {
   return null
 }
 
+const NINE_DIGIT_ORG_KEY = /^\d{9}$/
+const GUID_KEY =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function formatAuthUserDisplayName(user) {
+  if (!user || typeof user !== 'object') return ''
+  const first = String(user.firstName ?? '').trim()
+  const last = String(user.lastName ?? '').trim()
+  return [first, last].filter(Boolean).join(' ')
+}
+
 /**
- * Resolve a roster lookup key (student number, GUID, etc.) to `organizationalId` via GET `/api/auth/users/{id}`.
+ * Resolve a roster lookup key (9-digit organizational id or GUID) to `organizationalId`.
+ * Uses GET `/api/auth/users/by-organizational-id/{id}` for 9-digit keys, then GET `/api/auth/users/{id}`.
  * @param {string} lookupId
  * @returns {Promise<string>}
  */
@@ -59,7 +72,13 @@ export async function resolveEnteredIdToOrganizationalId(lookupId) {
     err.code = 'MISSING_USER_ID'
     throw err
   }
-  const user = await fetchAuthUserById(key)
+  let user = null
+  if (NINE_DIGIT_ORG_KEY.test(key)) {
+    user = await fetchAuthUserByOrganizationalId(key)
+  }
+  if (!user) {
+    user = await fetchAuthUserById(key)
+  }
   if (!user || typeof user !== 'object') {
     const err = new Error(
       `No account was found for "${key}". Check the student ID or GUID, or try again after signing in.`
@@ -74,6 +93,42 @@ export async function resolveEnteredIdToOrganizationalId(lookupId) {
   )
   err.code = 'ORGANIZATIONAL_ID_MISSING'
   throw err
+}
+
+/**
+ * Organizational / directory id for the signed-in user (JWT subject → profile).
+ * @returns {Promise<string | null>}
+ */
+export async function fetchCurrentUserOrganizationalId() {
+  const jwtId = getJwtUserId()
+  if (!jwtId) return null
+  const user = await fetchAuthUserById(jwtId)
+  if (!user || typeof user !== 'object') return null
+  return getOrganizationalIdFromAuthUser(user)
+}
+
+/**
+ * Load auth user for proposal UI (name preview). Same lookup rules as {@link resolveEnteredIdToOrganizationalId}.
+ * @param {string} lookupId
+ * @returns {Promise<{ displayName: string, organizationalId: string | null } | null>}
+ */
+export async function fetchProposalMemberProfile(lookupId) {
+  const key = String(lookupId ?? '').trim()
+  if (!key || (!NINE_DIGIT_ORG_KEY.test(key) && !GUID_KEY.test(key))) return null
+  let user = null
+  if (NINE_DIGIT_ORG_KEY.test(key)) {
+    user = await fetchAuthUserByOrganizationalId(key)
+  }
+  if (!user) {
+    user = await fetchAuthUserById(key)
+  }
+  if (!user || typeof user !== 'object') return null
+  const displayName = formatAuthUserDisplayName(user)
+  const organizationalId = getOrganizationalIdFromAuthUser(user)
+  return {
+    displayName: displayName || '',
+    organizationalId,
+  }
 }
 
 /**
@@ -100,6 +155,35 @@ export async function fetchAuthUserById(userId) {
   }
 
   // Fallback: retry once without Bearer token (some gateways treat Bearer as "must be authorized")
+  try {
+    const res = await fetch(url, { method: 'GET' })
+    if (!res.ok) return null
+    const data = unwrapAutoWrapper(await readJsonSafe(res))
+    return data && typeof data === 'object' ? data : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * GET `/api/auth/users/by-organizational-id/{organizationalId}` (see AUTH_API_DOC).
+ */
+export async function fetchAuthUserByOrganizationalId(organizationalId) {
+  const id = String(organizationalId ?? '').trim()
+  if (!id) return null
+
+  const url = `${AUTH_API_BASE}/api/auth/users/by-organizational-id/${encodeURIComponent(id)}`
+  try {
+    const res = await authFetch(url, { method: 'GET' })
+    if (res.ok) {
+      const data = unwrapAutoWrapper(await readJsonSafe(res))
+      return data && typeof data === 'object' ? data : null
+    }
+    if (res.status !== 403) return null
+  } catch {
+    // ignore and fallback
+  }
+
   try {
     const res = await fetch(url, { method: 'GET' })
     if (!res.ok) return null

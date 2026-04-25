@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { resolveEnteredIdToOrganizationalId } from '../api/authUsersApi'
-import { fetchStudentServicesProposalRequirements, submitClubProposal } from '../api/clubApi'
+import { fetchProposalMemberProfile, resolveEnteredIdToOrganizationalId } from '../api/authUsersApi'
+import {
+  CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES,
+  CLUB_PROPOSAL_MAX_LOGO_BYTES,
+  fetchStudentServicesProposalRequirements,
+  submitClubProposal,
+} from '../api/clubApi'
 import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ProposeClub.css'
 
@@ -163,15 +168,26 @@ const ProposeClub = () => {
   const [presidentError, setPresidentError] = useState('')
   const [vpError, setVpError] = useState('')
   const [vpStatus, setVpStatus] = useState('')
+  const [presidentDisplayName, setPresidentDisplayName] = useState('')
+  const [presidentNameLoading, setPresidentNameLoading] = useState(false)
+  const [vicePresidentDisplayName, setVicePresidentDisplayName] = useState('')
+  const [vicePresidentNameLoading, setVicePresidentNameLoading] = useState(false)
   const [otherMemberId, setOtherMemberId] = useState('')
   const [otherMemberPosition, setOtherMemberPosition] = useState('')
   const [otherMemberIdError, setOtherMemberIdError] = useState('')
+  const [otherMemberInputDisplayName, setOtherMemberInputDisplayName] = useState('')
+  const [otherMemberInputNameLoading, setOtherMemberInputNameLoading] = useState(false)
   const [otherMembers, setOtherMembers] = useState([])
+  const presidentBlurSeq = useRef(0)
+  const vpBlurSeq = useRef(0)
+  const otherMemberInputBlurSeq = useRef(0)
   const [alignment, setAlignment] = useState('')
   const [vision, setVision] = useState('')
   const [commitment, setCommitment] = useState('')
   const [logoFile, setLogoFile] = useState(null)
   const [constitutionFile, setConstitutionFile] = useState(null)
+  const [logoFileError, setLogoFileError] = useState('')
+  const [constitutionFileError, setConstitutionFileError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [policy, setPolicy] = useState({
     loading: true,
@@ -217,7 +233,16 @@ const ProposeClub = () => {
     setActivities(draft.activities || '')
     setPresidentId(draft.presidentId || '')
     setVicePresidentId(draft.vicePresidentId || '')
-    setOtherMembers(Array.isArray(draft.otherMembers) ? draft.otherMembers : [])
+    setOtherMembers(
+      Array.isArray(draft.otherMembers)
+        ? draft.otherMembers.map((m, idx) => ({
+            rowId: m.rowId || `draft-${idx}-${String(m.studentId || '')}`,
+            studentId: m.studentId,
+            position: m.position,
+            displayName: m.displayName !== undefined ? m.displayName : undefined,
+          }))
+        : []
+    )
     setAlignment(draft.alignment || '')
     setVision(draft.vision || '')
     setCommitment(draft.commitment || '')
@@ -237,11 +262,131 @@ const ProposeClub = () => {
     return isValidProposalMemberId(val) ? '' : INVALID_MEMBER_ID_MSG
   }
 
-  const onPresidentBlur = () => setPresidentError(validatePresidentId(presidentId))
+  const runPresidentNameLookup = (raw) => {
+    if (!isValidProposalMemberId(raw)) {
+      setPresidentDisplayName('')
+      setPresidentNameLoading(false)
+      return
+    }
+    presidentBlurSeq.current += 1
+    const seq = presidentBlurSeq.current
+    setPresidentNameLoading(true)
+    fetchProposalMemberProfile(raw)
+      .then((pr) => {
+        if (seq !== presidentBlurSeq.current) return
+        setPresidentDisplayName(pr?.displayName || '')
+      })
+      .finally(() => {
+        if (seq === presidentBlurSeq.current) setPresidentNameLoading(false)
+      })
+  }
+
+  const onPresidentBlur = () => {
+    setPresidentError(validatePresidentId(presidentId))
+    runPresidentNameLookup(presidentId.trim())
+  }
+
+  const runVpNameLookup = (raw) => {
+    if (!isValidProposalMemberId(raw)) {
+      setVicePresidentDisplayName('')
+      setVicePresidentNameLoading(false)
+      return
+    }
+    vpBlurSeq.current += 1
+    const seq = vpBlurSeq.current
+    setVicePresidentNameLoading(true)
+    fetchProposalMemberProfile(raw)
+      .then((pr) => {
+        if (seq !== vpBlurSeq.current) return
+        setVicePresidentDisplayName(pr?.displayName || '')
+      })
+      .finally(() => {
+        if (seq === vpBlurSeq.current) setVicePresidentNameLoading(false)
+      })
+  }
+
   const onVpBlur = () => {
     setVpError(validateVpId(vicePresidentId))
     if (vicePresidentId && isValidProposalMemberId(vicePresidentId)) setVpStatus('Waitlisted for verification')
     else setVpStatus('')
+    runVpNameLookup(vicePresidentId.trim())
+  }
+
+  /** When opening Leadership step, resolve officer names (draft restore / return from later step). */
+  useEffect(() => {
+    if (step !== 2) return
+    let cancelled = false
+    ;(async () => {
+      const p = presidentId.trim()
+      if (isValidProposalMemberId(p)) {
+        if (!cancelled) setPresidentNameLoading(true)
+        const pr = await fetchProposalMemberProfile(p)
+        if (!cancelled) {
+          setPresidentDisplayName(pr?.displayName || '')
+          setPresidentNameLoading(false)
+        }
+      } else if (!cancelled) {
+        setPresidentDisplayName('')
+      }
+      const v = vicePresidentId.trim()
+      if (isValidProposalMemberId(v)) {
+        if (!cancelled) setVicePresidentNameLoading(true)
+        const vr = await fetchProposalMemberProfile(v)
+        if (!cancelled) {
+          setVicePresidentDisplayName(vr?.displayName || '')
+          setVicePresidentNameLoading(false)
+        }
+      } else if (!cancelled) {
+        setVicePresidentDisplayName('')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Intentionally only `step`: avoid auth lookup on every keystroke; blur handlers refresh names.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
+
+  /** Resolve display names for executive rows still missing them (e.g. draft with saved roster). */
+  useEffect(() => {
+    if (step !== 2) return
+    let cancelled = false
+    ;(async () => {
+      for (const m of otherMembers) {
+        if (cancelled) return
+        const sid = String(m.studentId || '').trim()
+        if (!isValidProposalMemberId(sid) || m.displayName !== undefined) continue
+        const rowId = m.rowId
+        const pr = await fetchProposalMemberProfile(sid)
+        if (cancelled) return
+        setOtherMembers((prev) =>
+          prev.map((row) => (row.rowId === rowId ? { ...row, displayName: pr?.displayName || '' } : row))
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [step, otherMembers])
+
+  const onOtherMemberIdBlur = () => {
+    const raw = otherMemberId.trim()
+    if (!isValidProposalMemberId(raw)) {
+      setOtherMemberInputDisplayName('')
+      setOtherMemberInputNameLoading(false)
+      return
+    }
+    otherMemberInputBlurSeq.current += 1
+    const seq = otherMemberInputBlurSeq.current
+    setOtherMemberInputNameLoading(true)
+    fetchProposalMemberProfile(raw)
+      .then((pr) => {
+        if (seq !== otherMemberInputBlurSeq.current) return
+        setOtherMemberInputDisplayName(pr?.displayName || '')
+      })
+      .finally(() => {
+        if (seq === otherMemberInputBlurSeq.current) setOtherMemberInputNameLoading(false)
+      })
   }
 
   const addOtherMember = () => {
@@ -253,9 +398,12 @@ const ProposeClub = () => {
       setOtherMemberIdError(INVALID_MEMBER_ID_MSG)
       return
     }
-    setOtherMembers((prev) => [...prev, { studentId: id, position: pos }])
+    const rowId = `m-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    setOtherMembers((prev) => [...prev, { rowId, studentId: id, position: pos, displayName: undefined }])
     setOtherMemberId('')
     setOtherMemberPosition('')
+    setOtherMemberInputDisplayName('')
+    setOtherMemberInputNameLoading(false)
   }
   const removeOtherMember = (index) => setOtherMembers((prev) => prev.filter((_, i) => i !== index))
 
@@ -263,7 +411,13 @@ const ProposeClub = () => {
   const canContinueStep2 = presidentId.trim() && vicePresidentId.trim() && !validatePresidentId(presidentId) && !validateVpId(vicePresidentId)
   const alignmentWords = countWords(alignment)
   const canContinueStep3 = alignment.trim() && vision.trim() && commitment === 'yes' && alignmentWords >= MIN_ALIGNMENT_WORDS
-  const canContinueStep4 = logoFile && constitutionFile
+  const canContinueStep4 =
+    logoFile &&
+    constitutionFile &&
+    !logoFileError &&
+    !constitutionFileError &&
+    logoFile.size <= CLUB_PROPOSAL_MAX_LOGO_BYTES &&
+    constitutionFile.size <= CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES
 
   const canContinue =
     (step === 1 && canContinueStep1) ||
@@ -309,6 +463,7 @@ const ProposeClub = () => {
       const vpLookup = vicePresidentId.trim()
       const otherLookups = otherMembers.map((m) => String(m.studentId || '').trim()).filter(Boolean)
       const uniqueLookups = [...new Set([presidentLookup, vpLookup, ...otherLookups].filter(Boolean))]
+      /** Resolve directory input to organizational id for Club API (do not send Auth user GUID). */
       const orgIdByLookup = new Map()
       await Promise.all(
         uniqueLookups.map(async (lookup) => {
@@ -341,7 +496,7 @@ const ProposeClub = () => {
         constitutionFile,
         presidentStudentId: presidentOrg,
         vicePresidentStudentId: vpOrg,
-        // API: repeated `otherMembersJson` fields = organizational ids (resolved from directory).
+        // API: repeated `otherMembersJson` = organizational ids (resolved via Auth).
         otherMembers: otherMembersForApi,
         commitment: commitment === 'yes' ? 'yes' : 'no',
         shortDesc: shortDesc.trim().slice(0, DESC_MAX),
@@ -503,32 +658,52 @@ const ProposeClub = () => {
               </div>
               <div className="propose-field">
                 <label>President Student ID <span className="propose-required">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g. 123456789 or GUID"
-                  value={presidentId}
-                  onChange={(e) => {
-                    setPresidentId(e.target.value)
-                    if (presidentError) setPresidentError('')
-                  }}
-                  onBlur={onPresidentBlur}
-                  className={presidentError ? 'propose-input-error' : ''}
-                />
+                <div className="propose-id-with-name">
+                  <input
+                    type="text"
+                    placeholder="e.g. 123456789 or GUID"
+                    value={presidentId}
+                    onChange={(e) => {
+                      setPresidentId(e.target.value)
+                      if (presidentError) setPresidentError('')
+                      presidentBlurSeq.current += 1
+                      setPresidentDisplayName('')
+                      setPresidentNameLoading(false)
+                    }}
+                    onBlur={onPresidentBlur}
+                    className={presidentError ? 'propose-input-error' : ''}
+                  />
+                  {presidentNameLoading ? (
+                    <span className="propose-resolved-name propose-resolved-name--muted">Looking up…</span>
+                  ) : presidentDisplayName ? (
+                    <span className="propose-resolved-name">{presidentDisplayName}</span>
+                  ) : null}
+                </div>
                 {presidentError && <span className="propose-field-error"><span className="propose-field-error-icon">!</span> {presidentError}</span>}
               </div>
               <div className="propose-field">
                 <label>Vice President Student ID <span className="propose-required">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g. 987654321 or GUID"
-                  value={vicePresidentId}
-                  onChange={(e) => {
-                    setVicePresidentId(e.target.value)
-                    if (vpError) setVpError('')
-                  }}
-                  onBlur={onVpBlur}
-                  className={vpError ? 'propose-input-error' : ''}
-                />
+                <div className="propose-id-with-name">
+                  <input
+                    type="text"
+                    placeholder="e.g. 987654321 or GUID"
+                    value={vicePresidentId}
+                    onChange={(e) => {
+                      setVicePresidentId(e.target.value)
+                      if (vpError) setVpError('')
+                      vpBlurSeq.current += 1
+                      setVicePresidentDisplayName('')
+                      setVicePresidentNameLoading(false)
+                    }}
+                    onBlur={onVpBlur}
+                    className={vpError ? 'propose-input-error' : ''}
+                  />
+                  {vicePresidentNameLoading ? (
+                    <span className="propose-resolved-name propose-resolved-name--muted">Looking up…</span>
+                  ) : vicePresidentDisplayName ? (
+                    <span className="propose-resolved-name">{vicePresidentDisplayName}</span>
+                  ) : null}
+                </div>
                 {vpError && <span className="propose-field-error"><span className="propose-field-error-icon">!</span> {vpError}</span>}
                 {vpStatus && !vpError && <span className="propose-field-hint">{vpStatus}</span>}
               </div>
@@ -541,16 +716,27 @@ const ProposeClub = () => {
               <div className="propose-add-row">
                 <div className="propose-field propose-field--inline">
                   <label>STUDENT ID</label>
-                  <input
-                    type="text"
-                    placeholder="9 digits or GUID"
-                    value={otherMemberId}
-                    onChange={(e) => {
-                      setOtherMemberId(e.target.value)
-                      if (otherMemberIdError) setOtherMemberIdError('')
-                    }}
-                    className={otherMemberIdError ? 'propose-input-error' : ''}
-                  />
+                  <div className="propose-id-with-name propose-id-with-name--compact">
+                    <input
+                      type="text"
+                      placeholder="9 digits or GUID"
+                      value={otherMemberId}
+                      onChange={(e) => {
+                        setOtherMemberId(e.target.value)
+                        if (otherMemberIdError) setOtherMemberIdError('')
+                        otherMemberInputBlurSeq.current += 1
+                        setOtherMemberInputDisplayName('')
+                        setOtherMemberInputNameLoading(false)
+                      }}
+                      onBlur={onOtherMemberIdBlur}
+                      className={otherMemberIdError ? 'propose-input-error' : ''}
+                    />
+                    {otherMemberInputNameLoading ? (
+                      <span className="propose-resolved-name propose-resolved-name--muted">Looking up…</span>
+                    ) : otherMemberInputDisplayName ? (
+                      <span className="propose-resolved-name">{otherMemberInputDisplayName}</span>
+                    ) : null}
+                  </div>
                   {otherMemberIdError ? (
                     <span className="propose-field-error" style={{ display: 'block', marginTop: 6 }}>
                       <span className="propose-field-error-icon">!</span> {otherMemberIdError}
@@ -572,14 +758,18 @@ const ProposeClub = () => {
                   <thead>
                     <tr>
                       <th>STUDENT ID</th>
+                      <th>NAME</th>
                       <th>ASSIGNED POSITION</th>
                       <th>ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>
                     {otherMembers.map((m, i) => (
-                      <tr key={i}>
+                      <tr key={m.rowId || i}>
                         <td>{m.studentId}</td>
+                        <td className="propose-table-name">
+                          {m.displayName !== undefined ? m.displayName || '—' : '…'}
+                        </td>
                         <td><span className="propose-table-position">{m.position}</span></td>
                         <td><button type="button" className="propose-btn-icon" onClick={() => removeOtherMember(i)} aria-label="Remove"><IconTrash /></button></td>
                       </tr>
@@ -673,21 +863,73 @@ const ProposeClub = () => {
                 <div className="propose-field">
                   <label>Club Logo (PNG/JPG)</label>
                   <label className="propose-upload-zone">
-                    <input type="file" accept=".png,.jpg,.jpeg" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} className="propose-upload-input" />
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg"
+                      onChange={(e) => {
+                        const input = e.target
+                        const file = input.files?.[0] ?? null
+                        setLogoFileError('')
+                        if (!file) {
+                          setLogoFile(null)
+                          return
+                        }
+                        if (file.size > CLUB_PROPOSAL_MAX_LOGO_BYTES) {
+                          setLogoFile(null)
+                          setLogoFileError(`Logo must be ${CLUB_PROPOSAL_MAX_LOGO_BYTES / (1024 * 1024)} MB or smaller.`)
+                          input.value = ''
+                          return
+                        }
+                        setLogoFile(file)
+                      }}
+                      className="propose-upload-input"
+                    />
                     <IconUploadImage />
                     <span>Click to upload or drag and drop</span>
                     <span className="propose-upload-spec">Recommended size 512x512px (Max 2MB)</span>
                     {logoFile && <span className="propose-upload-filename">{logoFile.name}</span>}
+                    {logoFileError ? (
+                      <span className="propose-field-error propose-upload-file-error" role="alert">
+                        <span className="propose-field-error-icon">!</span> {logoFileError}
+                      </span>
+                    ) : null}
                   </label>
                 </div>
                 <div className="propose-field">
                   <label>Club Constitution (PDF)</label>
                   <label className="propose-upload-zone">
-                    <input type="file" accept=".pdf" onChange={(e) => setConstitutionFile(e.target.files?.[0] ?? null)} className="propose-upload-input" />
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => {
+                        const input = e.target
+                        const file = input.files?.[0] ?? null
+                        setConstitutionFileError('')
+                        if (!file) {
+                          setConstitutionFile(null)
+                          return
+                        }
+                        if (file.size > CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES) {
+                          setConstitutionFile(null)
+                          setConstitutionFileError(
+                            `Constitution PDF must be ${CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES / (1024 * 1024)} MB or smaller.`
+                          )
+                          input.value = ''
+                          return
+                        }
+                        setConstitutionFile(file)
+                      }}
+                      className="propose-upload-input"
+                    />
                     <IconUploadDoc />
                     <span>Click to upload or drag and drop</span>
                     <span className="propose-upload-spec">PDF format only (Max 5MB)</span>
                     {constitutionFile && <span className="propose-upload-filename">{constitutionFile.name}</span>}
+                    {constitutionFileError ? (
+                      <span className="propose-field-error propose-upload-file-error" role="alert">
+                        <span className="propose-field-error-icon">!</span> {constitutionFileError}
+                      </span>
+                    ) : null}
                   </label>
                 </div>
               </div>

@@ -270,6 +270,39 @@
   display: block;
 }
 
+.propose-id-with-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.propose-field .propose-id-with-name input[type="text"] {
+  flex: 1;
+  min-width: 160px;
+  width: auto;
+}
+
+.propose-id-with-name--compact {
+  gap: 8px 10px;
+}
+
+.propose-field .propose-id-with-name--compact input[type="text"] {
+  min-width: 120px;
+}
+
+.propose-resolved-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.propose-resolved-name--muted {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
 .propose-char-count,
 .propose-word-count {
   font-size: 12px;
@@ -582,6 +615,16 @@
   font-size: 12px;
   color: #2563eb;
   font-weight: 500;
+}
+
+.propose-upload-file-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .propose-upload-input {

@@ -1,6 +1,7 @@
 import { authFetch } from '../auth/authClient'
 import { getAccessToken } from '../auth/tokenStorage'
 import { getJwtUserId } from '../auth/jwtRoles'
+import { fetchCurrentUserOrganizationalId } from './authUsersApi'
 import { clubUrl } from './clubConfig'
 
 async function readJsonSafe(res) {
@@ -262,13 +263,23 @@ export function markClubNotificationRead(notificationId) {
 
 /* --- Club proposal (student) --- */
 
+/** Max sizes aligned with ProposeClub UI copy and typical gateway limits. */
+export const CLUB_PROPOSAL_MAX_LOGO_BYTES = 2 * 1024 * 1024
+export const CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES = 5 * 1024 * 1024
+
+function normalizeClubProposalCommitment(val) {
+  const s = String(val ?? 'no').trim().toLowerCase()
+  if (s === 'yes' || s === 'y' || s === 'true' || s === '1') return 'yes'
+  return 'no'
+}
+
 /**
  * POST /api/v1/club-proposals (anonymous).
  * Per CLUB_API_DOC: multipart/form-data with real `logoFile` / `constitutionFile` uploads (S3 on server);
- * `otherMembersJson` is repeated form fields, one string user id per member (not a JSON blob).
+ * `otherMembersJson` is repeated form fields, one string id per member (not a JSON blob). This gateway expects **organizational / student-style ids**, not Auth GUIDs — send trimmed strings as provided.
  *
  * @param {object} proposal
- * @param {string} [proposal.id] submitter id; falls back to JWT sub when logged in
+ * @param {string} [proposal.id] submitter id; when omitted, resolved as signed-in user’s **organizational** id (Auth profile)
  * @param {string} proposal.name
  * @param {string} [proposal.description]
  * @param {File} proposal.logoFile
@@ -284,25 +295,70 @@ export function markClubNotificationRead(notificationId) {
  * @param {string} [proposal.alignment]
  * @param {string} [proposal.vision]
  */
-export function submitClubProposal(proposal) {
-  const userId = getJwtUserId()
+export async function submitClubProposal(proposal) {
   const p = proposal && typeof proposal === 'object' ? proposal : {}
   const fd = new FormData()
 
-  const submitterId = String((p.id != null && p.id !== '' ? p.id : userId) || '').trim()
-  if (submitterId) fd.append('id', submitterId)
-
-  fd.append('name', String(p.name || '').trim())
-
-  const description = String(p.description ?? '').trim()
-  if (description) fd.append('description', description)
-
-  if (p.logoFile instanceof File) {
-    fd.append('logoFile', p.logoFile, p.logoFile.name)
+  if (!(p.logoFile instanceof File) || p.logoFile.size <= 0) {
+    const err = new Error(
+      'Club logo is missing or empty. Choose a real PNG/JPG file in Postman (no warning on the file row) or in the app before submitting.'
+    )
+    err.code = 'PROPOSAL_LOGO_FILE_MISSING'
+    throw err
   }
-  if (p.constitutionFile instanceof File) {
-    fd.append('constitutionFile', p.constitutionFile, p.constitutionFile.name)
+  if (!(p.constitutionFile instanceof File) || p.constitutionFile.size <= 0) {
+    const err = new Error(
+      'Constitution PDF is missing or empty. Choose a real PDF file in Postman (no warning on the file row) or in the app before submitting.'
+    )
+    err.code = 'PROPOSAL_CONSTITUTION_FILE_MISSING'
+    throw err
   }
+  if (p.logoFile.size > CLUB_PROPOSAL_MAX_LOGO_BYTES) {
+    const mb = CLUB_PROPOSAL_MAX_LOGO_BYTES / (1024 * 1024)
+    const err = new Error(`Club logo must be ${mb} MB or smaller.`)
+    err.code = 'PROPOSAL_LOGO_TOO_LARGE'
+    throw err
+  }
+  if (p.constitutionFile.size > CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES) {
+    const mb = CLUB_PROPOSAL_MAX_CONSTITUTION_BYTES / (1024 * 1024)
+    const err = new Error(`Constitution PDF must be ${mb} MB or smaller.`)
+    err.code = 'PROPOSAL_CONSTITUTION_TOO_LARGE'
+    throw err
+  }
+
+  let submitterId = p.id != null && p.id !== '' ? String(p.id).trim() : ''
+  if (!submitterId) {
+    submitterId = (await fetchCurrentUserOrganizationalId()) || ''
+  }
+  if (getAccessToken() && !submitterId) {
+    const err = new Error(
+      'Your student (organizational) id could not be loaded. Please sign in again, or contact support if this continues.'
+    )
+    err.code = 'PROPOSAL_SUBMITTER_ID_MISSING'
+    throw err
+  }
+  if (submitterId) {
+    fd.append('id', submitterId)
+  }
+
+  const name = String(p.name || '').trim()
+  fd.append('name', name)
+
+  /** `description` is required in legacy multipart mode on some gateways; always send a non-empty string. */
+  let description = String(p.description ?? '').trim()
+  if (!description) {
+    const parts = [p.shortDesc, p.uniqueDesc, p.goals, p.activities, p.alignment, p.vision]
+      .map((x) => String(x ?? '').trim())
+      .filter(Boolean)
+    description = parts.join('\n\n')
+  }
+  if (!description) {
+    description = name ? `Club proposal: ${name}` : 'Club proposal'
+  }
+  fd.append('description', description)
+
+  fd.append('logoFile', p.logoFile, p.logoFile.name)
+  fd.append('constitutionFile', p.constitutionFile, p.constitutionFile.name)
 
   const president = String(p.presidentStudentId ?? '').trim()
   if (president) fd.append('presidentStudentId', president)
@@ -322,8 +378,7 @@ export function submitClubProposal(proposal) {
     if (sid) fd.append('otherMembersJson', sid)
   }
 
-  const commitment = p.commitment === true || p.commitment === 'yes' ? 'yes' : String(p.commitment || 'no').trim() || 'no'
-  fd.append('commitment', commitment)
+  fd.append('commitment', normalizeClubProposalCommitment(p.commitment))
 
   const appendIf = (key, val) => {
     const t = String(val ?? '').trim()
