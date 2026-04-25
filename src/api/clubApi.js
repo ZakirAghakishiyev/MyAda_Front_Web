@@ -263,28 +263,81 @@ export function markClubNotificationRead(notificationId) {
 /* --- Club proposal (student) --- */
 
 /**
- * Submit a club proposal JSON payload.
- * Uses non-user-scoped endpoint: club-proposals
+ * POST /api/v1/club-proposals (anonymous).
+ * Per CLUB_API_DOC: multipart/form-data with real `logoFile` / `constitutionFile` uploads (S3 on server);
+ * `otherMembersJson` is repeated form fields, one string user id per member (not a JSON blob).
+ *
+ * @param {object} proposal
+ * @param {string} [proposal.id] submitter id; falls back to JWT sub when logged in
+ * @param {string} proposal.name
+ * @param {string} [proposal.description]
+ * @param {File} proposal.logoFile
+ * @param {File} proposal.constitutionFile
+ * @param {string} [proposal.presidentStudentId]
+ * @param {string} [proposal.vicePresidentStudentId]
+ * @param {Array<{ studentId?: string, userId?: string, position?: string } | string>} [proposal.otherMembers] roster rows or plain id strings
+ * @param {string} [proposal.commitment]
+ * @param {string} [proposal.shortDesc]
+ * @param {string} [proposal.uniqueDesc]
+ * @param {string} [proposal.goals]
+ * @param {string} [proposal.activities]
+ * @param {string} [proposal.alignment]
+ * @param {string} [proposal.vision]
  */
-export function submitClubProposal(body) {
+export function submitClubProposal(proposal) {
   const userId = getJwtUserId()
-  const base = body && typeof body === 'object' ? { ...body } : {}
-  // Many backends model this property as a JSON string (name ends with "Json").
-  if (Array.isArray(base.otherMembersJson)) {
-    base.otherMembersJson = JSON.stringify(base.otherMembersJson)
+  const p = proposal && typeof proposal === 'object' ? proposal : {}
+  const fd = new FormData()
+
+  const submitterId = String((p.id != null && p.id !== '' ? p.id : userId) || '').trim()
+  if (submitterId) fd.append('id', submitterId)
+
+  fd.append('name', String(p.name || '').trim())
+
+  const description = String(p.description ?? '').trim()
+  if (description) fd.append('description', description)
+
+  if (p.logoFile instanceof File) {
+    fd.append('logoFile', p.logoFile, p.logoFile.name)
   }
-  const normalizedBody = {
-    ...base,
-    // Legacy alias reads submitter from payload id.
-    id: String((base.id != null && base.id !== '' ? base.id : userId) || '').trim() || undefined,
+  if (p.constitutionFile instanceof File) {
+    fd.append('constitutionFile', p.constitutionFile, p.constitutionFile.name)
   }
-  const init = {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(normalizedBody),
+
+  const president = String(p.presidentStudentId ?? '').trim()
+  if (president) fd.append('presidentStudentId', president)
+  const vice = String(p.vicePresidentStudentId ?? '').trim()
+  if (vice) fd.append('vicePresidentStudentId', vice)
+
+  const others = Array.isArray(p.otherMembers)
+    ? p.otherMembers
+    : Array.isArray(p.otherMembersJson)
+      ? p.otherMembersJson
+      : []
+  for (const entry of others) {
+    const sid =
+      typeof entry === 'string' || typeof entry === 'number'
+        ? String(entry).trim()
+        : String(entry?.studentId ?? entry?.userId ?? '').trim()
+    if (sid) fd.append('otherMembersJson', sid)
   }
-  // Club proposals are intentionally unauthenticated in the current backend contract.
-  return clubPublicJson('club-proposals', init)
+
+  const commitment = p.commitment === true || p.commitment === 'yes' ? 'yes' : String(p.commitment || 'no').trim() || 'no'
+  fd.append('commitment', commitment)
+
+  const appendIf = (key, val) => {
+    const t = String(val ?? '').trim()
+    if (t) fd.append(key, t)
+  }
+  appendIf('shortDesc', p.shortDesc)
+  appendIf('uniqueDesc', p.uniqueDesc)
+  appendIf('goals', p.goals)
+  appendIf('activities', p.activities)
+  appendIf('alignment', p.alignment)
+  appendIf('vision', p.vision)
+
+  // Do not set Content-Type — browser sets multipart boundary.
+  return clubPublicJson('club-proposals', { method: 'POST', body: fd })
 }
 
 /* --- Applications (interview slots) --- */

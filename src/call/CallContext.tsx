@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import { getAccessToken, forceLogoutAndRedirectLogin } from '../auth'
-import { callHubClient } from './callHubClient'
+import { buildIceServersEndpoint, callHubClient } from './callHubClient'
+import { invalidateCallHistory } from './callHistoryInvalidate'
 import type {
   CallAcceptedPayload,
   CallCancelledPayload,
@@ -39,11 +40,12 @@ type CallContextValue = {
   cancelCall: (callId: string, reason?: string) => Promise<void>
   leaveCall: () => Promise<void>
   endCall: () => Promise<void>
+  /** User-facing summary when a call stops (disconnect, explicit end, etc.) */
+  sessionEndReason: string | null
+  clearSessionEndReason: () => void
 }
 
 const CallContext = createContext<CallContextValue | null>(null)
-
-const ICE_SERVERS_ENDPOINT = 'http://13.60.31.141:5000/call/webrtc/ice-servers'
 
 const CALL_DEBUG =
   import.meta.env.DEV || String(import.meta.env.VITE_CALL_DEBUG || '').toLowerCase() === 'true'
@@ -120,6 +122,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [otherParticipants, setOtherParticipants] = useState<JoinedRoomPayload['otherParticipants']>([])
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+  const [sessionEndReason, setSessionEndReason] = useState<string | null>(null)
+
+  const clearSessionEndReason = useCallback(() => setSessionEndReason(null), [])
 
   const setErrorFrom = useCallback((err: unknown) => {
     const msg = formatCallHubError(err)
@@ -223,7 +228,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resolveIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
     const token = getAccessToken()
-    const endpoint = ICE_SERVERS_ENDPOINT
+    const endpoint = buildIceServersEndpoint(hubRef.current.resolvedHubUrl)
     try {
       dbg('FetchIceConfiguration', { endpoint, withBearerToken: Boolean(token) })
       const res = await fetch(endpoint, {
@@ -285,7 +290,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     pcCreateInFlightRef.current = (async () => {
       const iceServers = await resolveIceServers()
       if (!iceServers.length) {
-        throw new Error(`ICE configuration is empty. Verify ${ICE_SERVERS_ENDPOINT} returns TURN/STUN servers.`)
+        const iceUrl = buildIceServersEndpoint(hubRef.current.resolvedHubUrl)
+        throw new Error(`ICE configuration is empty. Verify ${iceUrl} returns TURN/STUN servers.`)
       }
 
       const pcInstanceId = ++pcInstanceCounterRef.current
@@ -474,12 +480,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPhase('connected')
     })
     hub.on('IncomingCall', (payload: IncomingCallPayload) => {
+      invalidateCallHistory()
       setIncomingCall(payload)
       setCallId(payload.callId)
       setActiveRoomId(payload.roomId)
       setPhase('incoming')
     })
     hub.on('CallRinging', (payload: CallRingingPayload) => {
+      invalidateCallHistory()
       setRinging(payload)
       setCallId(payload.callId)
       setActiveRoomId(payload.roomId)
@@ -487,6 +495,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.on('CallAccepted', (payload: CallAcceptedPayload) => {
       dbg('CallAccepted', payload)
+      invalidateCallHistory()
       setCallId(payload.callId)
       setActiveRoomId(payload.roomId)
       const localConnectionId = localConnectionIdRef.current
@@ -504,6 +513,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPhase('accepted')
     })
     hub.on('CallRejected', (payload: CallRejectedPayload) => {
+      invalidateCallHistory()
+      setSessionEndReason(payload.reason ? `Call declined: ${payload.reason}` : 'Call was declined.')
       setError(payload.reason || 'Call rejected.')
       setIncomingCall(null)
       setRinging(null)
@@ -512,7 +523,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setActiveRoomId(null)
       setPhase('rejected')
     })
-    hub.on('CallCancelled', (_payload: CallCancelledPayload) => {
+    hub.on('CallCancelled', (payload: CallCancelledPayload) => {
+      invalidateCallHistory()
+      setSessionEndReason(payload.reason || 'The call was cancelled.')
       setIncomingCall(null)
       setRinging(null)
       setOtherParticipants([])
@@ -520,7 +533,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setActiveRoomId(null)
       setPhase('cancelled')
     })
-    hub.on('CallTimedOut', (_payload: CallTimedOutPayload) => {
+    hub.on('CallTimedOut', (payload: CallTimedOutPayload) => {
+      invalidateCallHistory()
+      setSessionEndReason(payload.reason || 'The call request timed out before a dispatcher answered.')
       setIncomingCall(null)
       setRinging(null)
       setOtherParticipants([])
@@ -557,6 +572,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })
     hub.on('LeftRoom', (_payload: LeftRoomPayload) => {
+      invalidateCallHistory()
       cleanupPeer()
       setIncomingCall(null)
       setRinging(null)
@@ -565,7 +581,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setActiveRoomId(null)
       setPhase('connected')
     })
-    hub.on('ParticipantLeft', (_payload: ParticipantLeftPayload) => {
+    hub.on('ParticipantLeft', (payload: ParticipantLeftPayload) => {
+      const who = String(payload.displayName || payload.userId || 'The other participant').trim()
+      setSessionEndReason(`${who} left the call. Your audio session has stopped.`)
+      invalidateCallHistory()
       cleanupPeer()
       setIncomingCall(null)
       setRinging(null)
@@ -664,6 +683,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })
     hub.on('CallEnded', (_payload: CallEndedPayload) => {
+      setSessionEndReason('The call has ended.')
+      invalidateCallHistory()
       cleanupPeer()
       setIncomingCall(null)
       setRinging(null)
@@ -721,6 +742,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         wireEvents()
         hubEventsWiredRef.current = true
       }
+      setSessionEndReason(null)
       setPhase('connected')
     } catch (err) {
       hubEventsWiredRef.current = false
@@ -737,6 +759,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hubEventsWiredRef.current = false
     await hubRef.current.stop()
     iceConfigurationRef.current = null
+    setSessionEndReason(null)
     setPhase('idle')
     setIncomingCall(null)
     setRinging(null)
@@ -756,6 +779,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const requestCall = useCallback(
     async (dispatcherUserId: string) => {
       setError(null)
+      setSessionEndReason(null)
       try {
         await ensureCallHubConnected()
         await hubRef.current.invoke('RequestCall', dispatcherUserId)
@@ -769,6 +793,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const acceptCall = useCallback(
     async (targetCallId: string) => {
       setError(null)
+      setSessionEndReason(null)
       try {
         await ensureCallHubConnected()
         // Activate microphone immediately on dispatcher accept.
@@ -871,6 +896,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cancelCall,
       leaveCall,
       endCall,
+      sessionEndReason,
+      clearSessionEndReason,
     }),
     [
       phase,
@@ -891,6 +918,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cancelCall,
       leaveCall,
       endCall,
+      sessionEndReason,
+      clearSessionEndReason,
     ]
   )
 

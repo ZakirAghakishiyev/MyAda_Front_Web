@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getActiveDispatchers } from '../../api/supportApi'
 import CallDispatcherButton from '../../call/CallDispatcherButton'
 import { useCallHub } from '../../call/useCallHub'
@@ -47,6 +48,11 @@ export default function CallerCallPage() {
   return (
     <div style={{ maxWidth: 760, margin: '24px auto', padding: 16 }}>
       <h1>Caller Panel</h1>
+      <p style={{ marginTop: -6, marginBottom: 12 }}>
+        <Link to="/calls/history" style={{ fontSize: 14, color: '#2563eb' }}>
+          View call history
+        </Link>
+      </p>
       <p style={{ color: '#64748b', fontSize: 14, marginTop: -8 }}>
         Flow: ring the dispatcher over SignalR → they accept on their dashboard → both join the call room for audio.
       </p>

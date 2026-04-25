@@ -2,7 +2,6 @@ import * as signalR from '@microsoft/signalr'
 
 const DEFAULT_GATEWAY_BASE = 'http://13.60.31.141:5000'
 const DEFAULT_CALL_HUB_URL = `${DEFAULT_GATEWAY_BASE}/call/hub`
-const DEFAULT_ICE_SERVERS_ENDPOINT = `${DEFAULT_GATEWAY_BASE}/call/webrtc/ice-servers`
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/$/, '')
@@ -17,6 +16,11 @@ function resolveGatewayBase() {
   return DEFAULT_GATEWAY_BASE
 }
 
+/** API gateway origin used for `/call/hub`, `/call/webrtc/ice-servers`, `/call/api/*`. */
+export function resolveCallGatewayBase() {
+  return resolveGatewayBase()
+}
+
 function resolveHubUrl() {
   const explicit = (import.meta.env.VITE_CALL_HUB_URL as string | undefined)?.trim()
   if (explicit) return trimTrailingSlash(explicit)
@@ -25,10 +29,26 @@ function resolveHubUrl() {
   return `${base}/call/hub`
 }
 
-export function buildIceServersEndpoint(_hubUrl: string) {
+/**
+ * REST base for call routes on the gateway, e.g. `${resolveCallRestBase()}/call-history`.
+ * Always includes the `/call/api` prefix segment.
+ */
+export function resolveCallRestApiBase() {
+  return `${resolveGatewayBase()}/call/api`
+}
+
+/**
+ * `GET …/call/webrtc/ice-servers` — same gateway host as the hub unless overridden.
+ */
+export function buildIceServersEndpoint(hubUrl?: string | null) {
   const explicit = (import.meta.env.VITE_CALL_ICE_SERVERS_URL as string | undefined)?.trim()
   if (explicit) return trimTrailingSlash(explicit)
-  return DEFAULT_ICE_SERVERS_ENDPOINT
+  const hub = (hubUrl || resolveHubUrl()).trim()
+  const fromHub = hub.replace(/\/call\/hub\/?$/i, '')
+  if (fromHub && fromHub !== hub) {
+    return `${trimTrailingSlash(fromHub)}/call/webrtc/ice-servers`
+  }
+  return `${resolveGatewayBase()}/call/webrtc/ice-servers`
 }
 
 export type CallHubMethod =

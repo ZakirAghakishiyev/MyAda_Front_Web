@@ -17,6 +17,65 @@ function unwrapAutoWrapper(data) {
   return data
 }
 
+const ORG_ID_KEYS = [
+  'organizationalId',
+  'organizationalID',
+  'organizationId',
+  'organizationID',
+  'orgId',
+  'org_id',
+]
+
+/**
+ * Read organizational / directory id from an auth user DTO (property names differ by API version).
+ * @param {Record<string, unknown> | null | undefined} user
+ * @returns {string | null}
+ */
+export function getOrganizationalIdFromAuthUser(user) {
+  if (!user || typeof user !== 'object') return null
+  for (const k of ORG_ID_KEYS) {
+    const v = user[k]
+    if (v != null && String(v).trim() !== '') return String(v).trim()
+  }
+  for (const key of Object.keys(user)) {
+    const lower = key.toLowerCase()
+    if (lower === 'organizationalid' || lower === 'organizationid') {
+      const v = user[key]
+      if (v != null && String(v).trim() !== '') return String(v).trim()
+    }
+  }
+  return null
+}
+
+/**
+ * Resolve a roster lookup key (student number, GUID, etc.) to `organizationalId` via GET `/api/auth/users/{id}`.
+ * @param {string} lookupId
+ * @returns {Promise<string>}
+ */
+export async function resolveEnteredIdToOrganizationalId(lookupId) {
+  const key = String(lookupId ?? '').trim()
+  if (!key) {
+    const err = new Error('Missing user id.')
+    err.code = 'MISSING_USER_ID'
+    throw err
+  }
+  const user = await fetchAuthUserById(key)
+  if (!user || typeof user !== 'object') {
+    const err = new Error(
+      `No account was found for "${key}". Check the student ID or GUID, or try again after signing in.`
+    )
+    err.code = 'AUTH_USER_NOT_FOUND'
+    throw err
+  }
+  const org = getOrganizationalIdFromAuthUser(user)
+  if (org) return org
+  const err = new Error(
+    `An account exists for "${key}", but no organizational id was returned. Contact support if this keeps happening.`
+  )
+  err.code = 'ORGANIZATIONAL_ID_MISSING'
+  throw err
+}
+
 /**
  * Fetch auth user profile by id.
  * Primary endpoint (per backend contract): `/api/auth/users/{id}`.

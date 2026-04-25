@@ -15,7 +15,7 @@ function isAuthRoute(pathname: string) {
 }
 
 function isCallRoute(pathname: string) {
-  return pathname === '/calls/caller' || pathname === '/calls/dispatcher'
+  return pathname === '/calls/caller' || pathname === '/calls/dispatcher' || pathname === '/calls/history'
 }
 
 function formatCallDuration(totalSeconds: number) {
@@ -64,6 +64,8 @@ const GlobalCallUi: React.FC = () => {
     otherParticipants,
     localStream,
     remoteStream,
+    sessionEndReason,
+    clearSessionEndReason,
   } = useCallHub()
 
   const hasCallIdentity = Boolean(callId || roomId)
@@ -254,6 +256,10 @@ const GlobalCallUi: React.FC = () => {
   const primaryPeer = (otherParticipants || [])[0]
   const peerName = primaryPeer?.displayName || primaryPeer?.userId || 'Participant'
 
+  const showSessionEndBanner =
+    Boolean(sessionEndReason) &&
+    (phase === 'ended' || phase === 'rejected' || phase === 'cancelled' || phase === 'timeout')
+
   const handleToggleMute = () => {
     if (!hasLocalAudioTracks) return
     setIsMuted((prev) => !prev)
@@ -297,6 +303,42 @@ const GlobalCallUi: React.FC = () => {
           role="alert"
         >
           {hubError}
+        </div>
+      )}
+
+      {showSessionEndBanner && sessionEndReason && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 100,
+            right: 12,
+            zIndex: 2147482490,
+            maxWidth: 380,
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: '#f8fafc',
+            color: '#0f172a',
+            fontSize: 13,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          }}
+          role="status"
+        >
+          <div style={{ marginBottom: 8 }}>{sessionEndReason}</div>
+          <button
+            type="button"
+            onClick={() => clearSessionEndReason()}
+            style={{
+              fontSize: 12,
+              padding: '6px 10px',
+              borderRadius: 8,
+              border: '1px solid #cbd5e1',
+              background: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

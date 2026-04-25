@@ -142,3 +142,28 @@ export type SupportRequestChangedPayload = {
   summary?: string
 }
 
+/** Persisted call history (`GET /call/api/call-history`). */
+export type CallHistoryStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'timed-out'
+
+export type CallHistoryParticipant = {
+  userId: string
+  displayName?: string
+}
+
+export type CallHistoryItem = {
+  callId: string
+  roomId: string
+  status: CallHistoryStatus
+  caller: CallHistoryParticipant
+  dispatcher: CallHistoryParticipant
+  requestedAtUtc: string
+  acceptedAtUtc: string | null
+  endedAtUtc: string | null
+  durationSeconds: number | null
+  resolvedAtUtc: string | null
+  resolveReason: string | null
+  endReason: string | null
+}
+
+export type CallHistoryFilter = 'all' | CallHistoryStatus
+

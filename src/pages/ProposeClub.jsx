@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { resolveEnteredIdToOrganizationalId } from '../api/authUsersApi'
 import { fetchStudentServicesProposalRequirements, submitClubProposal } from '../api/clubApi'
 import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ProposeClub.css'
@@ -9,11 +10,11 @@ const STEP_LABELS = ['DETAILS', 'LEADERSHIP', 'ALIGNMENT', 'REVIEW']
 const DESC_MAX = 500
 const MIN_ALIGNMENT_WORDS = 200
 const POSITION_OPTIONS = ['Select Position', 'Secretary', 'Treasurer', 'Social Media Manager', 'Event Coordinator', 'Outreach Officer', 'Other']
-const STUDENT_ID_REGEX = /^\d{8}$/
+const STUDENT_ID_REGEX = /^\d{9}$/
 /** Standard UUID string (e.g. from directory / SSO user id) */
 const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const INVALID_MEMBER_ID_MSG = 'Use an 8-digit student ID or a GUID (e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890)'
+const INVALID_MEMBER_ID_MSG = 'Use a 9-digit student ID or a GUID (e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890)'
 
 function isValidProposalMemberId(raw) {
   const s = String(raw || '').trim()
@@ -304,6 +305,25 @@ const ProposeClub = () => {
     if (!logoFile || !constitutionFile || !clubName.trim()) return
     setSubmitting(true)
     try {
+      const presidentLookup = presidentId.trim()
+      const vpLookup = vicePresidentId.trim()
+      const otherLookups = otherMembers.map((m) => String(m.studentId || '').trim()).filter(Boolean)
+      const uniqueLookups = [...new Set([presidentLookup, vpLookup, ...otherLookups].filter(Boolean))]
+      const orgIdByLookup = new Map()
+      await Promise.all(
+        uniqueLookups.map(async (lookup) => {
+          const orgId = await resolveEnteredIdToOrganizationalId(lookup)
+          orgIdByLookup.set(lookup, orgId)
+        })
+      )
+      const presidentOrg = orgIdByLookup.get(presidentLookup) || ''
+      const vpOrg = orgIdByLookup.get(vpLookup) || ''
+      const otherMembersForApi = otherMembers.map((m) => {
+        const lookup = String(m.studentId || '').trim()
+        const org = lookup ? orgIdByLookup.get(lookup) : ''
+        return { ...m, studentId: org || lookup }
+      })
+
       const description = [
         shortDesc && `Summary: ${shortDesc}`,
         uniqueDesc && `Uniqueness: ${uniqueDesc}`,
@@ -317,15 +337,12 @@ const ProposeClub = () => {
       await submitClubProposal({
         name: clubName.trim(),
         description: description.slice(0, 12000),
-        // Backend expects placeholders/paths in JSON for now (not multipart streams).
-        logoFile: logoFile?.name || 'logo.png',
-        constitutionFile: constitutionFile?.name || 'constitution.pdf',
-        presidentStudentId: presidentId.trim(),
-        vicePresidentStudentId: vicePresidentId.trim(),
-        otherMembersJson: otherMembers.map((m) => ({
-          studentId: String(m.studentId || '').trim(),
-          position: String(m.position || '').trim(),
-        })),
+        logoFile,
+        constitutionFile,
+        presidentStudentId: presidentOrg,
+        vicePresidentStudentId: vpOrg,
+        // API: repeated `otherMembersJson` fields = organizational ids (resolved from directory).
+        otherMembers: otherMembersForApi,
         commitment: commitment === 'yes' ? 'yes' : 'no',
         shortDesc: shortDesc.trim().slice(0, DESC_MAX),
         uniqueDesc: uniqueDesc.trim(),
@@ -488,7 +505,7 @@ const ProposeClub = () => {
                 <label>President Student ID <span className="propose-required">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g. 12345678 or GUID"
+                  placeholder="e.g. 123456789 or GUID"
                   value={presidentId}
                   onChange={(e) => {
                     setPresidentId(e.target.value)
@@ -503,7 +520,7 @@ const ProposeClub = () => {
                 <label>Vice President Student ID <span className="propose-required">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g. 87654321 or GUID"
+                  placeholder="e.g. 987654321 or GUID"
                   value={vicePresidentId}
                   onChange={(e) => {
                     setVicePresidentId(e.target.value)
@@ -526,7 +543,7 @@ const ProposeClub = () => {
                   <label>STUDENT ID</label>
                   <input
                     type="text"
-                    placeholder="8 digits or GUID"
+                    placeholder="9 digits or GUID"
                     value={otherMemberId}
                     onChange={(e) => {
                       setOtherMemberId(e.target.value)
