@@ -19,7 +19,7 @@ export function LostAndFoundAdminProvider({ children }) {
     setIsLoading(true)
     setError('')
     try {
-      const result = await getLostFoundItems({ page: 1, limit: 200 })
+      const result = await getLostFoundItems({ page: 1, limit: 200, adminListingMode: true })
       setItems(Array.isArray(result.items) ? result.items : [])
     } catch (err) {
       setError(err?.message || 'Failed to load admin items.')
@@ -48,7 +48,7 @@ export function LostAndFoundAdminProvider({ children }) {
       // Some backend builds validate strict DTOs for confirm endpoints.
       // Fallback to status patch so admin flow remains operational.
       if (err?.status === 400 || err?.status === 404 || err?.status === 405) {
-        await patchLostFoundItem(itemId, { adminStatus: 'Received' })
+        await patchLostFoundItem(itemId, { adminStatus: 'received' })
       } else {
         throw err
       }
@@ -61,7 +61,7 @@ export function LostAndFoundAdminProvider({ children }) {
       await completeLostFoundDelivery(itemId, payload)
     } catch (err) {
       if (err?.status === 400 || err?.status === 404 || err?.status === 405) {
-        await patchLostFoundItem(itemId, { adminStatus: 'Delivered' })
+        await patchLostFoundItem(itemId, { adminStatus: 'delivered' })
       } else {
         throw err
       }

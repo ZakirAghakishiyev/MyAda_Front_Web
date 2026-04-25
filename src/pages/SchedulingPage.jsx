@@ -10,7 +10,7 @@ import {
   schedulingPatchSession,
   schedulingPublish,
 } from '../api/schedulingMsApi'
-import { SCHEDULING_API_BASE, SCHEDULING_DEV_USER_ID_HEADER } from '../api/schedulingConfig'
+import { userHasJwtAdminRole } from '../auth/jwtRoles'
 import { instructorNameById } from '../data/mockInstructors'
 import { getEffectiveSchedulingInstructorId } from '../utils/schedulingInstructorId'
 import './SchedulingPage.css'
@@ -259,7 +259,11 @@ const SchedulingPage = () => {
     setPublishResult(null)
     const uid = getEffectiveSchedulingInstructorId()
     if (!uid) {
-      setPublishMsg('Sign in as an instructor or set Instructor user ID in the bar above (UUID or numeric).')
+      setPublishMsg(
+        userHasJwtAdminRole()
+          ? 'Sign in as an instructor or set Instructor user ID in the bar above (UUID or numeric).'
+          : 'Sign in as an instructor so your account id can be used for publish (UUID or numeric).'
+      )
       setPublishMsgTone('error')
       return
     }
@@ -376,25 +380,19 @@ const SchedulingPage = () => {
           </Link>
         </nav>
 
-        <h1>Scheduling</h1>
-        <p className="scheduling-muted">
-          Scheduling microservice at <span className="sched-ms-code">{SCHEDULING_API_BASE}</span>. Generate a
-          run, inspect sessions, patch placements, then publish when ready. Publish sends{' '}
-          <span className="sched-ms-code">from_date</span> / <span className="sched-ms-code">to_date</span> (and optional{' '}
-          <span className="sched-ms-code">topic</span>) to bulk-generate Attendance sessions per lesson.
-        </p>
+        <header className="scheduling-page-header">
+          <h1>Scheduling</h1>
+          <button type="button" className="back-button scheduling-back-secondary" onClick={() => navigate('/')}>
+            Back to Home
+          </button>
+        </header>
 
-        <SchedulingUserIdBar />
+        {userHasJwtAdminRole() ? <SchedulingUserIdBar showHint={false} /> : null}
 
         {pageError ? <p className="sched-ms-error">{pageError}</p> : null}
 
         <section className="sched-ms-section">
           <h2>Generate schedule</h2>
-          <p className="scheduling-muted" style={{ marginTop: 0 }}>
-            POST <span className="sched-ms-code">/schedules/generate</span> — no{' '}
-            <span className="sched-ms-code">{SCHEDULING_DEV_USER_ID_HEADER}</span> required. Body uses string fields, e.g.{' '}
-            <span className="sched-ms-code">{'{ "academic_year": "2026", "semester": "Fall" }'}</span>. If you see 422, read the error text: it is often a dependency issue (for example no rooms from the Location service), not invalid JSON.
-          </p>
           <div className="sched-ms-form-grid">
             <label className="sched-ms-field">
               <span>academic_year</span>
@@ -458,10 +456,6 @@ const SchedulingPage = () => {
             ) : null}
 
             <h3 className="sched-ms-subsection-title">Publish to Attendance</h3>
-            <p className="scheduling-muted" style={{ marginTop: 0 }}>
-              POST <span className="sched-ms-code">/schedules/{'{id}'}/publish</span> with JSON body (snake_case). Run must be{' '}
-              <code>completed</code> with at least one scheduled session. Inclusive span ≤ 731 days.
-            </p>
             <div className="sched-ms-form-grid">
               <label className="sched-ms-field">
                 <span>from_date</span>
@@ -506,11 +500,6 @@ const SchedulingPage = () => {
             </div>
             {(publishResult?.attendance_generations ?? publishResult?.attendanceGenerations)?.length ? (
               <div className="sched-ms-publish-result">
-                <p className="scheduling-muted" style={{ marginBottom: 8 }}>
-                  <span className="sched-ms-code">status</span>: {publishResult.status ?? 'published'} ·{' '}
-                  <span className="sched-ms-code">schedule_run_id</span>:{' '}
-                  {publishResult.schedule_run_id ?? publishResult.scheduleRunId ?? activeRunId}
-                </p>
                 <div className="sched-ms-table-wrap">
                   <table className="sched-ms-table sched-ms-table--compact">
                     <thead>
@@ -538,12 +527,6 @@ const SchedulingPage = () => {
                 </div>
               </div>
             ) : null}
-            {!canPublish && runDetail.status !== 'published' ? (
-              <p className="scheduling-muted" style={{ fontSize: 13 }}>
-                Publish is only allowed when status is <code>completed</code> and{' '}
-                <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> is set.
-              </p>
-            ) : null}
           </section>
         ) : null}
 
@@ -551,9 +534,6 @@ const SchedulingPage = () => {
           <>
             <section className="sched-ms-section">
               <h2>Scheduled sessions</h2>
-              <p className="scheduling-muted" style={{ marginTop: 0 }}>
-                GET <span className="sched-ms-code">/schedules/{'{id}'}/sessions</span>
-              </p>
               <div className="sched-ms-form-grid" style={{ marginBottom: 12 }}>
                 <label className="sched-ms-field">
                   <span>day filter</span>
@@ -625,9 +605,6 @@ const SchedulingPage = () => {
 
             <section className="sched-ms-section">
               <h2>Unscheduled lessons</h2>
-              <p className="scheduling-muted" style={{ marginTop: 0 }}>
-                GET <span className="sched-ms-code">/schedules/{'{id}'}/unscheduled</span>
-              </p>
               <div className="sched-ms-table-wrap">
                 <table className="sched-ms-table">
                   <thead>
@@ -727,12 +704,6 @@ const SchedulingPage = () => {
             </div>
           </div>
         ) : null}
-
-        <div className="scheduling-actions">
-          <button type="button" className="back-button scheduling-back-secondary" onClick={() => navigate('/')}>
-            Back to Home
-          </button>
-        </div>
       </div>
     </div>
   )

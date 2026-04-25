@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LostAndFound.css'
-import { createFoundReport, getLostFoundCategories, uploadLostFoundImage } from '../api/lostFoundApi'
+import { createFoundReport, getLostFoundCategories } from '../api/lostFoundApi'
 import { getBuildings, getRoomsByBuildingId, validateRoomLocation } from '../api/locationApi'
 
 const MAX_DESCRIPTION_LENGTH = 500
@@ -84,23 +84,27 @@ const AnnounceFoundItem = () => {
           return
         }
       }
-      const uploadedUrl = await uploadLostFoundImage(photoFile)
       const selectedBuilding = buildings.find((b) => String(b.id) === String(buildingId))
       const selectedRoom = rooms.find((r) => String(r.id) === String(roomId))
-      const payload = {
+      const roomOrArea = roomId
+        ? String(selectedRoom?.name || selectedRoom?.number || '').trim()
+        : String(roomAreaText || '').trim()
+      if (!selectedBuilding?.name || !roomOrArea) {
+        alert('Building and room/area are required.')
+        setIsSubmitting(false)
+        return
+      }
+      const foundFields = {
         itemName: String(formData.get('itemName') || '').trim(),
         category: String(formData.get('category') || '').trim() || DEFAULT_CATEGORIES[0],
         description: String(description || '').trim(),
         locationType: 'building',
-        building: selectedBuilding?.name || undefined,
-        isRoom: roomId ? 'yes' : 'no',
-        roomOrArea: roomId ? selectedRoom?.name || undefined : roomAreaText || undefined,
+        building: selectedBuilding.name,
+        isRoom: roomId ? 'true' : 'false',
+        roomOrArea,
         collectionPlace: String(formData.get('collectionPlace') || '').trim(),
-        contactName: String(formData.get('contactName') || '').trim(),
-        contactPhone: String(formData.get('contactPhone') || '').trim(),
-        photoUrls: uploadedUrl ? [uploadedUrl] : [],
       }
-      await createFoundReport(payload)
+      await createFoundReport(foundFields, [photoFile])
       alert('Found item report submitted for review.')
       navigate(-1)
     } catch (err) {
@@ -199,30 +203,10 @@ const AnnounceFoundItem = () => {
             </div>
           </section>
 
-          {/* 3. When did you find it? */}
+          {/* 3. Description */}
           <section className="lf-report-section">
             <h2 className="lf-report-section-title">
               <span className="lf-report-section-num">3</span>
-              When did you find it?
-            </h2>
-            <div className="lf-report-fields">
-              <div className="lf-field-row">
-                <label className="lf-field">
-                  <span className="lf-field-label">Date</span>
-                  <input type="date" required />
-                </label>
-                <label className="lf-field">
-                  <span className="lf-field-label">Time</span>
-                  <input type="time" />
-                </label>
-              </div>
-            </div>
-          </section>
-
-          {/* 4. Description */}
-          <section className="lf-report-section">
-            <h2 className="lf-report-section-title">
-              <span className="lf-report-section-num">4</span>
               Description
             </h2>
             <div className="lf-report-fields">
@@ -242,7 +226,7 @@ const AnnounceFoundItem = () => {
           {/* 5. Photos (required for found items) */}
           <section className="lf-report-section">
             <h2 className="lf-report-section-title">
-              <span className="lf-report-section-num">5</span>
+              <span className="lf-report-section-num">4</span>
               Photos
             </h2>
             <div className="lf-report-fields">
@@ -262,19 +246,13 @@ const AnnounceFoundItem = () => {
             </div>
           </section>
 
-          {/* 6. Your Contact Information & Collection */}
+          {/* 5. Collection */}
           <section className="lf-report-section">
             <h2 className="lf-report-section-title">
-              <span className="lf-report-section-num">6</span>
-              Your Contact Information
+              <span className="lf-report-section-num">5</span>
+              Collection
             </h2>
             <div className="lf-report-fields">
-              <label className="lf-field">
-                <input type="text" name="contactName" placeholder="Your Name" />
-              </label>
-              <label className="lf-field">
-                <input type="tel" name="contactPhone" placeholder="Phone Number" />
-              </label>
               <label className="lf-field">
                 <input type="text" required name="collectionPlace" placeholder="Where can it be collected? *" />
               </label>

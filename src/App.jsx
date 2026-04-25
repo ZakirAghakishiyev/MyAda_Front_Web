@@ -83,8 +83,11 @@ import './App.css'
 
 const AppContent = () => {
   const location = useLocation()
-  const isRequestDetailRoute = location.pathname.match(/^\/my-requests\/T-\d+$/)
-  const isDispatcherTicketRoute = location.pathname.match(/^\/support-dispatcher\/T-\d+$/)
+  // Ticket detail URLs use numeric ids (or legacy T-…); hide global header so the list stays visible behind the modal scrim.
+  const isRequestDetailRoute = /^\/my-requests\/[^/]+$/.test(location.pathname)
+  const isDispatcherTicketRoute = /^\/support-dispatcher\/(?!history$|staff$|assign-task$)[^/]+$/.test(
+    location.pathname
+  )
   const isClubAdminRoute = location.pathname.startsWith('/club-admin')
   const isStaffPortalRoute = location.pathname.startsWith('/staff-portal')
   const isAttendanceRoute = location.pathname.startsWith('/attendance')

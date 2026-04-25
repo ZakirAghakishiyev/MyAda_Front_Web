@@ -5,7 +5,6 @@ import {
   createLostReport,
   getLostFoundCategories,
   getLostFoundItems,
-  uploadLostFoundImages,
 } from '../api/lostFoundApi'
 import { getBuildings, getRoomsByBuildingId, validateRoomLocation } from '../api/locationApi'
 import './LostAndFound2.css'
@@ -57,6 +56,12 @@ const clearDraftCookie = (key) => {
   document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
 }
 
+const IconHome = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+)
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
@@ -124,6 +129,36 @@ function lostFoundStatusBadgeClass(status) {
   return 'pending'
 }
 
+/** Composes a single human-readable location line from the shared building/campus form. */
+function composeReportLocationString(reportForm, buildings, rooms) {
+  const locationType = reportForm.locationType || 'building'
+  if (locationType === 'campus') {
+    return String(reportForm.campusLocation || '').trim()
+  }
+  const selectedBuilding = buildings.find((b) => String(b.id) === String(reportForm.building))
+  const selectedRoom = rooms.find((r) => String(r.id) === String(reportForm.roomArea))
+  const buildingName = (selectedBuilding?.name || '').trim()
+  let detail = ''
+  if (reportForm.isRoom === 'yes') {
+    detail = String(selectedRoom?.name || selectedRoom?.number || '').trim()
+  } else if (reportForm.isRoom === 'no') {
+    detail = String(reportForm.roomArea || '').trim()
+  }
+  return [buildingName, detail].filter(Boolean).join(', ').trim()
+}
+
+/** Lost report API requires date/time/contact; used when the contact section was removed from the form. */
+function lostReportApiContactDefaults() {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return {
+    dateLost: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    timeLost: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    contactName: 'Submitted via campus portal',
+    contactPhone: '+994000000000',
+  }
+}
+
 const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -132,8 +167,13 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
 
   useEffect(() => {
     const openReport = initialReport || location.state?.openReport
-    if (openReport === 'lost') setView('report-lost')
-    else if (openReport === 'found') setView('report-found')
+    if (openReport === 'lost') {
+      setView('report-lost')
+      setReportForm((f) => ({ ...f, locationType: f.locationType || 'building' }))
+    } else if (openReport === 'found') {
+      setView('report-found')
+      setReportForm((f) => ({ ...f, locationType: f.locationType || 'building' }))
+    }
   }, [initialReport, location.state?.openReport])
   const [searchQuery, setSearchQuery] = useState('')
   const [announcementFilter, setAnnouncementFilter] = useState('all')
@@ -160,7 +200,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     isRoom: '',
     campusLocation: '',
     description: '',
-    photos: []
+    photos: [],
   })
   const selectedPhoto = reportForm.photos[0] || null
   const selectedPhotoPreviewUrl = useMemo(
@@ -175,7 +215,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   }, [selectedPhotoPreviewUrl])
 
   useEffect(() => {
-    if (!isReportOpen) return
+    if (view !== 'report-lost' && view !== 'report-found') return
     let isMounted = true
     const loadBuildings = async () => {
       try {
@@ -191,10 +231,9 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     return () => {
       isMounted = false
     }
-  }, [isReportOpen])
+  }, [view])
 
   useEffect(() => {
-    if (!isReportOpen) return
     let isMounted = true
     getLostFoundCategories()
       .then((result) => {
@@ -212,10 +251,10 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     return () => {
       isMounted = false
     }
-  }, [isReportOpen])
+  }, [])
 
   useEffect(() => {
-    if (!isReportOpen || reportForm.locationType !== 'building' || !reportForm.building) {
+    if ((view !== 'report-lost' && view !== 'report-found') || reportForm.locationType !== 'building' || !reportForm.building) {
       setRooms([])
       return
     }
@@ -234,7 +273,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     return () => {
       isMounted = false
     }
-  }, [isReportOpen, reportForm.locationType, reportForm.building])
+  }, [view, reportForm.locationType, reportForm.building])
 
   useEffect(() => {
     if (view !== 'report-lost' && view !== 'report-found') return
@@ -245,7 +284,8 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setReportForm(prev => ({
       ...prev,
       ...draft.reportForm,
-      photos: []
+      photos: [],
+      locationType: draft.reportForm.locationType || prev.locationType || 'building',
     }))
     if (typeof draft.reportStep === 'number' && draft.reportStep >= 0 && draft.reportStep < STEPS.length) {
       setReportStep(Math.min(draft.reportStep, STEPS.length - 1))
@@ -299,12 +339,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       daysAgo: computeDaysAgo(item),
       location: item.location || 'Location not specified',
       description: item.description || '',
-      // normalizeLostFoundItem may only set on fetch; keep fallback
-      displayStatus: String(
-        (item.status != null && String(item.status).trim() !== '' && String(item.status).trim()) ||
-          (item.adminStatus != null && String(item.adminStatus).trim() !== '' && String(item.adminStatus).trim()) ||
-          'Pending'
-      ),
+      displayStatus: String(item.adminStatus || 'Pending'),
     }))
     return list
   }, [items])
@@ -316,8 +351,20 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setCurrentPage(1)
   }, [searchQuery, announcementFilter, categoryFilter])
 
-  const openReportLost = () => setView('report-lost')
-  const openReportFound = () => setView('report-found')
+  const openReportLost = () => {
+    setView('report-lost')
+    setReportForm((f) => ({
+      ...f,
+      locationType: f.locationType || 'building',
+    }))
+  }
+  const openReportFound = () => {
+    setView('report-found')
+    setReportForm((f) => ({
+      ...f,
+      locationType: f.locationType || 'building',
+    }))
+  }
   const backToDashboard = () => {
     if (fromAdmin || location.state?.from === 'admin') {
       navigate('/admin/lost-and-found')
@@ -335,7 +382,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       isRoom: '',
       campusLocation: '',
       description: '',
-      photos: []
+      photos: [],
     })
   }
 
@@ -350,6 +397,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setIsSubmittingReport(true)
     try {
       if (
+        (view === 'report-found' || view === 'report-lost') &&
         reportForm.locationType === 'building' &&
         reportForm.isRoom === 'yes' &&
         reportForm.building &&
@@ -363,34 +411,72 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         }
       }
 
-      const photoUrls = await uploadLostFoundImages(reportForm.photos)
-      const selectedBuilding = buildings.find((b) => String(b.id) === String(reportForm.building))
-      const selectedRoom = rooms.find((r) => String(r.id) === String(reportForm.roomArea))
-      const basePayload = {
-        itemName: reportForm.itemName.trim(),
-        category: reportForm.category,
-        description: reportForm.description.trim(),
-        locationType: reportForm.locationType || 'building',
-        building: selectedBuilding?.name || undefined,
-        isRoom: reportForm.locationType === 'building' ? reportForm.isRoom || undefined : undefined,
-        roomOrArea:
-          reportForm.locationType === 'building'
-            ? reportForm.isRoom === 'yes'
-              ? selectedRoom?.name || undefined
-              : reportForm.roomArea || undefined
-            : undefined,
-        campusLocation: reportForm.locationType === 'campus' ? reportForm.campusLocation || undefined : undefined,
-        photoUrls,
-      }
-
       if (view === 'report-lost') {
-        await createLostReport(basePayload)
+        const composedLoc = composeReportLocationString(reportForm, buildings, rooms)
+        const location = composedLoc.trim() || 'Not specified'
+        const { dateLost, timeLost, contactName, contactPhone } = lostReportApiContactDefaults()
+        const lostBody = {
+          type: 'lost',
+          itemName: reportForm.itemName.trim(),
+          category: reportForm.category,
+          description: (reportForm.description || '').trim(),
+          location,
+          dateLost,
+          timeLost,
+          contactName,
+          contactPhone,
+          status: 'pending',
+        }
+        if (reportForm.photos.length) {
+          const fd = new FormData()
+          Object.entries(lostBody).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && String(v).trim() !== '') fd.append(k, String(v))
+          })
+          reportForm.photos.forEach((f) => fd.append('files', f))
+          await createLostReport(fd)
+        } else {
+          await createLostReport(lostBody)
+        }
         alert('Lost item report submitted for review.')
       } else {
-        await createFoundReport({
-          ...basePayload,
+        const selectedBuilding = buildings.find((b) => String(b.id) === String(reportForm.building))
+        const selectedRoom = rooms.find((r) => String(r.id) === String(reportForm.roomArea))
+        const locationType = reportForm.locationType || 'building'
+        const foundFields = {
+          itemName: reportForm.itemName.trim(),
+          category: reportForm.category,
+          description: (reportForm.description || '').trim(),
+          locationType,
           collectionPlace: 'Campus Lost & Found Office',
-        })
+        }
+        if (locationType === 'building') {
+          if (!selectedBuilding?.name) {
+            alert('Please select a building.')
+            setIsSubmittingReport(false)
+            return
+          }
+          foundFields.building = selectedBuilding.name
+          foundFields.isRoom = reportForm.isRoom === 'yes' ? 'true' : 'false'
+          const roomOrArea =
+            reportForm.isRoom === 'yes'
+              ? (selectedRoom?.name || '').trim()
+              : String(reportForm.roomArea || '').trim()
+          if (!roomOrArea) {
+            alert('Please complete building location (room or area).')
+            setIsSubmittingReport(false)
+            return
+          }
+          foundFields.roomOrArea = roomOrArea
+        } else if (locationType === 'campus') {
+          const cl = String(reportForm.campusLocation || '').trim()
+          if (!cl) {
+            alert('Please describe the campus location.')
+            setIsSubmittingReport(false)
+            return
+          }
+          foundFields.campusLocation = cl
+        }
+        await createFoundReport(foundFields, reportForm.photos)
         alert('Found item report submitted for review.')
       }
 
@@ -451,6 +537,8 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     alert('Draft saved on this device. It will be restored next time you open this form.')
   }
 
+  const locationFieldsRequired = view === 'report-found'
+
   const reportPopup = isReportOpen && (
     <div
       className="lf2-report-overlay"
@@ -506,199 +594,193 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                   </div>
                 </section>
 
-                <section className="lf2-section">
-                  <h2 className="lf2-section-title">
-                    <span className="lf2-section-icon"><IconPin /></span>
-                    Location
-                    {view === 'report-found' && <span className="lf2-required-hint"> *</span>}
-                    {view === 'report-lost' && <span className="lf2-optional-hint"> (optional)</span>}
-                  </h2>
-                  <div className="lf2-fields">
-                    <label className="lf2-field">
-                      <span className="lf2-label">
+                {(view === 'report-lost' || view === 'report-found') && (
+                    <section className="lf2-section">
+                      <h2 className="lf2-section-title">
+                        <span className="lf2-section-icon"><IconPin /></span>
                         Location
-                        {view === 'report-found' && ' *'}
-                      </span>
+                        {locationFieldsRequired && <span className="lf2-required-hint"> *</span>}
+                        {!locationFieldsRequired && <span className="lf2-optional-hint"> (optional)</span>}
+                      </h2>
+                      <p className="lf2-section-desc">
+                        {locationFieldsRequired
+                          ? 'Where the item was found on campus.'
+                          : 'Same fields as found reports; leave anything blank if you are unsure.'}
+                      </p>
                       <div className="lf2-fields">
                         <label className="lf2-field">
-                          <span className="lf2-label">Choose location type</span>
-                          <div className="lf2-field">
-                            <label>
-                              <input
-                                type="radio"
-                                name="locationType"
-                                value="building"
-                                checked={reportForm.locationType === 'building'}
-                                onChange={e =>
-                                  setReportForm(f => ({
-                                    ...f,
-                                    locationType: e.target.value,
-                                    building: '',
-                                    floor: '',
-                                    roomArea: '',
-                                    isRoom: '',
-                                    campusLocation: ''
-                                  }))
-                                }
-                                required={view === 'report-found'}
-                              />{' '}
-                              Building
+                          <span className="lf2-label">
+                            Location type
+                            {locationFieldsRequired && ' *'}
+                          </span>
+                          <div className="lf2-fields">
+                            <label className="lf2-field">
+                              <span className="lf2-label">Choose location type</span>
+                              <div className="lf2-field">
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name="locationType"
+                                    value="building"
+                                    checked={reportForm.locationType === 'building'}
+                                    onChange={e =>
+                                      setReportForm(f => ({
+                                        ...f,
+                                        locationType: e.target.value,
+                                        building: '',
+                                        floor: '',
+                                        roomArea: '',
+                                        isRoom: '',
+                                        campusLocation: ''
+                                      }))
+                                    }
+                                    required={locationFieldsRequired}
+                                  />{' '}
+                                  Building
+                                </label>
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name="locationType"
+                                    value="campus"
+                                    checked={reportForm.locationType === 'campus'}
+                                    onChange={e =>
+                                      setReportForm(f => ({
+                                        ...f,
+                                        locationType: e.target.value,
+                                        building: '',
+                                        floor: '',
+                                        roomArea: '',
+                                        isRoom: ''
+                                      }))
+                                    }
+                                  />{' '}
+                                  Campus
+                                </label>
+                              </div>
                             </label>
-                            <label>
-                              <input
-                                type="radio"
-                                name="locationType"
-                                value="campus"
-                                checked={reportForm.locationType === 'campus'}
+                          </div>
+                        </label>
+
+                        {reportForm.locationType === 'campus' && (
+                          <label className="lf2-field">
+                            <span className="lf2-label">
+                              Campus location
+                              {locationFieldsRequired && ' *'}
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="Describe where on campus (e.g. main yard, parking area)"
+                              value={reportForm.campusLocation}
+                              onChange={e => setReportForm(f => ({ ...f, campusLocation: e.target.value }))}
+                              required={locationFieldsRequired}
+                            />
+                          </label>
+                        )}
+
+                        {reportForm.locationType === 'building' && (
+                          <>
+                            <label className="lf2-field">
+                              <span className="lf2-label">
+                                Building
+                                {locationFieldsRequired && ' *'}
+                              </span>
+                              <select
+                                value={reportForm.building}
                                 onChange={e =>
                                   setReportForm(f => ({
                                     ...f,
-                                    locationType: e.target.value,
-                                    building: '',
-                                    floor: '',
+                                    building: e.target.value,
                                     roomArea: '',
                                     isRoom: ''
                                   }))
                                 }
-                                required={view === 'report-found'}
-                              />{' '}
-                              Campus
+                                required={locationFieldsRequired}
+                              >
+                                <option value="">Select building...</option>
+                                {buildings.map(b => (
+                                  <option key={b.id} value={String(b.id)}>
+                                    {b.name}
+                                  </option>
+                                ))}
+                              </select>
                             </label>
-                          </div>
-                        </label>
+
+                            <label className="lf2-field">
+                              <span className="lf2-label">
+                                Is it a room?
+                                {locationFieldsRequired && ' *'}
+                              </span>
+                              <select
+                                value={reportForm.isRoom}
+                                onChange={e =>
+                                  setReportForm(f => ({
+                                    ...f,
+                                    isRoom: e.target.value,
+                                    roomArea: ''
+                                  }))
+                                }
+                                required={locationFieldsRequired}
+                              >
+                                <option value="">Select...</option>
+                                <option value="yes">Yes, it is a room</option>
+                                <option value="no">No, another area</option>
+                              </select>
+                            </label>
+
+                            {reportForm.isRoom === 'yes' && (
+                              <label className="lf2-field">
+                                <span className="lf2-label">
+                                  Room
+                                  {locationFieldsRequired && ' *'}
+                                </span>
+                                <select
+                                  value={reportForm.roomArea}
+                                  onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
+                                  required={locationFieldsRequired}
+                                >
+                                  <option value="">Select room...</option>
+                                  {rooms.map(room => (
+                                    <option key={room.id} value={String(room.id)}>
+                                      {room.name || room.number}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+
+                            {reportForm.isRoom === 'no' && (
+                              <label className="lf2-field">
+                                <span className="lf2-label">
+                                  Location details
+                                  {locationFieldsRequired && ' *'}
+                                  {!locationFieldsRequired && <span className="lf2-optional-hint"> (optional)</span>}
+                                </span>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Lobby near reception"
+                                  value={reportForm.roomArea}
+                                  onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
+                                  required={locationFieldsRequired}
+                                />
+                              </label>
+                            )}
+                          </>
+                        )}
                       </div>
-                    </label>
-
-                    {reportForm.locationType === 'campus' && (
-                      <label className="lf2-field">
-                        <span className="lf2-label">
-                          Campus location
-                          {view === 'report-found' && ' *'}
-                        </span>
-                        <input
-                          type="text"
-                          placeholder="Describe where on campus (e.g. main yard, parking area)"
-                          value={reportForm.campusLocation}
-                          onChange={e => setReportForm(f => ({ ...f, campusLocation: e.target.value }))}
-                          required={view === 'report-found'}
-                        />
-                      </label>
-                    )}
-
-                    {reportForm.locationType === 'building' && (
-                      <>
-                        <label className="lf2-field">
-                          <span className="lf2-label">
-                            Building
-                            {view === 'report-found' && ' *'}
-                          </span>
-                          <select
-                            value={reportForm.building}
-                            onChange={e =>
-                              setReportForm(f => ({
-                                ...f,
-                                building: e.target.value,
-                                roomArea: '',
-                                isRoom: ''
-                              }))
-                            }
-                            required={view === 'report-found'}
-                          >
-                            <option value="">Select building...</option>
-                            {buildings.map(b => (
-                              <option key={b.id} value={String(b.id)}>
-                                {b.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        {/* <label className="lf2-field">
-                          <span className="lf2-label">
-                            Floor
-                            {view === 'report-found' && ' *'}
-                          </span>
-                          <input
-                            type="text"
-                            placeholder="e.g. 2nd Floor"
-                            value={reportForm.floor}
-                            onChange={e => setReportForm(f => ({ ...f, floor: e.target.value }))}
-                            required={view === 'report-found'}
-                          />
-                        </label> */}
-
-                        <label className="lf2-field">
-                          <span className="lf2-label">
-                            Is it a room?
-                            {view === 'report-found' && ' *'}
-                          </span>
-                          <select
-                            value={reportForm.isRoom}
-                            onChange={e =>
-                              setReportForm(f => ({
-                                ...f,
-                                isRoom: e.target.value,
-                                roomArea: ''
-                              }))
-                            }
-                            required={view === 'report-found'}
-                          >
-                            <option value="">Select...</option>
-                            <option value="yes">Yes, it is a room</option>
-                            <option value="no">No, another area</option>
-                          </select>
-                        </label>
-
-                        {reportForm.isRoom === 'yes' && (
-                          <label className="lf2-field">
-                            <span className="lf2-label">
-                              Room
-                              {view === 'report-found' && ' *'}
-                            </span>
-                            <select
-                              value={reportForm.roomArea}
-                              onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
-                              required={view === 'report-found'}
-                            >
-                              <option value="">Select room...</option>
-                              {rooms.map(room => (
-                                <option key={room.id} value={String(room.id)}>
-                                  {room.name || room.number}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-
-                        {reportForm.isRoom === 'no' && (
-                          <label className="lf2-field">
-                            <span className="lf2-label">
-                              Location details
-                              {view === 'report-found' && ' *'}
-                            </span>
-                            <input
-                              type="text"
-                              placeholder="e.g. Lobby near reception"
-                              value={reportForm.roomArea}
-                              onChange={e => setReportForm(f => ({ ...f, roomArea: e.target.value }))}
-                              required={view === 'report-found'}
-                            />
-                          </label>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </section>
+                    </section>
+                )}
 
                 <section className="lf2-section">
                   <h2 className="lf2-section-title">
                     <span className="lf2-section-icon lf2-section-icon--info"><IconInfo /></span>
                     Description
+                    {view === 'report-lost' && <span className="lf2-optional-hint"> (optional)</span>}
                   </h2>
                   <p className="lf2-section-desc">Describe the item to help identify it.</p>
                   <div className="lf2-fields">
                     <label className="lf2-field">
-                      <span className="lf2-label">Description</span>
+                      <span className="lf2-label">Description{view === 'report-lost' && ' (optional)'}</span>
                       <textarea
                         rows={4}
                         placeholder="Describe the item..."
@@ -785,11 +867,10 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     <div className="lf2-page">
       {reportPopup}
       <header className="lf2-header">
-        <button type="button" className="lf2-icon-btn" onClick={() => navigate('/')} aria-label="Back to Home">
-          <span>‹</span>
+        <button type="button" className="lf2-icon-btn" onClick={() => navigate('/')} aria-label="Go to home">
+          <IconHome />
         </button>
         <div className="lf2-logo-wrap">
-          <div className="lf2-logo" aria-hidden="true" />
           <div className="lf2-header-titles">
             <h1>Lost &amp; Found - ADA University Campus</h1>
             <span className="lf2-subtitle">Manage and track items within the campus</span>

@@ -285,10 +285,6 @@ const CoursePage = () => {
         <header className="course-page-header">
           <div>
             <h1>Courses</h1>
-            <p className="scheduling-muted">
-              Add catalog courses (POST <code className="course-inline-code">/api/admin/courses</code>), then create
-              lessons (POST <code className="course-inline-code">/api/admin/lessons</code>). CRN is server-generated.
-            </p>
           </div>
           <button type="button" className="back-button scheduling-back-secondary" onClick={() => navigate('/')}>
             Back to Home
@@ -298,10 +294,6 @@ const CoursePage = () => {
         <div className="course-catalog-row">
           <section ref={addCoursePanelRef} className="course-panel course-panel-add" aria-labelledby="add-course-heading">
             <h2 id="add-course-heading">Add course</h2>
-            <p className="course-panel-hint">
-              Body fields: <strong>name</strong>, <strong>department</strong>, <strong>code</strong>,{' '}
-              <strong>credits</strong>, <strong>timesPerWeek</strong>.
-            </p>
             <form className="course-form" onSubmit={onSubmitCatalog}>
               <label className="course-field">
                 <span>Name</span>
@@ -353,7 +345,6 @@ const CoursePage = () => {
             aria-labelledby="existing-courses-heading"
           >
             <h2 id="existing-courses-heading">Existing courses</h2>
-            <p className="course-panel-hint course-panel-hint-tight">From GET /api/admin/courses</p>
             <div className="course-existing-body">
               {loadingCourses ? <p className="scheduling-muted course-existing-placeholder">Loading…</p> : null}
               {!loadingCourses && coursesError ? <p className="course-form-error course-existing-placeholder">{coursesError}</p> : null}
@@ -408,7 +399,6 @@ const CoursePage = () => {
         <div className="course-lessons-row">
           <section className="course-panel" aria-labelledby="lesson-heading">
             <h2 id="lesson-heading">Add lesson</h2>
-            <p className="course-panel-hint">POST /api/admin/lessons — links a section to a catalog course.</p>
             <form className="course-form" onSubmit={onSubmitLesson}>
               <label className="course-field">
                 <span>courseId</span>
@@ -514,7 +504,6 @@ const CoursePage = () => {
 
           <section className="course-panel" aria-labelledby="lessons-list-heading">
             <h2 id="lessons-list-heading">Lessons</h2>
-            <p className="course-panel-hint course-panel-hint-tight">From GET /api/admin/lessons</p>
             {loadingLessons ? <p className="scheduling-muted">Loading…</p> : null}
             {!loadingLessons && lessonsError ? <p className="course-form-error">{lessonsError}</p> : null}
             {!loadingLessons && !lessonsError && lessons.length === 0 ? (

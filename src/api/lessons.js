@@ -21,21 +21,20 @@ export async function fetchLessons() {
  *
  * @param {object} payload
  * @param {number} payload.courseId
- * @param {number} payload.instructorId
- * @param {number} payload.roomId use 0 when unassigned until scheduling
+ * @param {string} payload.instructorId instructor GUID
+ * @param {number} payload.roomId positive room id (CreateLessonDto.roomId)
  * @param {number} payload.academicYear e.g. 2026
  * @param {'Fall'|'Spring'|'Summer'} payload.semester AcademicSemester JSON string
  * @param {number} payload.maxCapacity
  */
 export async function createLesson(payload) {
+  const maxCapacity = payload.maxCapacity ?? payload.capacity
   const normalizedPayload = {
     courseId: payload.courseId,
     instructorId: payload.instructorId,
     academicYear: payload.academicYear,
     semester: payload.semester,
-    // Attendance admin API expects `capacity` in CreateLessonDto.
-    capacity: payload.capacity ?? payload.maxCapacity,
-    // Treat 0 / null / undefined as "unassigned room" and omit from body.
+    maxCapacity,
     ...(payload.roomId != null && Number(payload.roomId) > 0 ? { roomId: Number(payload.roomId) } : {}),
   }
 

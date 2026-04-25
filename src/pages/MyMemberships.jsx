@@ -2,16 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchMyClubMemberships, fetchMyMembershipApplications, fetchMyVacancyApplications, fetchClub } from '../api/clubApi'
 import { mapClubFromApi } from '../api/clubMappers'
-import adaLogo from '../assets/ada-logo.png'
+import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ClubsList.css'
 import './MyMemberships.css'
 import './MyVacancyApplications.css'
 
-const IconBack = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
 const IconPerson = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -25,11 +20,6 @@ const IconChevron = () => (
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-  </svg>
-)
-const IconBell = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
 )
 const IconBriefcase = () => (
@@ -300,26 +290,8 @@ const MyMemberships = () => {
 
   return (
     <div className="clubs-page">
-      <header className="vacancies-nav">
-        <div className="vacancies-nav-left">
-          <div
-            className="vacancies-nav-logo"
-            onClick={() => navigate('/')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-          >
-            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
-          </div>
-          <nav className="vacancies-nav-links">
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
-            <button type="button" className="vacancies-nav-link vacancies-nav-link--active" onClick={() => navigate('/clubs')}>Clubs</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
-          </nav>
-        </div>
-        <div className="vacancies-nav-right">
+      <ClubsAreaNav
+        rightSlot={(
           <div className="vacancies-nav-search">
             <IconSearch />
             <input
@@ -329,31 +301,13 @@ const MyMemberships = () => {
               readOnly
             />
           </div>
-          <button
-            type="button"
-            className="vacancies-nav-icon"
-            aria-label="Notifications"
-            onClick={() => navigate('/clubs/notifications')}
-          >
-            <IconBell />
-          </button>
-          <button
-            type="button"
-            className="vacancies-nav-avatar"
-            aria-label="My memberships"
-            onClick={() => navigate('/clubs/my-memberships')}
-          >
-            U
-          </button>
-        </div>
-      </header>
+        )}
+      />
 
       <div className="clubs-main">
         <div className="mm-header-row">
           <div className="mm-header-left">
-            {/* <button type="button" className="clubs-back" onClick={() => navigate('/clubs')} aria-label="Back to clubs">
-              <IconBack />
-            </button> */}
+            {/* <button type="button" className="clubs-back" onClick={() => navigate('/clubs')} aria-label="Back to clubs">…</button> */}
             <div className="mm-header-text">
               <h1 className="mm-title">My Memberships</h1>
               <span className="mm-subtitle">

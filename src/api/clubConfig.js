@@ -10,10 +10,20 @@ export const CLUB_API_BASE = String(
     '/club'
 ).replace(/\/+$/, '')
 
-/** Origin without `/club` — used to resolve relative image paths from the API. */
+/** Origin without `/club` — used for legacy fallbacks (e.g. default.png on the gateway). */
 export function clubGatewayOrigin() {
   return CLUB_API_BASE.replace(/\/club$/i, '') || CLUB_API_BASE
 }
+
+/**
+ * Public base URL for club media files (S3). API often returns relative paths like
+ * `/clubs/clubs/{id}/profile/logo/...jpg` which must be joined to this host, not the API gateway.
+ * @see https://myada-app.s3.eu-north-1.amazonaws.com/clubs/clubs/1/profile/logo/...
+ */
+export const CLUB_MEDIA_BASE = String(
+  import.meta.env.VITE_CLUB_MEDIA_BASE ||
+    'https://myada-app.s3.eu-north-1.amazonaws.com'
+).replace(/\/+$/, '')
 
 /** Path segment after `/api/v1/` (no leading slash). */
 export function clubUrl(path) {

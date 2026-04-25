@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
 import { mapEventFromApi } from '../api/clubMappers'
-import adaLogo from '../assets/ada-logo.png'
+import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ClubEvents.css'
 
 const IconBack = () => (
@@ -156,44 +156,7 @@ const ClubEvents = () => {
 
   return (
     <div className="ce-page">
-      <header className="vacancies-nav">
-        <div className="vacancies-nav-left">
-          <div
-            className="vacancies-nav-logo"
-            onClick={() => navigate('/')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-          >
-            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
-          </div>
-          <nav className="vacancies-nav-links">
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
-            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Events</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs')}>Clubs</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
-          </nav>
-        </div>
-        <div className="vacancies-nav-right">
-          <button
-            type="button"
-            className="vacancies-nav-icon"
-            aria-label="Notifications"
-            onClick={() => navigate('/clubs/notifications')}
-          >
-            <IconBell />
-          </button>
-          <button
-            type="button"
-            className="vacancies-nav-avatar"
-            aria-label="My memberships"
-            onClick={() => navigate('/clubs/my-memberships')}
-          >
-            U
-          </button>
-        </div>
-      </header>
+      <ClubsAreaNav />
       <div className="ce-main">
         <header className="ce-header">
           {/* <button type="button" className="ce-back" onClick={() => navigate('/')} aria-label="Back">
@@ -320,7 +283,7 @@ const ClubEvents = () => {
         )}
 
         <footer className="ce-footer">
-          <span className="ce-footer-logo">CampusEvents</span>
+          <span className="ce-footer-logo">MyAda</span>
           <nav className="ce-footer-nav">
             <button type="button" onClick={() => navigate('/clubs')}>Clubs Directory</button>
             <span>Safety Guidelines</span>

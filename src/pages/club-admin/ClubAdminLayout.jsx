@@ -91,10 +91,7 @@ function ClubAdminClubPicker({ onChoose, membershipsLoading, membershipOptions, 
   return (
     <div className="club-admin-content" style={{ maxWidth: 560, margin: '48px auto', padding: 24 }}>
       <div className="club-admin-card">
-        <h1 className="club-admin-card-title" style={{ marginBottom: 8 }}>Club administration</h1>
-        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#64748b' }}>
-          Choose a club you manage. Club staff only, unless your account has the global <strong>Admin</strong> role (JWT), which can open any club by id.
-        </p>
+        <h1 className="club-admin-card-title" style={{ marginBottom: 20 }}>Club administration</h1>
         {membershipsLoading ? (
           <p style={{ color: '#64748b' }}>Loading your memberships…</p>
         ) : membershipOptions.length > 0 ? (

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { fetchVacancies } from '../api/clubApi'
 import { mapVacancyFromApi } from '../api/clubMappers'
 import { getSavedVacancyIds, setSavedVacancyIds } from '../utils/savedVacanciesCookie'
-import adaLogo from '../assets/ada-logo.png'
+import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ClubVacancies.css'
 
 const IconBack = () => (
@@ -34,11 +34,6 @@ const IconFilter = () => (
 const IconSearch = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-  </svg>
-)
-const IconBell = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
 )
 const IconGraduation = () => (
@@ -175,71 +170,39 @@ const ClubVacancies = () => {
 
   return (
     <div className="vacancies-page">
-      <header className="vacancies-nav">
-        <div className="vacancies-nav-left">
-          <div
-            className="vacancies-nav-logo"
-            onClick={() => navigate('/')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-          >
-            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
-          </div>
-          <nav className="vacancies-nav-links">
-            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Vacancies</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs')}>Clubs</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
-          </nav>
-        </div>
-        <div className="vacancies-nav-right">
-          <button
-            type="button"
-            className="vacancies-nav-search-toggle"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Open search"
-          >
-            <IconSearch />
-          </button>
-          <div className={`vacancies-nav-search ${searchOpen ? 'vacancies-nav-search--open' : ''}`}>
-            <IconSearch />
-            <input
-              type="text"
-              placeholder="Search roles or clubs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search roles or clubs"
-              ref={searchInputRef}
-            />
+      <ClubsAreaNav
+        rightSlot={
+          <>
             <button
               type="button"
-              className="vacancies-nav-search-close"
-              onClick={() => setSearchOpen(false)}
-              aria-label="Close search"
+              className="vacancies-nav-search-toggle"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Open search"
             >
-              ×
+              <IconSearch />
             </button>
-          </div>
-          <button
-            type="button"
-            className="vacancies-nav-icon"
-            aria-label="Notifications"
-            onClick={() => navigate('/clubs/notifications')}
-          >
-            <IconBell />
-          </button>
-          <button
-            type="button"
-            className="vacancies-nav-avatar"
-            aria-label="My memberships"
-            onClick={() => navigate('/clubs/my-memberships')}
-          >
-            U
-          </button>
-        </div>
-      </header>
+            <div className={`vacancies-nav-search ${searchOpen ? 'vacancies-nav-search--open' : ''}`}>
+              <IconSearch />
+              <input
+                type="text"
+                placeholder="Search roles or clubs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search roles or clubs"
+                ref={searchInputRef}
+              />
+              <button
+                type="button"
+                className="vacancies-nav-search-close"
+                onClick={() => setSearchOpen(false)}
+                aria-label="Close search"
+              >
+                ×
+              </button>
+            </div>
+          </>
+        }
+      />
 
       <div className="vacancies-content">
         {/* <a href="/clubs" className="vacancies-back-link" onClick={(e) => { e.preventDefault(); navigate('/clubs') }}>

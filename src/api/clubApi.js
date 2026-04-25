@@ -882,7 +882,7 @@ export function patchStudentServicesClub(clubId, body) {
   })
 }
 
-/** Upload or replace club logo (multipart). Field name matches club-admin profile uploads. */
+/** Pending club logo for Student Services review. Multipart field name: `logoFile` (per API). */
 export function uploadStudentServicesClubProfileImage(clubId, file) {
   const fd = new FormData()
   fd.append('logoFile', file)
@@ -890,6 +890,28 @@ export function uploadStudentServicesClubProfileImage(clubId, file) {
     method: 'POST',
     body: fd,
   })
+}
+
+/**
+ * Pending club background for Student Services (when implemented).
+ * Falls back to club-admin profile PATCH with `backgroundFile` if the SS route is not deployed (404).
+ */
+export async function uploadStudentServicesClubBackgroundImage(clubId, file) {
+  const fd = new FormData()
+  fd.append('backgroundFile', file)
+  try {
+    return await clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/background-image`, {
+      method: 'POST',
+      body: fd,
+    })
+  } catch (e) {
+    if (e.status === 404) {
+      const fd2 = new FormData()
+      fd2.append('backgroundFile', file)
+      return patchClubAdminProfile(clubId, fd2)
+    }
+    throw e
+  }
 }
 
 export function approveStudentServicesClubProfileImage(clubId) {

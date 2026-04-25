@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchClub, patchClubAdminProfile } from '../../api/clubApi'
+import {
+  fetchClub,
+  patchClubAdminProfile,
+  uploadStudentServicesClubProfileImage,
+  uploadStudentServicesClubBackgroundImage,
+} from '../../api/clubApi'
 import { mapClubFromApi } from '../../api/clubMappers'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import { FOCUS_ICON_OPTIONS, ClubFocusAreaIcon } from '../../components/club/ClubFocusAreaIcon'
@@ -363,19 +368,7 @@ export default function ClubAdminProfile() {
     const emailChanged = emailNext !== emailBase
     const focusPayload = normalizedFocusAreasPayload()
     const focusSerialized = JSON.stringify(focusPayload)
-    const formData = new FormData()
-    if (logoFile) formData.append('logoFile', logoFile)
-    if (bgFile) formData.append('backgroundFile', bgFile)
-    if (Object.keys(socialPatch).length > 0) {
-      formData.append('socialLinks', JSON.stringify(socialPatch))
-    }
-    if (emailChanged) {
-      formData.append('email', emailNext)
-    }
     const sentFocus = focusSerialized !== lastServerComparableFocusRef.current
-    if (sentFocus) {
-      formData.append('focusAreasJson', focusSerialized)
-    }
     const hasPart =
       Boolean(logoFile) ||
       Boolean(bgFile) ||
@@ -388,12 +381,50 @@ export default function ClubAdminProfile() {
     }
     setSavingProfile(true)
     try {
-      await patchClubAdminProfile(clubId, formData)
-      alert('Profile update submitted.')
+      if (logoFile) {
+        try {
+          await uploadStudentServicesClubProfileImage(clubId, logoFile)
+        } catch (e) {
+          // Student Services route is admin-only on some gateways; fall back to direct club-admin persist.
+          if (e?.status === 403 || e?.status === 404) {
+            const logoFd = new FormData()
+            logoFd.append('logoFile', logoFile)
+            await patchClubAdminProfile(clubId, logoFd)
+          } else {
+            throw e
+          }
+        }
+      }
+      if (bgFile) {
+        await uploadStudentServicesClubBackgroundImage(clubId, bgFile)
+      }
+      const patchFd = new FormData()
+      if (Object.keys(socialPatch).length > 0) {
+        patchFd.append('socialLinks', JSON.stringify(socialPatch))
+      }
+      if (emailChanged) {
+        patchFd.append('email', emailNext)
+      }
+      if (sentFocus) {
+        patchFd.append('focusAreasJson', focusSerialized)
+      }
+      const hasTextPatch =
+        Object.keys(socialPatch).length > 0 || emailChanged || sentFocus
+      if (hasTextPatch) {
+        await patchClubAdminProfile(clubId, patchFd)
+      }
+      const parts = []
+      if (logoFile) parts.push('logo sent to Student Services for review')
+      if (bgFile) parts.push('background submitted')
+      if (hasTextPatch) parts.push('profile text saved')
+      alert(parts.length ? `${parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('. ')}.` : 'Done.')
+      setLogoFile(null)
+      setLogoPreview('')
+      setBgFile(null)
+      setBgPreview('')
       await reloadClub()
     } catch (e) {
       alert(e?.message || 'Could not submit profile changes.')
-      return
     } finally {
       setSavingProfile(false)
     }
@@ -632,6 +663,10 @@ export default function ClubAdminProfile() {
           <div className="club-admin-card-head">
             <h2 className="club-admin-card-title">Branding</h2>
           </div>
+          <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
+            Club logo is uploaded to Student Services as a pending change until an administrator approves it.
+            Background images use the same Student Services flow when available; otherwise they are saved via club admin.
+          </p>
 
           <div className="club-admin-profile-branding-grid">
             <div className="club-admin-field">

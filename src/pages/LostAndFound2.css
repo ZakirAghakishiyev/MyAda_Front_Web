@@ -35,14 +35,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.lf2-logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 1;
 }
 
 .lf2-header-titles h1 {

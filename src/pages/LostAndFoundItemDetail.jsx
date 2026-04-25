@@ -63,14 +63,11 @@ const LostAndFoundItemDetail = () => {
     if (!item) return null
     return {
       ...item,
-      title: item?.title || 'Untitled item',
+      title: item?.title || item?.itemName || 'Untitled item',
       description: item?.description || 'No description',
       category: item?.category || 'Other',
       type: item?.type || 'found',
-      status:
-        (item?.status != null && String(item.status).trim() !== '' && String(item.status).trim()) ||
-        (item?.adminStatus != null && String(item.adminStatus).trim() !== '' && String(item.adminStatus).trim()) ||
-        'Pending Verification',
+      status: String(item?.adminStatus || 'Pending'),
       location: item?.location || 'Location not specified',
       image: item?.image || item?.images?.[0] || null,
       referenceNumber: item?.referenceNumber || '-',
@@ -118,11 +115,11 @@ const LostAndFoundItemDetail = () => {
     try {
       await createLostFoundClaim(normalizedItem.id, {
         claimType,
-        message: '',
+        message: 'Submitted from the campus Lost & Found portal.',
       })
       alert('Claim submitted successfully.')
     } catch (err) {
-      if (err?.status === 409) {
+      if (err?.status === 409 || err?.code === 'DUPLICATE_CLAIM') {
         alert('You already submitted this claim for this item.')
       } else {
         alert(err?.message || 'Failed to submit claim.')

@@ -4,7 +4,7 @@ import { fetchClub, fetchClubMembers, fetchEvents, fetchMyClubMemberships } from
 import { mapClubFromApi, mapEventFromApi } from '../api/clubMappers'
 import { fetchAuthUserById } from '../api/authUsersApi'
 import { ClubFocusAreaIcon } from '../components/club/ClubFocusAreaIcon'
-import adaLogo from '../assets/ada-logo.png'
+import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ClubVacancies.css'
 import './ClubDetail.css'
 
@@ -48,12 +48,6 @@ const IconPlus = () => (
     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 )
-const IconBell = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-)
-
 const TABS = [
   { id: 'about', label: 'About Us' },
   { id: 'announcements', label: 'Announcements' },
@@ -381,6 +375,7 @@ const ClubDetail = () => {
   if (loadState.loading) {
     return (
       <div className="club-detail-page club-detail-page--not-found">
+        <ClubsAreaNav />
         <div className="club-detail-container">
           <div className="club-detail-loading-indicator" role="status" aria-live="polite">
             <span className="club-detail-loading-spinner" aria-hidden="true" />
@@ -394,6 +389,7 @@ const ClubDetail = () => {
   if (loadState.error || !club) {
     return (
       <div className="club-detail-page club-detail-page--not-found">
+        <ClubsAreaNav />
         <div className="club-detail-container">
           <p>{loadState.error || 'Club not found.'}</p>
           <button type="button" className="club-detail-btn-primary" onClick={() => navigate('/clubs')}>
@@ -406,44 +402,7 @@ const ClubDetail = () => {
 
   return (
     <div className="club-detail-page">
-      <header className="vacancies-nav">
-        <div className="vacancies-nav-left">
-          <div
-            className="vacancies-nav-logo"
-            onClick={() => navigate('/')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-          >
-            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
-          </div>
-          <nav className="vacancies-nav-links">
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
-            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Clubs</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/propose')}>Propose Club</button>
-          </nav>
-        </div>
-        <div className="vacancies-nav-right">
-          <button
-            type="button"
-            className="vacancies-nav-icon"
-            aria-label="Notifications"
-            onClick={() => navigate('/clubs/notifications')}
-          >
-            <IconBell />
-          </button>
-          <button
-            type="button"
-            className="vacancies-nav-avatar"
-            aria-label="My memberships"
-            onClick={() => navigate('/clubs/my-memberships')}
-          >
-            U
-          </button>
-        </div>
-      </header>
+      <ClubsAreaNav />
 
       {/* Hero with banner and floating card */}
       <section className="club-detail-hero">
@@ -698,14 +657,14 @@ const ClubDetail = () => {
 
       <footer className="club-detail-footer">
         <div className="club-detail-footer-inner">
-          <Link to="/" className="club-detail-nav-logo">CampusConnect</Link>
+          <Link to="/" className="club-detail-nav-logo">MyAda</Link>
           <nav className="club-detail-footer-links">
             <a href="#help">Help Center</a>
             <a href="#privacy">Privacy Policy</a>
             <a href="#terms">Terms of Service</a>
             <a href="#guidelines">University Guidelines</a>
           </nav>
-          <span className="club-detail-footer-copy">© {new Date().getFullYear()} CampusConnect University Platforms.</span>
+          <span className="club-detail-footer-copy">© {new Date().getFullYear()} MyAda University Platforms.</span>
         </div>
       </footer>
     </div>

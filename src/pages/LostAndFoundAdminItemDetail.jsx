@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { itemHasEligibleClaimForOwnerNotify } from '../api/lostFoundApi'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import './LostAndFound.css'
 import './LostAndFoundAdmin.css'
@@ -44,9 +45,11 @@ export default function LostAndFoundAdminItemDetail() {
   const [receiptStorageBin, setReceiptStorageBin] = useState('')
   const [receiptCondition, setReceiptCondition] = useState('')
   const [receiptVerified, setReceiptVerified] = useState(false)
+  const [receiptIntakeFile, setReceiptIntakeFile] = useState(null)
   const [handoverStudentName, setHandoverStudentName] = useState('')
   const [handoverStudentId, setHandoverStudentId] = useState('')
   const [handoverVerified, setHandoverVerified] = useState(false)
+  const [handoverProofFile, setHandoverProofFile] = useState(null)
   const [actionError, setActionError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -94,7 +97,9 @@ export default function LostAndFoundAdminItemDetail() {
     try {
       await confirmReceipt(item.id, {
         storageBinId: receiptStorageBin.trim(),
-        verifiedCondition: receiptCondition,
+        condition: receiptCondition,
+        confirmAccuracy: receiptVerified,
+        intakePhotoFile: receiptIntakeFile || undefined,
       })
       await notifyOwner(item.id, `Your ${item.title || 'item'} has been verified and is ready for pickup.`)
       setVerifyModalOpen(false)
@@ -116,6 +121,8 @@ export default function LostAndFoundAdminItemDetail() {
       await confirmHandover(item.id, {
         claimantName: handoverStudentName.trim(),
         claimantStudentId: handoverStudentId.trim(),
+        studentIdVerified: handoverVerified,
+        handoverProofFile: handoverProofFile || undefined,
       })
       setHandoverModalOpen(false)
     } catch (err) {
@@ -251,9 +258,11 @@ export default function LostAndFoundAdminItemDetail() {
                   )}
                   {item.adminStatus === 'Received' && (
                     <>
-                      <button type="button" className="lf-detail-btn lf-detail-btn--admin-notify" onClick={handleNotifyOwner} disabled={isSubmitting}>
-                        Notify Owner
-                      </button>
+                      {itemHasEligibleClaimForOwnerNotify(item) ? (
+                        <button type="button" className="lf-detail-btn lf-detail-btn--admin-notify" onClick={handleNotifyOwner} disabled={isSubmitting}>
+                          Notify Owner
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="lf-detail-btn lf-detail-btn--admin-delivered"
@@ -312,10 +321,15 @@ export default function LostAndFoundAdminItemDetail() {
               <div className="lf-admin-verify-section">
                 <h3>STAFF INTAKE FORM</h3>
                 <label className="lf-admin-upload-zone">
-                  <input type="file" accept="image/*" className="lf-admin-upload-input" />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="lf-admin-upload-input"
+                    onChange={(e) => setReceiptIntakeFile(e.target.files?.[0] || null)}
+                  />
                   <IconCamera />
                   <span>Click to upload photo</span>
-                  <span className="lf-admin-upload-hint">Clear shot of serial number or identifying marks. *</span>
+                  <span className="lf-admin-upload-hint">PNG or JPG — optional intake photo</span>
                 </label>
                 <label className="lf-admin-field">
                   <span>Office Storage Bin / ID *</span>
@@ -390,9 +404,15 @@ export default function LostAndFoundAdminItemDetail() {
                   <span>Student ID Verified Manually</span>
                 </label>
                 <label className="lf-admin-upload-zone">
-                  <input type="file" accept="image/*" className="lf-admin-upload-input" />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="lf-admin-upload-input"
+                    onChange={(e) => setHandoverProofFile(e.target.files?.[0] || null)}
+                  />
                   <IconCamera />
                   <span>Handover proof (photo)</span>
+                  <span className="lf-admin-upload-hint">PNG or JPG — optional</span>
                 </label>
               </div>
             </div>

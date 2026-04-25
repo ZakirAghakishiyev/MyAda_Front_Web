@@ -4,8 +4,9 @@ import { SCHEDULING_DEV_USER_ID_HEADER } from '../../api/schedulingConfig'
 
 /**
  * Dev header for scheduling microservice must match instructor_user_id.
+ * @param {{ showHint?: boolean }} [props]
  */
-export default function SchedulingUserIdBar() {
+export default function SchedulingUserIdBar({ showHint = true }) {
   const [value, setValue] = useState(() => getSchedulingUserId())
 
   function persist(next) {
@@ -30,10 +31,12 @@ export default function SchedulingUserIdBar() {
         onChange={(e) => persist(e.target.value)}
         onBlur={() => setSchedulingUserId(value)}
       />
-      <p className="sched-ms-user-bar-hint">
-        Sent as <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> for preferences, session edits, and publish. If your JWT
-        already carries a valid instructor id, you can leave this empty. Value is stored for this browser session only.
-      </p>
+      {showHint ? (
+        <p className="sched-ms-user-bar-hint">
+          Sent as <code>{SCHEDULING_DEV_USER_ID_HEADER}</code> for preferences, session edits, and publish. If your JWT
+          already carries a valid instructor id, you can leave this empty. Value is stored for this browser session only.
+        </p>
+      ) : null}
     </div>
   )
 }

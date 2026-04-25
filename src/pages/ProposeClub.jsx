@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { fetchStudentServicesProposalRequirements, submitClubProposal } from '../api/clubApi'
-import adaLogo from '../assets/ada-logo.png'
+import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './ProposeClub.css'
 
 const STEPS = 4
@@ -135,12 +135,6 @@ const IconUploadDoc = () => (
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
   </svg>
 )
-const IconBell = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-)
-
 const countWords = (s) => (s || '').trim().split(/\s+/).filter(Boolean).length
 
 const ProposeClub = () => {
@@ -377,19 +371,7 @@ const ProposeClub = () => {
   if (!policy.loading && deadlinePassed) {
     return (
       <div className="propose-page">
-        <header className="vacancies-nav">
-          <div className="vacancies-nav-left">
-            <div
-              className="vacancies-nav-logo"
-              onClick={() => navigate('/')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-            >
-              <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
-            </div>
-          </div>
-        </header>
+        <ClubsAreaNav />
         <div className="propose-content-wrap">
           <div className="propose-main-col">
             <div className="propose-card">
@@ -419,44 +401,7 @@ const ProposeClub = () => {
 
   return (
     <div className="propose-page">
-      <header className="vacancies-nav">
-        <div className="vacancies-nav-left">
-          <div
-            className="vacancies-nav-logo"
-            onClick={() => navigate('/')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-          >
-            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
-          </div>
-          <nav className="vacancies-nav-links">
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies')}>Vacancies</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/vacancies/my-applications')}>My Applications</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs/events')}>Events</button>
-            <button type="button" className="vacancies-nav-link" onClick={() => navigate('/clubs')}>Clubs</button>
-            <button type="button" className="vacancies-nav-link vacancies-nav-link--active">Propose Club</button>
-          </nav>
-        </div>
-        <div className="vacancies-nav-right">
-          <button
-            type="button"
-            className="vacancies-nav-icon"
-            aria-label="Notifications"
-            onClick={() => navigate('/clubs/notifications')}
-          >
-            <IconBell />
-          </button>
-          <button
-            type="button"
-            className="vacancies-nav-avatar"
-            aria-label="My memberships"
-            onClick={() => navigate('/clubs/my-memberships')}
-          >
-            U
-          </button>
-        </div>
-      </header>
+      <ClubsAreaNav />
 
       <div className="propose-content-wrap">
         <div className="propose-main-col">

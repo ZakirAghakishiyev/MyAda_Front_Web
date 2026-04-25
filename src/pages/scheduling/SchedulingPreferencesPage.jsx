@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { preferencesGet, preferencesPut } from '../../api/schedulingMsApi'
-import { SCHEDULING_API_BASE, SCHEDULING_DEV_USER_ID_HEADER } from '../../api/schedulingConfig'
+import { userHasJwtAdminRole } from '../../auth/jwtRoles'
 import SchedulingUserIdBar from '../../components/scheduling/SchedulingUserIdBar'
 import { getEffectiveSchedulingInstructorId } from '../../utils/schedulingInstructorId'
 import '../SchedulingPage.css'
@@ -56,7 +56,9 @@ const SchedulingPreferencesPage = () => {
     setSaveMessage({ type: '', text: '' })
     if (!getEffectiveSchedulingInstructorId()) {
       setLoadMessage(
-        `No instructor id for ${SCHEDULING_DEV_USER_ID_HEADER}. Sign in, or set Instructor user ID below (Auth UUID or numeric string).`
+        userHasJwtAdminRole()
+          ? 'No instructor id. Sign in, or set Instructor user ID in the bar above (UUID or numeric).'
+          : 'Sign in so your account supplies a valid instructor id (UUID or numeric).'
       )
       return
     }
@@ -92,7 +94,9 @@ const SchedulingPreferencesPage = () => {
     if (!getEffectiveSchedulingInstructorId()) {
       setSaveMessage({
         type: 'error',
-        text: `No valid id for ${SCHEDULING_DEV_USER_ID_HEADER}. Set Instructor user ID below or use a JWT with sub / instructor claim (UUID or numeric).`,
+        text: userHasJwtAdminRole()
+          ? 'No valid instructor id. Set Instructor user ID in the bar above or sign in with a JWT that includes sub / instructor (UUID or numeric).'
+          : 'No valid instructor id. Sign in with an instructor account (UUID or numeric in JWT).',
       })
       return
     }
@@ -129,29 +133,22 @@ const SchedulingPreferencesPage = () => {
           <Link to="/scheduling">Scheduling</Link>
         </nav>
 
-        <h1>Instructor preferences</h1>
-        <p className="scheduling-muted">
-          Uses <span className="sched-ms-code">GET /api/v1/instructors/preferences</span> (query{' '}
-          <span className="sched-ms-code">academic_year</span>, <span className="sched-ms-code">semester</span>) and{' '}
-          <span className="sched-ms-code">PUT /api/v1/instructors/preferences</span> on{' '}
-          <span className="sched-ms-code">{SCHEDULING_API_BASE}</span>. The instructor is identified only via the{' '}
-          <span className="sched-ms-code">{SCHEDULING_DEV_USER_ID_HEADER}</span> header (Auth user UUID or legacy numeric
-          string). Preferences are per term.
-        </p>
+        <header className="scheduling-page-header">
+          <h1>Instructor preferences</h1>
+          <button type="button" className="back-button scheduling-back-secondary" onClick={() => navigate('/')}>
+            Back to Home
+          </button>
+        </header>
 
-        <SchedulingUserIdBar />
+        {userHasJwtAdminRole() ? <SchedulingUserIdBar showHint={false} /> : null}
 
-        {resolvedInstructorId ? (
-          <p className="scheduling-muted" style={{ marginTop: 8 }}>
-            Requests use <span className="sched-ms-code">{SCHEDULING_DEV_USER_ID_HEADER}</span> ={' '}
-            <span className="sched-ms-code">{resolvedInstructorId}</span>
-          </p>
-        ) : (
+        {!resolvedInstructorId ? (
           <p className="sched-ms-error" style={{ marginTop: 8 }}>
-            Set <strong>Instructor user ID</strong> above, or sign in so your JWT supplies a valid instructor user id
-            for <span className="sched-ms-code">{SCHEDULING_DEV_USER_ID_HEADER}</span>.
+            {userHasJwtAdminRole()
+              ? 'Set Instructor user ID in the bar above, or sign in so your JWT supplies a valid instructor id (UUID or numeric).'
+              : 'Sign in so your JWT supplies a valid instructor id (UUID or numeric).'}
           </p>
-        )}
+        ) : null}
 
         <div className="sched-ms-section">
           <h2>Term</h2>
@@ -242,12 +239,6 @@ const SchedulingPreferencesPage = () => {
             </button>
           </div>
         </form>
-
-        <div className="scheduling-actions">
-          <button type="button" className="back-button scheduling-back-secondary" onClick={() => navigate('/')}>
-            Back to Home
-          </button>
-        </div>
       </div>
     </div>
   )

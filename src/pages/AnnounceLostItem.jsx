@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './LostAndFound.css'
-import { createLostReport, getLostFoundCategories, uploadLostFoundImage } from '../api/lostFoundApi'
+import { createLostReport, getLostFoundCategories } from '../api/lostFoundApi'
 import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
 
 const MAX_DESCRIPTION_LENGTH = 500
@@ -74,28 +74,42 @@ const AnnounceLostItem = () => {
     setIsSubmitting(true)
     try {
       const formData = new FormData(event.currentTarget)
-      const photoUrls = photoFile ? [await uploadLostFoundImage(photoFile)].filter(Boolean) : []
       const selectedBuilding = buildings.find((b) => String(b.id) === String(buildingId))
       const selectedRoom = rooms.find((r) => String(r.id) === String(roomId))
-      const payload = {
+      let location = ''
+      if (locationType === 'building') {
+        location = [selectedBuilding?.name, roomId ? selectedRoom?.name : roomAreaText].filter(Boolean).join(', ').trim()
+      } else {
+        location = (campusLocation || '').trim()
+      }
+      if (!location) {
+        alert('Please provide location details (building and room/area, or campus).')
+        setIsSubmitting(false)
+        return
+      }
+      const timeLost = String(formData.get('timeLost') || '').trim() || '12:00'
+      const lostBody = {
+        type: 'lost',
         itemName: String(formData.get('itemName') || '').trim(),
         category: String(formData.get('category') || '').trim() || DEFAULT_CATEGORIES[0],
         description: String(description || '').trim(),
-        locationType,
-        building: locationType === 'building' ? selectedBuilding?.name || undefined : undefined,
-        isRoom: locationType === 'building' ? (roomId ? 'yes' : 'no') : undefined,
-        roomOrArea:
-          locationType === 'building'
-            ? (roomId ? selectedRoom?.name : roomAreaText) || undefined
-            : undefined,
-        campusLocation: locationType === 'campus' ? campusLocation || undefined : undefined,
+        location,
         dateLost: String(formData.get('dateLost') || '').trim(),
-        timeLost: String(formData.get('timeLost') || '').trim(),
+        timeLost,
         contactName: String(formData.get('contactName') || '').trim(),
         contactPhone: String(formData.get('contactPhone') || '').trim(),
-        photoUrls,
+        status: 'pending',
       }
-      await createLostReport(payload)
+      if (photoFile) {
+        const fd = new FormData()
+        Object.entries(lostBody).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && String(v).trim() !== '') fd.append(k, String(v))
+        })
+        fd.append('files', photoFile)
+        await createLostReport(fd)
+      } else {
+        await createLostReport(lostBody)
+      }
       alert('Lost item report submitted for review.')
       navigate('/lost-and-found')
     } catch (err) {
@@ -283,10 +297,10 @@ const AnnounceLostItem = () => {
           </h2>
           <div className="lf-report-fields">
             <label className="lf-field">
-              <input type="text" name="contactName" placeholder="Your Name" />
+              <input type="text" required name="contactName" placeholder="Your Name *" />
             </label>
             <label className="lf-field">
-              <input type="tel" name="contactPhone" placeholder="Phone Number" />
+              <input type="tel" required name="contactPhone" placeholder="Phone Number *" />
             </label>
           </div>
         </section>

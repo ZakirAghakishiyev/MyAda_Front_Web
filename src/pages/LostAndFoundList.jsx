@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getLostFoundItems, getLostFoundStats } from '../api/lostFoundApi'
+import { getLostFoundItems } from '../api/lostFoundApi'
 import './LostAndFound.css'
 
 const IconPin = () => (
@@ -29,13 +29,10 @@ function computeDaysAgo(item) {
 }
 
 function normalizeItem(item) {
-  const status =
-    (item?.status != null && String(item.status).trim() !== '' && String(item.status).trim()) ||
-    (item?.adminStatus != null && String(item.adminStatus).trim() !== '' && String(item.adminStatus).trim()) ||
-    'Pending Verification'
+  const status = String(item?.adminStatus || item?.status || 'Pending').trim() || 'Pending'
   return {
     ...item,
-    title: item?.title || 'Untitled item',
+    title: item?.title || item?.itemName || 'Untitled item',
     description: item?.description || 'No description',
     category: item?.category || 'Other',
     location: item?.location || 'Location not specified',
@@ -49,9 +46,8 @@ function normalizeItem(item) {
 const LostAndFoundList = () => {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('total') // 'total' | 'active' | 'pending'
+  const [statusFilter, setStatusFilter] = useState('total') // 'total' | 'pending'
   const [items, setItems] = useState([])
-  const [stats, setStats] = useState({ total: 0, active: 0, pendingVerification: 0 })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -61,13 +57,9 @@ const LostAndFoundList = () => {
       setIsLoading(true)
       setError('')
       try {
-        const [itemsRes, statsRes] = await Promise.all([
-          getLostFoundItems({ page: 1, limit: 100 }),
-          getLostFoundStats(),
-        ])
+        const itemsRes = await getLostFoundItems({ page: 1, limit: 100 })
         if (!isMounted) return
         setItems((itemsRes.items || []).map(normalizeItem))
-        setStats(statsRes)
       } catch (err) {
         if (!isMounted) return
         setError(err?.message || 'Failed to load lost and found items.')
@@ -84,10 +76,8 @@ const LostAndFoundList = () => {
   const filteredItems = useMemo(() => {
     let list = items
 
-    if (statusFilter === 'active') {
-      list = list.filter(item => item.status === 'Active')
-    } else if (statusFilter === 'pending') {
-      list = list.filter(item => item.status.toLowerCase().includes('pending'))
+    if (statusFilter === 'pending') {
+      list = list.filter((item) => String(item.status).toLowerCase() === 'pending')
     }
 
     if (!searchQuery.trim()) return list
@@ -102,10 +92,9 @@ const LostAndFoundList = () => {
     )
   }, [searchQuery, statusFilter])
 
-  const totalCount = stats.total || items.length
-  const activeCount = stats.active || items.filter(item => item.status === 'Active').length
-  const pendingCount =
-    stats.pendingVerification || items.filter(item => item.status.toLowerCase().includes('pending')).length
+  const visible = items
+  const totalCount = visible.length
+  const pendingCount = visible.filter((item) => String(item.status).toLowerCase() === 'pending').length
 
   return (
     <div className="lf-page lf-list-page">
@@ -144,14 +133,6 @@ const LostAndFoundList = () => {
         >
           <span>Total</span>
           <span className="lf-tab-count">{totalCount}</span>
-        </button>
-        <button
-          type="button"
-          className={`lf-tab lf-tab--active ${statusFilter === 'active' ? 'lf-tab--selected' : ''}`}
-          onClick={() => setStatusFilter('active')}
-        >
-          <span>Active</span>
-          <span className="lf-tab-count">{activeCount}</span>
         </button>
         <button
           type="button"
@@ -215,7 +196,7 @@ const LostAndFoundList = () => {
                   </div>
                 </div>
                 <div className="lf-card-status-row">
-                  <span className={`lf-status-badge lf-status-badge--${item.status === 'Active' ? 'active' : 'pending'}`}>
+                  <span className="lf-status-badge lf-status-badge--pending">
                     {item.status}
                   </span>
                   <span className="lf-days-ago">

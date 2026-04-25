@@ -1,11 +1,12 @@
-import { clubGatewayOrigin } from './clubConfig'
+import { CLUB_MEDIA_BASE, clubGatewayOrigin } from './clubConfig'
 
 export function resolveClubMediaUrl(path) {
   if (path == null || path === '') return null
-  const s = String(path)
+  const s = String(path).trim()
   if (/^https?:\/\//i.test(s)) return s
-  const origin = clubGatewayOrigin().replace(/\/+$/, '')
-  return `${origin}${s.startsWith('/') ? s : `/${s}`}`
+  const isDefaultPlaceholder = /^\/clubs\/default\.png$/i.test(s) || /^clubs\/default\.png$/i.test(s)
+  const base = (isDefaultPlaceholder ? clubGatewayOrigin() : CLUB_MEDIA_BASE).replace(/\/+$/, '')
+  return `${base}${s.startsWith('/') ? s : `/${s}`}`
 }
 
 function firstNonEmptyLink(...candidates) {
@@ -39,11 +40,21 @@ export function mapClubFromApi(dto) {
       ? dto.socialLinks
       : {}
   const sl = /** @type {Record<string, unknown>} */ (socialLinks)
+  // API: `image` is display-safe; some payloads only set `profileImageUrl` / PascalCase variants.
+  const rawClubImage = firstNonEmptyLink(
+    dto.image,
+    dto.Image,
+    dto.profileImageUrl,
+    dto.ProfileImageUrl,
+  )
+  const resolvedClubImage = rawClubImage
+    ? resolveClubMediaUrl(rawClubImage) || rawClubImage
+    : resolveClubMediaUrl('/clubs/default.png') || '/clubs/default.png'
   return {
     id: String(id),
     name: String(dto.name ?? ''),
     category: String(dto.category ?? ''),
-    image: resolveClubMediaUrl(dto.image) || dto.image,
+    image: resolvedClubImage,
     tags,
     members: Number(dto.members) || 0,
     about: aboutText,
@@ -96,6 +107,7 @@ export function mapClubFromApi(dto) {
         .filter(Boolean)
     })(),
     categoryId: dto.categoryId,
+    profileImageUrl: rawClubImage ? resolveClubMediaUrl(rawClubImage) || rawClubImage : undefined,
     raw: dto,
   }
 }
@@ -268,12 +280,9 @@ export function mapStudentServicesDirectoryClub(c) {
     if (v === 'inactive') return 'Inactive'
     return 'Active'
   }
-  const profileImageUrl =
-    c.profileImageUrl != null
-      ? resolveClubMediaUrl(c.profileImageUrl) || c.profileImageUrl
-      : c.image != null
-        ? resolveClubMediaUrl(c.image) || c.image
-        : undefined
+  const rawProfile = firstNonEmptyLink(c.profileImageUrl, c.ProfileImageUrl, c.image, c.Image)
+  const profileImageUrl = rawProfile ? resolveClubMediaUrl(rawProfile) || rawProfile : undefined
+  const rawProposed = firstNonEmptyLink(c.proposedProfileImageUrl, c.ProposedProfileImageUrl)
   return {
     id: String(c.id),
     name: String(c.name ?? ''),
@@ -285,9 +294,7 @@ export function mapStudentServicesDirectoryClub(c) {
     status: normalizeStatus(c.status),
     iconColor: c.iconColor ?? 'blue',
     profileImageUrl,
-    proposedProfileImageUrl: c.proposedProfileImageUrl
-      ? resolveClubMediaUrl(c.proposedProfileImageUrl)
-      : undefined,
+    proposedProfileImageUrl: rawProposed ? resolveClubMediaUrl(rawProposed) || rawProposed : undefined,
     raw: c,
   }
 }

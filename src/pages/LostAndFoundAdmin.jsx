@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { itemHasEligibleClaimForOwnerNotify } from '../api/lostFoundApi'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import AdminSidebar from '../components/AdminSidebar'
 import './LostAndFoundAdmin.css'
@@ -48,9 +49,11 @@ export default function LostAndFoundAdmin() {
   const [receiptCondition, setReceiptCondition] = useState('')
   const [receiptNotes, setReceiptNotes] = useState('')
   const [receiptVerified, setReceiptVerified] = useState(false)
+  const [receiptIntakeFile, setReceiptIntakeFile] = useState(null)
   const [handoverStudentName, setHandoverStudentName] = useState('')
   const [handoverStudentId, setHandoverStudentId] = useState('')
   const [handoverVerified, setHandoverVerified] = useState(false)
+  const [handoverProofFile, setHandoverProofFile] = useState(null)
   const [actionError, setActionError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
@@ -121,6 +124,7 @@ export default function LostAndFoundAdmin() {
     setReceiptCondition('')
     setReceiptNotes('')
     setReceiptVerified(false)
+    setReceiptIntakeFile(null)
     setVerifyModalItem(item)
   }
   const handleVerifyApprove = async () => {
@@ -142,8 +146,10 @@ export default function LostAndFoundAdmin() {
     try {
       await confirmReceipt(verifyModalItem.id, {
         storageBinId: receiptStorageBin.trim(),
-        verifiedCondition: receiptCondition,
+        condition: receiptCondition,
+        confirmAccuracy: receiptVerified,
         adminNotes: receiptNotes.trim(),
+        intakePhotoFile: receiptIntakeFile || undefined,
       })
       await notifyOwner(
         verifyModalItem.id,
@@ -162,6 +168,7 @@ export default function LostAndFoundAdmin() {
     setHandoverStudentName('')
     setHandoverStudentId('')
     setHandoverVerified(false)
+    setHandoverProofFile(null)
     setHandoverItem(item)
   }
   const handleFinalizeDelivery = async () => {
@@ -184,6 +191,8 @@ export default function LostAndFoundAdmin() {
       await confirmHandover(handoverItem.id, {
         claimantName: handoverStudentName.trim(),
         claimantStudentId: handoverStudentId.trim(),
+        studentIdVerified: handoverVerified,
+        handoverProofFile: handoverProofFile || undefined,
       })
       setHandoverItem(null)
     } catch (err) {
@@ -369,9 +378,11 @@ export default function LostAndFoundAdmin() {
                         )}
                         {getStatus(item) === 'Received' && (
                           <>
-                            <button type="button" className="lf-admin-action-btn lf-admin-action-btn--orange" onClick={() => handleNotifyOwner(item)} disabled={isSubmitting}>
-                              Notify Owner
-                            </button>
+                            {itemHasEligibleClaimForOwnerNotify(item) ? (
+                              <button type="button" className="lf-admin-action-btn lf-admin-action-btn--orange" onClick={() => handleNotifyOwner(item)} disabled={isSubmitting}>
+                                Notify Owner
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className="lf-admin-action-btn lf-admin-action-btn--green"
@@ -489,10 +500,15 @@ export default function LostAndFoundAdmin() {
               <div className="lf-admin-verify-section">
                 <h3>STAFF INTAKE FORM</h3>
                 <label className="lf-admin-upload-zone">
-                  <input type="file" accept="image/*" className="lf-admin-upload-input" />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="lf-admin-upload-input"
+                    onChange={(e) => setReceiptIntakeFile(e.target.files?.[0] || null)}
+                  />
                   <IconCamera />
                   <span>Click to upload photo</span>
-                  <span className="lf-admin-upload-hint">Clear shot of serial number or identifying marks. *</span>
+                  <span className="lf-admin-upload-hint">PNG or JPG — optional intake photo</span>
                 </label>
                 <label className="lf-admin-field">
                   <span>Office Storage Bin / ID *</span>
@@ -581,10 +597,15 @@ export default function LostAndFoundAdmin() {
                   <a href="#clear">Clear Canvas</a>
                 </div>
                 <label className="lf-admin-upload-zone">
-                  <input type="file" accept="image/*" className="lf-admin-upload-input" />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    className="lf-admin-upload-input"
+                    onChange={(e) => setHandoverProofFile(e.target.files?.[0] || null)}
+                  />
                   <IconCamera />
                   <span>Click to upload or drag and drop</span>
-                  <span className="lf-admin-upload-hint">Capture the handover moment or receipt.</span>
+                  <span className="lf-admin-upload-hint">PNG or JPG — optional handover proof</span>
                 </label>
               </div>
             </div>

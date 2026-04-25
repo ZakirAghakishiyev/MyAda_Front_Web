@@ -6,9 +6,8 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* Dim only: no backdrop blur so the page underneath (e.g. My Requests) stays recognizable */
+  background: rgba(15, 23, 42, 0.35);
   overflow-y: auto;
 }
 

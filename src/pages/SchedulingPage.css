@@ -45,6 +45,15 @@
   margin-top: 8px;
 }
 
+.scheduling-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
 .page-container {
   background: white;
   border-radius: 8px;
@@ -56,6 +65,10 @@
 .page-container h1 {
   color: #1f2937;
   margin-bottom: 20px;
+}
+
+.page-container .scheduling-page-header h1 {
+  margin: 0 0 8px;
 }
 
 .page-container p {

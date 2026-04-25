@@ -302,7 +302,6 @@ const CourseDetailPage = () => {
         <div className="course-detail-grid">
           <section className="course-panel" aria-labelledby="edit-course-heading">
             <h2 id="edit-course-heading">Course details</h2>
-            <p className="course-panel-hint">PUT /api/admin/courses/{'{id}'}</p>
             <form className="course-form" onSubmit={onSubmitUpdate}>
               <label className="course-field">
                 <span>Name</span>
@@ -341,7 +340,6 @@ const CourseDetailPage = () => {
 
           <section className="course-panel" aria-labelledby="add-lesson-detail-heading">
             <h2 id="add-lesson-detail-heading">Add lesson</h2>
-            <p className="course-panel-hint">POST /api/admin/lessons for this course (courseId {course.id})</p>
             <form className="course-form" onSubmit={onSubmitLesson}>
               <div className="course-field">
                 <span>Course</span>
@@ -440,7 +438,6 @@ const CourseDetailPage = () => {
 
         <section className="course-panel course-detail-lessons-block" aria-labelledby="course-lessons-heading">
           <h2 id="course-lessons-heading">Lessons for this course</h2>
-          <p className="course-panel-hint course-panel-hint-tight">GET /api/admin/courses/{course.id}/lessons</p>
           {loadingLessons ? <p className="scheduling-muted">Loading lessons…</p> : null}
           {!loadingLessons && lessonsError ? <p className="course-form-error">{lessonsError}</p> : null}
           {!loadingLessons && !lessonsError && lessons.length === 0 ? (
