@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Outlet } from 'react-router-dom'
 import { RequireAuth, RequireStudentServices, RequireClubAdminPortal } from './auth/RouteGuards'
+import { SessionRestoreGate } from './auth/SessionRestoreGate'
 import { FilterProvider } from './contexts/FilterContext'
 import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
 import { RegisteredEventsProvider } from './contexts/RegisteredEventsContext'
@@ -407,14 +408,16 @@ function App() {
             v7_relativeSplatPath: true,
           }}
         >
-          <RegisteredEventsProvider>
-            <LostAndFoundAdminProvider>
-              <CallProvider>
-                <GlobalCallUi />
-                <AppContent />
-              </CallProvider>
-            </LostAndFoundAdminProvider>
-          </RegisteredEventsProvider>
+          <SessionRestoreGate>
+            <RegisteredEventsProvider>
+              <LostAndFoundAdminProvider>
+                <CallProvider>
+                  <GlobalCallUi />
+                  <AppContent />
+                </CallProvider>
+              </LostAndFoundAdminProvider>
+            </RegisteredEventsProvider>
+          </SessionRestoreGate>
         </Router>
       </CancelledRequestsProvider>
     </FilterProvider>
