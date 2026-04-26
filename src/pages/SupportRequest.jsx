@@ -4,11 +4,14 @@ import './ITSupport.css'
 import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
 import {
   createSupportRequest,
+  getActiveDispatchers,
   getCategories,
   getCurrentUserIds,
   getMockLocations,
+  isDispatcherActiveByMemberId,
   saveAttachmentsToMockFolder,
 } from '../api/supportApi'
+import { useCallHub } from '../call/useCallHub'
 
 const SUPPORT_REQUEST_DRAFT_COOKIE_KEY = 'support_request_draft'
 
@@ -71,11 +74,35 @@ const IconInfo = () => (
   </svg>
 )
 
+const normalizeDispatcherOption = (item, index) => {
+  const sub = String(item?.sub ?? item?.id ?? item?.userId ?? item?.memberId ?? '').trim()
+  if (!sub) return null
+
+  const displayName = String(
+    item?.name ||
+      item?.displayName ||
+      item?.fullName ||
+      item?.userName ||
+      item?.username ||
+      item?.email ||
+      `Dispatcher ${index + 1}`
+  ).trim()
+
+  return {
+    sub,
+    displayName: displayName || `Dispatcher ${index + 1}`,
+    email: String(item?.email || '').trim(),
+    status: String(item?.status || '').trim(),
+    isActive: item?.isActive !== false,
+  }
+}
+
 const SupportRequest = ({ initialArea = 'it' }) => {
   const navigate = useNavigate()
   const locationRouter = useLocation()
   const queryParams = new URLSearchParams(locationRouter.search)
   const areaFromQuery = queryParams.get('area')
+  const { phase, error: callError, ringing, requestCall, otherParticipants } = useCallHub()
 
   const [area, setArea] = useState(areaFromQuery === 'fm' || initialArea === 'fm' ? 'fm' : 'it')
   const [issueCategory, setIssueCategory] = useState('')
@@ -92,7 +119,28 @@ const SupportRequest = ({ initialArea = 'it' }) => {
   const [categoryOptions, setCategoryOptions] = useState([])
   const [buildings, setBuildings] = useState(getMockLocations().buildings)
   const [roomsByBuilding, setRoomsByBuilding] = useState(getMockLocations().roomsByBuildingId)
+  const [availableDispatchers, setAvailableDispatchers] = useState([])
+  const [dispatchersLoading, setDispatchersLoading] = useState(true)
+  const [dispatchersError, setDispatchersError] = useState('')
+  const [callingDispatcherId, setCallingDispatcherId] = useState('')
+  const [callStatusText, setCallStatusText] = useState('')
   const locations = { buildings, roomsByBuildingId: roomsByBuilding }
+  const currentCallPeer = otherParticipants?.[0] || null
+  const callRequestLocked = ['connecting', 'ringing', 'incoming', 'accepted', 'in-call'].includes(phase)
+
+  const loadDispatchers = async () => {
+    setDispatchersLoading(true)
+    setDispatchersError('')
+    try {
+      const rows = await getActiveDispatchers()
+      setAvailableDispatchers(rows.map(normalizeDispatcherOption).filter(Boolean))
+    } catch (err) {
+      setAvailableDispatchers([])
+      setDispatchersError(err?.message || 'Could not load dispatcher users.')
+    } finally {
+      setDispatchersLoading(false)
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -108,6 +156,10 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     return () => {
       isMounted = false
     }
+  }, [])
+
+  useEffect(() => {
+    loadDispatchers()
   }, [])
 
   useEffect(() => {
@@ -166,6 +218,54 @@ const SupportRequest = ({ initialArea = 'it' }) => {
       .catch(() => setCategoryOptions([]))
   }, [area])
 
+  useEffect(() => {
+    if (callError) {
+      setCallStatusText(callError)
+      if (phase === 'error') setCallingDispatcherId('')
+      return
+    }
+
+    if (phase === 'ringing' && ringing?.dispatcherUserId) {
+      setCallingDispatcherId(ringing.dispatcherUserId)
+      const target = availableDispatchers.find((dispatcher) => dispatcher.sub === ringing.dispatcherUserId)
+      setCallStatusText(`Calling ${target?.displayName || 'dispatcher'}... waiting for answer.`)
+      return
+    }
+
+    if (phase === 'accepted') {
+      setCallStatusText('Dispatcher accepted. Joining the call...')
+      return
+    }
+
+    if (phase === 'in-call') {
+      const peerName = currentCallPeer?.displayName || currentCallPeer?.userId || 'dispatcher'
+      setCallStatusText(`Connected to ${peerName}. Use the floating call panel to manage the call.`)
+      return
+    }
+
+    if (phase === 'timeout') {
+      setCallingDispatcherId('')
+      setCallStatusText('No dispatcher answered before the request timed out.')
+      return
+    }
+
+    if (phase === 'rejected') {
+      setCallingDispatcherId('')
+      setCallStatusText('The dispatcher declined the call request.')
+      return
+    }
+
+    if (phase === 'cancelled') {
+      setCallingDispatcherId('')
+      setCallStatusText('The pending call was cancelled.')
+      return
+    }
+
+    if (phase === 'ended') {
+      setCallingDispatcherId('')
+    }
+  }, [availableDispatchers, callError, currentCallPeer, phase, ringing])
+
   const goBack = () => {
     if (window.history.length > 1) navigate(-1)
     else navigate('/')
@@ -192,6 +292,29 @@ const SupportRequest = ({ initialArea = 'it' }) => {
     }
     setDraftCookie(SUPPORT_REQUEST_DRAFT_COOKIE_KEY, payload)
     alert('Support request draft saved. It will be restored next time you open this form on this browser.')
+  }
+
+  const handleCallDispatcher = async (dispatcher) => {
+    if (!dispatcher?.sub || callRequestLocked) return
+
+    setDispatchersError('')
+    setCallingDispatcherId(dispatcher.sub)
+    setCallStatusText(`Checking ${dispatcher.displayName} availability...`)
+
+    try {
+      const active = await isDispatcherActiveByMemberId(dispatcher.sub)
+      if (!active) {
+        setCallingDispatcherId('')
+        setCallStatusText(`${dispatcher.displayName} is not active right now.`)
+        return
+      }
+
+      setCallStatusText(`Calling ${dispatcher.displayName}...`)
+      await requestCall(dispatcher.sub)
+    } catch (err) {
+      setCallingDispatcherId('')
+      setCallStatusText(err?.message || 'Could not start the dispatcher call.')
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -583,26 +706,73 @@ const SupportRequest = ({ initialArea = 'it' }) => {
             </div>
 
             <div className="it-support-info-box it-support-info-box--accent">
-              <p className="it-support-info-title">Call Hub (Realtime)</p>
-              <p className="it-support-info-text">
-                Join the call hub to talk instantly. Caller sends request, dispatcher accepts, then both join the same call room.
-              </p>
-              <div className="it-support-callhub-actions">
+              <div className="it-support-callhub-head">
+                <p className="it-support-info-title">Available Dispatchers</p>
                 <button
                   type="button"
-                  className="it-support-hotline"
-                  onClick={() => navigate('/calls/caller')}
+                  className="it-support-callhub-refresh"
+                  onClick={loadDispatchers}
+                  disabled={dispatchersLoading}
                 >
-                  Join as Caller
-                </button>
-                <button
-                  type="button"
-                  className="it-support-hotline it-support-hotline--secondary"
-                  onClick={() => navigate('/calls/dispatcher')}
-                >
-                  Join as Dispatcher
+                  {dispatchersLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
+              <p className="it-support-info-text">
+                Dispatcher users are loaded from the role endpoint and you can ring one directly from here.
+              </p>
+              {callStatusText && (
+                <p className="it-support-call-status" role="status">
+                  {callStatusText}
+                </p>
+              )}
+              {dispatchersError && (
+                <p className="it-support-call-error" role="alert">
+                  {dispatchersError}
+                </p>
+              )}
+              {dispatchersLoading ? (
+                <p className="it-support-call-empty">Loading available dispatchers...</p>
+              ) : availableDispatchers.length === 0 ? (
+                <p className="it-support-call-empty">No dispatcher users are available right now.</p>
+              ) : (
+                <div className="it-support-dispatcher-list">
+                  {availableDispatchers.map((dispatcher) => {
+                    const isCurrentTarget = dispatcher.sub === (ringing?.dispatcherUserId || callingDispatcherId)
+                    const callButtonLabel =
+                      phase === 'connecting' && isCurrentTarget
+                        ? 'Connecting...'
+                        : phase === 'ringing' && isCurrentTarget
+                          ? 'Calling...'
+                          : phase === 'accepted' && isCurrentTarget
+                            ? 'Joining...'
+                            : phase === 'in-call' && isCurrentTarget
+                              ? 'In Call'
+                              : 'Call'
+
+                    return (
+                      <div key={dispatcher.sub} className="it-support-dispatcher-row">
+                        <div className="it-support-dispatcher-meta">
+                          <span className="it-support-dispatcher-name">{dispatcher.displayName}</span>
+                          <div className="it-support-dispatcher-subline">
+                            <span className={`it-support-dispatcher-badge ${dispatcher.isActive ? 'is-active' : ''}`}>
+                              {dispatcher.isActive ? 'Available' : dispatcher.status || 'Unavailable'}
+                            </span>
+                            <span className="it-support-dispatcher-sub">{dispatcher.email || dispatcher.sub}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="it-support-dispatcher-call"
+                          onClick={() => handleCallDispatcher(dispatcher)}
+                          disabled={callRequestLocked || !dispatcher.isActive}
+                        >
+                          {callButtonLabel}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </aside>
         </div>

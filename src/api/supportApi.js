@@ -390,28 +390,31 @@ export async function getActiveDispatchers() {
             ? data.items
             : []
 
-      return list
+      const mapped = list
         .map((item, index) => {
           const rawSub = item?.sub ?? item?.id ?? item?.userId ?? item?.memberId
           const sub = rawSub != null && String(rawSub).trim() !== '' ? String(rawSub).trim() : ''
           if (!sub) return null
+          const status = String(item?.status || '').trim().toLowerCase()
           return {
             id: sub || index,
             sub,
             userId: sub,
             memberId: sub,
-            name:
-              item.fullName ||
-              item.displayName ||
-              item.userName ||
-              item.username ||
-              item.email ||
-              `Dispatcher ${index + 1}`,
+            name: displayNameFromAuthUser(item) || `Dispatcher ${index + 1}`,
+            email: String(item?.email || '').trim() || null,
             role: String(item.role || 'dispatcher').toLowerCase(),
-            isActive: item.isActive !== false,
+            status: status || null,
+            isActive:
+              item.isActive !== false &&
+              item.active !== false &&
+              (!status || status === 'active'),
           }
         })
         .filter(Boolean)
+
+      const activeOnly = mapped.filter((item) => item.isActive !== false)
+      return activeOnly.length > 0 ? activeOnly : mapped
     } catch {
       // Try next base URL.
     }
