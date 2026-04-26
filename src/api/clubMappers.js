@@ -363,7 +363,18 @@ export function mapEventFromApi(dto) {
     time,
     endTime,
     location: String(dto.location ?? ''),
-    image: resolveClubMediaUrl(dto.image) || dto.image || null,
+    /** API exposes event art as `imageUrl` (and sometimes `image` / poster aliases). */
+    image: (() => {
+      const raw = firstNonEmptyLink(
+        dto.imageUrl,
+        dto.ImageUrl,
+        dto.image,
+        dto.Image,
+        dto.posterUrl,
+        dto.PosterUrl
+      )
+      return raw ? resolveClubMediaUrl(raw) || raw : null
+    })(),
     seatLimit: dto.seatLimit != null ? Number(dto.seatLimit) : undefined,
     requirements: dto.requirements != null ? String(dto.requirements) : '',
     prerequisites: dto.prerequisites != null ? String(dto.prerequisites) : '',
