@@ -169,6 +169,60 @@ function resolveAssignedStaffName(item) {
   return `Staff ${assignedId}`
 }
 
+function pickCreatedByUserId(item) {
+  if (!item || typeof item !== 'object') return null
+  const v =
+    item.createdById ??
+    item.createdByUserId ??
+    item.creatorUserId ??
+    item.requesterUserId ??
+    item.requestedByUserId ??
+    item.requestedById ??
+    item.memberUserId ??
+    item.memberId ??
+    item.reporter?.memberId ??
+    item.reporter?.MemberId
+  if (v == null || String(v).trim() === '') return null
+  return String(v).trim()
+}
+
+function resolveCreatorName(item) {
+  const label =
+    item?.createdByName ||
+    item?.createdByFullName ||
+    item?.creatorName ||
+    item?.requesterName ||
+    item?.requestedByName ||
+    item?.memberName ||
+    item?.teacherName ||
+    item?.instructorName ||
+    item?.reporter?.fullName ||
+    item?.reporter?.FullName ||
+    (typeof item?.createdBy === 'string' ? item.createdBy : null)
+  if (label && String(label).trim()) return String(label).trim()
+  const creatorId = pickCreatedByUserId(item)
+  if (!creatorId) return null
+  if (creatorId.length > 12) return `User ${creatorId.slice(0, 8)}...`
+  return `User ${creatorId}`
+}
+
+function resolveCreatorRoleLabel(item) {
+  const raw =
+    item?.createdByRole ||
+    item?.creatorRole ||
+    item?.requesterRole ||
+    item?.requestedByRole ||
+    item?.memberRole ||
+    item?.createdByType ||
+    item?.creatorType ||
+    item?.requesterType
+  const value = String(raw || '').trim().toLowerCase()
+  if (!value) return 'creator'
+  if (/(teacher|instructor|faculty|professor|lecturer)/i.test(value)) return 'teacher'
+  if (/student/.test(value)) return 'requester'
+  return 'creator'
+}
+
 /** Auth user id (JWT `sub`) of the staff member assigned to the request, when the API exposes it. */
 function pickAssignedStaffUserId(item) {
   if (!item || typeof item !== 'object') return null
@@ -307,6 +361,9 @@ function normalizeSupportRequest(item) {
   return {
     ...item,
     assignedStaffUserId: pickAssignedStaffUserId(item),
+    createdById: pickCreatedByUserId(item),
+    creatorName: resolveCreatorName(item),
+    creatorRoleLabel: resolveCreatorRoleLabel(item),
     service,
     location: buildRequestLocation(item),
     assignedTo: resolveAssignedStaffName(item),
@@ -835,5 +892,8 @@ export function mapListItemToCard(item) {
     ticketNo: item.ticketNo || null,
     service: item.service || serviceFromArea || '',
     unseen: Boolean(item.unseen),
+    createdById: item.createdById || null,
+    creatorName: item.creatorName || null,
+    creatorRoleLabel: item.creatorRoleLabel || 'creator',
   }
 }

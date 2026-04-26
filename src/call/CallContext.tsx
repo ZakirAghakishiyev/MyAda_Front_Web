@@ -89,7 +89,7 @@ function hasFreshIceConfiguration(config: IceConfigurationPayload | null) {
 function formatCallHubError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err || 'Unknown call error.')
   if (/dispatcher is offline/i.test(raw)) {
-    return "Dispatcher is offline or unavailable for call routing. Ensure the target dispatcher id equals their JWT 'sub' and that dispatcher session is connected."
+    return "Target user is offline or unavailable for call routing. Ensure the target user id equals their JWT 'sub' and that their session is connected."
   }
   const hubMatch = raw.match(/HubException:\s*(.+)/i)
   if (hubMatch?.[1]) {

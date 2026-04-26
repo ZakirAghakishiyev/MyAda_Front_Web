@@ -785,6 +785,19 @@
   color: #94a3b8;
 }
 
+.sp-job-assignee-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sp-job-assignee-row .sp-job-sub {
+  margin-bottom: 0;
+}
+
 .sp-job-actions {
   display: flex;
   align-items: center;
@@ -818,6 +831,24 @@
 
 .sp-btn--success:hover {
   background: #16a34a;
+}
+
+.sp-btn--call {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ecfeff;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
+}
+
+.sp-btn--call:hover:not(:disabled) {
+  background: #ccfbf1;
+}
+
+.sp-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .sp-status-inline {
