@@ -13,6 +13,14 @@ export function decodeJwtPayload(token) {
   }
 }
 
+/** @param {string | null | undefined} token */
+export function getAccessTokenExpirationMs(token) {
+  if (!token) return null
+  const p = decodeJwtPayload(token)
+  if (!p || typeof p.exp !== 'number' || !Number.isFinite(p.exp)) return null
+  return p.exp * 1000
+}
+
 export function readJwtRoleClaims(payload) {
   if (!payload || typeof payload !== 'object') return []
   const realmRoles = payload.realm_access && Array.isArray(payload.realm_access.roles) ? payload.realm_access.roles : []

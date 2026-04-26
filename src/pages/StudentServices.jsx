@@ -25,7 +25,8 @@ import {
   fetchStudentServicesClub,
   fetchStudentServicesClubProposal,
   approveStudentServicesClubProfileImage,
-  patchClubAdminProfileLogoOnly,
+  uploadStudentServicesClubProfileImage,
+  uploadStudentServicesClubBackgroundImage,
   deleteStudentServicesClubMember,
   patchStudentServicesClubMember,
   createStudentServicesClubEmployee,
@@ -845,17 +846,28 @@ const StudentServices = () => {
   const [clubEditStatus, setClubEditStatus] = useState('')
   const [clubEditDescription, setClubEditDescription] = useState('')
   const [clubEditImage, setClubEditImage] = useState(null)
+  const [clubEditBackground, setClubEditBackground] = useState(null)
   const [clubEditImageUploadState, setClubEditImageUploadState] = useState({ uploading: false, error: '' })
   const clubSettingsLogoInputRef = useRef(null)
+  const clubSettingsBackgroundInputRef = useRef(null)
   const clubEditImagePreviewUrl = useMemo(() => {
     if (!clubEditImage) return ''
     return URL.createObjectURL(clubEditImage)
   }, [clubEditImage])
+  const clubEditBackgroundPreviewUrl = useMemo(() => {
+    if (!clubEditBackground) return ''
+    return URL.createObjectURL(clubEditBackground)
+  }, [clubEditBackground])
   useEffect(() => {
     return () => {
       if (clubEditImagePreviewUrl) URL.revokeObjectURL(clubEditImagePreviewUrl)
     }
   }, [clubEditImagePreviewUrl])
+  useEffect(() => {
+    return () => {
+      if (clubEditBackgroundPreviewUrl) URL.revokeObjectURL(clubEditBackgroundPreviewUrl)
+    }
+  }, [clubEditBackgroundPreviewUrl])
 
   const [ssDataLoadState, setSsDataLoadState] = useState({ loading: true, error: '' })
 
@@ -1402,23 +1414,28 @@ const StudentServices = () => {
         : '') ||
       name
     const hasStagedLogo = clubEditImage instanceof File
-    if (hasStagedLogo) {
+    const hasStagedBackground = clubEditBackground instanceof File
+    if (hasStagedLogo || hasStagedBackground) {
       setClubEditImageUploadState({ uploading: true, error: '' })
     }
     try {
       if (hasStagedLogo) {
-        // Same as Club Admin profile: persist logo immediately via club-admin PATCH (no pending/approve flow).
-        await patchClubAdminProfileLogoOnly(cid, clubEditImage)
+        await uploadStudentServicesClubProfileImage(cid, clubEditImage)
         setClubEditImage(null)
         if (clubSettingsLogoInputRef.current) clubSettingsLogoInputRef.current.value = ''
+      }
+      if (hasStagedBackground) {
+        await uploadStudentServicesClubBackgroundImage(cid, clubEditBackground)
+        setClubEditBackground(null)
+        if (clubSettingsBackgroundInputRef.current) clubSettingsBackgroundInputRef.current.value = ''
       }
       await patchStudentServicesClub(cid, { name, description, status })
       await refreshStudentServicesFromApi()
       setDirectorySelectedClubId(cid)
       setClubEditImageUploadState({ uploading: false, error: '' })
     } catch (e) {
-      if (hasStagedLogo) {
-        setClubEditImageUploadState({ uploading: false, error: e?.message || 'Could not save club or upload logo.' })
+      if (hasStagedLogo || hasStagedBackground) {
+        setClubEditImageUploadState({ uploading: false, error: e?.message || 'Could not save club or upload media.' })
       }
       alert(e?.message || 'Could not save club settings.')
     }
@@ -1903,9 +1920,12 @@ const StudentServices = () => {
                   />
                 </div>
                 <div className="club-admin-field">
-                  <label>Club logo</label>
+                  <label>Club logo (profile image)</label>
                   <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748b' }}>
-                    Choose an image file, then click <strong>Save changes</strong>. The logo is saved the same way as Club Admin (direct profile update, no separate approval).
+                    API: multipart field <code>logoFile</code> → <code>profileImageUrl</code> when published. Student Services
+                    first posts to the pending profile-image route; if that is unavailable, the app falls back to the
+                    same club-admin <code>PATCH .../profile</code> as Club Admin (immediate). Use <strong>Approve
+                    proposed image</strong> below when a proposed logo appears.
                   </p>
                   <input
                     ref={clubSettingsLogoInputRef}
@@ -1921,13 +1941,54 @@ const StudentServices = () => {
                     }}
                   />
                   {clubEditImage ? <span className="ss-cc-settings-filename">Selected: {clubEditImage.name}</span> : null}
-                  {clubEditImageUploadState.uploading && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: '#2563eb' }}>Saving logo and settings…</div>
-                  )}
-                  {clubEditImageUploadState.error && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c' }}>{clubEditImageUploadState.error}</div>
-                  )}
                 </div>
+                <div className="club-admin-field">
+                  <label>Background / hero image</label>
+                  <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748b' }}>
+                    API: <code>backgroundFile</code> (multipart) via club-admin <code>PATCH .../profile</code>, or{' '}
+                    <code>POST .../background-image</code> under student-services when deployed (same field name). Choose
+                    a file and save; the wide image is shown on the public club header.
+                  </p>
+                  <div
+                    style={
+                      clubEditBackgroundPreviewUrl
+                        ? {
+                            width: '100%',
+                            maxWidth: 400,
+                            height: 100,
+                            borderRadius: 8,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            backgroundImage: `url(${clubEditBackgroundPreviewUrl})`,
+                            border: '1px solid #e2e8f0',
+                            marginBottom: 8,
+                          }
+                        : undefined
+                    }
+                  />
+                  <input
+                    ref={clubSettingsBackgroundInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={clubEditImageUploadState.uploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f instanceof File) {
+                        setClubEditBackground(f)
+                        setClubEditImageUploadState({ uploading: false, error: '' })
+                      }
+                    }}
+                  />
+                  {clubEditBackground ? (
+                    <span className="ss-cc-settings-filename">Selected: {clubEditBackground.name}</span>
+                  ) : null}
+                </div>
+                {clubEditImageUploadState.uploading && (
+                  <div style={{ margin: '0 0 8px', fontSize: 12, color: '#2563eb' }}>Saving media and settings…</div>
+                )}
+                {clubEditImageUploadState.error && (
+                  <div style={{ margin: '0 0 8px', fontSize: 12, color: '#b91c1c' }}>{clubEditImageUploadState.error}</div>
+                )}
                 {selectedDirectoryClub.proposedProfileImageUrl && (
                   <div className="club-admin-field">
                     <label>Proposed profile image</label>
@@ -2367,6 +2428,10 @@ const StudentServices = () => {
       const raw = club.raw && typeof club.raw === 'object' ? club.raw : null
       const desc = raw != null ? String(raw.description ?? raw.about ?? '').trim() : ''
       setClubEditDescription(desc)
+      setClubEditImage(null)
+      setClubEditBackground(null)
+      if (clubSettingsLogoInputRef.current) clubSettingsLogoInputRef.current.value = ''
+      if (clubSettingsBackgroundInputRef.current) clubSettingsBackgroundInputRef.current.value = ''
     }
   }, [directorySelectedClubId, directoryClubs])
 
@@ -2994,6 +3059,11 @@ const StudentServices = () => {
                 className={`ss-eap-list-item ${selectedEventId === e.id ? 'ss-eap-list-item--selected' : ''}`}
                 onClick={() => setSelectedEventId(e.id)}
               >
+                {e.posterImageUrl && (
+                  <div className="ss-eap-list-thumb" aria-hidden="true">
+                    <img src={e.posterImageUrl} alt="" className="ss-eap-list-thumb-img" />
+                  </div>
+                )}
                 <div className="ss-eap-list-item-content">
                   <span className="ss-eap-list-id">#{e.proposalId}</span>
                   <span className="ss-eap-list-title">{e.eventTitle}</span>
@@ -3068,12 +3138,20 @@ const StudentServices = () => {
                       <p className="ss-eap-field-muted">{selectedEvent.venueRoom}</p>
                     </div>
                   </div>
-                  {selectedEvent.posterPlaceholder && (
-                    <div className="ss-eap-field">
-                      <span className="ss-eap-field-label">EVENT POSTER</span>
-                      <div className="ss-eap-poster">Event poster</div>
-                    </div>
-                  )}
+                  <div className="ss-eap-field">
+                    <span className="ss-eap-field-label">EVENT IMAGE</span>
+                    {selectedEvent.posterImageUrl ? (
+                      <div className="ss-eap-poster ss-eap-poster--image">
+                        <img
+                          src={selectedEvent.posterImageUrl}
+                          alt=""
+                          className="ss-eap-poster-img"
+                        />
+                      </div>
+                    ) : (
+                      <div className="ss-eap-poster ss-eap-poster--empty">No image attached</div>
+                    )}
+                  </div>
                 </section>
 
                 <section className="ss-eap-section">
@@ -3084,11 +3162,15 @@ const StudentServices = () => {
                   </div>
                   <div className="ss-eap-field">
                     <span className="ss-eap-field-label">Purpose and Goals</span>
-                    <ul className="ss-eap-goals-list">
-                      {selectedEvent.objectives.map((obj, i) => (
-                        <li key={i}>{obj}</li>
-                      ))}
-                    </ul>
+                    {selectedEvent.objectives && selectedEvent.objectives.length > 0 ? (
+                      <ul className="ss-eap-goals-list">
+                        {selectedEvent.objectives.map((obj, i) => (
+                          <li key={i}>{obj}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="ss-eap-field-muted" style={{ margin: 0 }}>—</p>
+                    )}
                   </div>
                 </section>
 

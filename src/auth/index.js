@@ -1,5 +1,6 @@
 export { AUTH_API_BASE } from './config'
 export { getAccessToken, getRefreshToken, setTokens, clearTokens } from './tokenStorage'
+export { getAccessTokenExpirationMs } from './jwtRoles'
 export {
   authFetch,
   login,

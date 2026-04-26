@@ -260,23 +260,27 @@ const ClubAdminSuggestEvent = () => {
 
   const handleSubmit = async () => {
     try {
-      await proposeClubAdminEvent(clubId, {
-        name: eventName.trim() || 'Event proposal',
-        dateTime: composeProposalStartDateTime(eventDate, eventTime),
-        duration,
-        attendance,
-        venue: venue || 'TBD',
-        description,
-        objectives,
-        subEvents,
-        logistics: {
-          avSetup,
-          security,
-          catering,
-          cleaning,
-          otherNeeds,
+      await proposeClubAdminEvent(
+        clubId,
+        {
+          name: eventName.trim() || 'Event proposal',
+          dateTime: composeProposalStartDateTime(eventDate, eventTime),
+          duration,
+          attendance,
+          venue: venue || 'TBD',
+          description,
+          objectives,
+          subEvents,
+          logistics: {
+            avSetup,
+            security,
+            catering,
+            cleaning,
+            otherNeeds,
+          },
         },
-      })
+        posterFile
+      )
     } catch (err) {
       alert(err?.message || 'Could not submit event proposal.')
       return
@@ -444,7 +448,7 @@ const ClubAdminSuggestEvent = () => {
                 id="suggest-event-poster-upload"
                 ref={posterInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                 onChange={(e) => setPosterFile(e.target.files?.[0] ?? null)}
               />
               <IconUpload style={{ color: '#2563eb', marginBottom: 8 }} />
@@ -459,6 +463,9 @@ const ClubAdminSuggestEvent = () => {
                 Select File
               </button>
               {posterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{posterFile.name}</div>}
+              <p style={{ margin: '12px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                Optional event image. The club-admin proposal API accepts an uploaded file only (do not use a URL here).
+              </p>
             </div>
           </div>
         </div>

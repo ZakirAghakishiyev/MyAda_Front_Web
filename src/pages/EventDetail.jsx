@@ -1,7 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRegisteredEvents } from '../contexts/RegisteredEventsContext'
-import { fetchEvent, fetchMyEventRegistrations, registerForEvent, fetchClub } from '../api/clubApi'
+import {
+  fetchEvent,
+  fetchMyEventRegistrations,
+  registerForEvent,
+  fetchClub,
+  fetchEventRegistrationsList,
+  countEventRegistrationsInResponse,
+} from '../api/clubApi'
 import { mapEventFromApi, mapClubFromApi } from '../api/clubMappers'
 import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './EventDetail.css'
@@ -61,6 +68,15 @@ function pickFirstFiniteNonNegativeInt(obj, keys) {
   return null
 }
 
+/** `row.id` is often the *registration* id, not the event. Prefer `eventId` / nested `event.id` only. */
+function myRegRowEventId(row) {
+  if (!row || typeof row !== 'object') return null
+  const fromDirect = row.eventId ?? row.EventId ?? row.event?.id ?? row.event?.Id
+  if (fromDirect != null && String(fromDirect).trim()) return String(fromDirect)
+  if (row.event == null && row.id != null && String(row.id).trim()) return String(row.id)
+  return null
+}
+
 const EventDetail = () => {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -81,34 +97,61 @@ const EventDetail = () => {
       setLoading(true)
       setLoadError(null)
       try {
-        const [rawEv, rawReg] = await Promise.all([
+        const [rawEv, rawReg, regListRes] = await Promise.all([
           fetchEvent(id),
           fetchMyEventRegistrations().catch(() => null),
+          fetchEventRegistrationsList(id).catch(() => null),
         ])
         if (cancelled) return
         const mapped = mapEventFromApi(rawEv)
         setEvent(mapped)
         const rawObj = mapped?.raw && typeof mapped.raw === 'object' ? mapped.raw : rawEv
-        const initialRegisteredCount = pickFirstFiniteNonNegativeInt(rawObj, [
+        const countKeys = [
           'registeredCount',
+          'RegisteredCount',
           'registrationsCount',
+          'RegistrationsCount',
           'registrationCount',
+          'RegistrationCount',
           'attendeesCount',
+          'AttendeesCount',
           'attendeeCount',
+          'AttendeeCount',
           'participantsCount',
+          'ParticipantsCount',
           'participantCount',
+          'ParticipantCount',
           'participants',
           'attendees',
           'spotsTaken',
           'seatsTaken',
           'takenSeats',
           'filledSeats',
-        ])
-        setRegisteredCountOverride(initialRegisteredCount)
+        ]
+        const initialFromDto = pickFirstFiniteNonNegativeInt(rawObj, countKeys)
+        const fromList = regListRes != null ? countEventRegistrationsInResponse(regListRes) : null
         const items = rawReg?.items ?? rawReg ?? []
         const list = Array.isArray(items) ? items : []
-        const found = list.some((r) => String(r.eventId ?? r.event?.id ?? r.id) === String(id))
+        const matchingReg = list.find((r) => {
+          const eid = myRegRowEventId(r)
+          return eid != null && String(eid) === String(id)
+        })
+        const found = Boolean(matchingReg)
         setApiRegistered(found)
+
+        let n = fromList != null ? fromList : initialFromDto
+        if (matchingReg) {
+          const fromRow =
+            pickFirstFiniteNonNegativeInt(matchingReg, countKeys) ??
+            (matchingReg.event && typeof matchingReg.event === 'object'
+              ? pickFirstFiniteNonNegativeInt(matchingReg.event, countKeys)
+              : null)
+          if (fromRow != null) n = fromRow
+        }
+        if (n == null) n = 0
+        if (found && n === 0) n = 1
+        if (!found && isRegistered(id) && n === 0) n = 1
+        setRegisteredCountOverride(n)
       } catch (e) {
         if (!cancelled) {
           setEvent(null)
@@ -152,51 +195,76 @@ const EventDetail = () => {
 
   const registered = apiRegistered || isRegistered(id)
 
+  /** Published capacity: positive int, `0` = no seats, `null` = not set / open (no server limit in DTO). */
   const totalSlots = useMemo(() => {
-    if (!event) return 0
+    if (!event) return null
     const raw = event.raw && typeof event.raw === 'object' ? event.raw : {}
     const cap =
       toFiniteNonNegativeInt(event.seatLimit) ??
       pickFirstFiniteNonNegativeInt(raw, [
         'seatLimit',
+        'SeatLimit',
         'capacity',
+        'Capacity',
         'maxCapacity',
+        'MaxCapacity',
         'maxAttendees',
+        'MaxAttendees',
+        'maxSeats',
+        'MaxSeats',
         'totalSlots',
+        'TotalSlots',
         'totalSeats',
+        'TotalSeats',
         'totalCapacity',
+        'TotalCapacity',
       ])
-    return cap != null && cap > 0 ? cap : 0
+    if (cap === 0) return 0
+    if (cap != null && cap > 0) return cap
+    return null
   }, [event])
 
   const registeredCount = useMemo(() => {
-    if (registeredCountOverride != null) return registeredCountOverride
-    const raw = event?.raw && typeof event.raw === 'object' ? event.raw : null
-    return (
-      pickFirstFiniteNonNegativeInt(raw, [
-        'registeredCount',
-        'registrationsCount',
-        'registrationCount',
-        'attendeesCount',
-        'attendeeCount',
-        'participantsCount',
-        'participantCount',
-        'participants',
-        'attendees',
-        'spotsTaken',
-        'seatsTaken',
-        'takenSeats',
-        'filledSeats',
-      ]) ?? 0
-    )
-  }, [event, registeredCountOverride])
+    let c
+    if (registeredCountOverride != null) {
+      c = registeredCountOverride
+    } else {
+      const raw = event?.raw && typeof event.raw === 'object' ? event.raw : null
+      c =
+        pickFirstFiniteNonNegativeInt(raw, [
+          'registeredCount',
+          'RegisteredCount',
+          'registrationsCount',
+          'RegistrationsCount',
+          'registrationCount',
+          'RegistrationCount',
+          'attendeesCount',
+          'AttendeesCount',
+          'attendeeCount',
+          'AttendeeCount',
+          'participantsCount',
+          'ParticipantsCount',
+          'participantCount',
+          'ParticipantCount',
+          'participants',
+          'attendees',
+          'spotsTaken',
+          'seatsTaken',
+          'takenSeats',
+          'filledSeats',
+        ]) ?? 0
+    }
+    if (registered && c === 0) return 1
+    return c
+  }, [event, registeredCountOverride, registered])
 
   const remainingSlots = useMemo(() => {
-    if (!totalSlots) return 0
+    if (totalSlots == null || totalSlots === 0) return null
     return Math.max(0, totalSlots - (registeredCount || 0))
   }, [registeredCount, totalSlots])
 
-  const isSoldOut = totalSlots > 0 && remainingSlots <= 0
+  const isSoldOut = totalSlots != null && totalSlots > 0 && remainingSlots != null && remainingSlots <= 0
+  const noPublishedCapacity = totalSlots === 0
 
   if (loading) {
     return (
@@ -313,12 +381,22 @@ const EventDetail = () => {
 
         <aside className="ed-sidebar">
           <div className="ed-sidebar-card">
-            <span className="ed-sidebar-label">Remaining Slots</span>
-            <p className="ed-sidebar-slots">{remainingSlots} / {totalSlots}</p>
+            <span className="ed-sidebar-label">Registered</span>
+            <p className="ed-sidebar-registered-count">{registeredCount}</p>
+            <span className="ed-sidebar-label">Remaining spots</span>
+            <p className="ed-sidebar-slots">
+              {noPublishedCapacity
+                ? '— (no online capacity set)'
+                : totalSlots == null
+                  ? '— (no published limit)'
+                  : `${remainingSlots} of ${totalSlots} left`}
+            </p>
             <div className="ed-progress">
               <div
                 className="ed-progress-fill"
-                style={{ width: `${totalSlots ? ((Math.min(totalSlots, registeredCount) / totalSlots) * 100) : 0}%` }}
+                style={{
+                  width: `${totalSlots != null && totalSlots > 0 ? (Math.min(totalSlots, registeredCount) / totalSlots) * 100 : 0}%`,
+                }}
               />
             </div>
             {registered ? (
@@ -330,22 +408,25 @@ const EventDetail = () => {
                 View Ticket
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  className="ed-btn ed-btn--primary ed-btn--full"
-                  onClick={handleRegister}
-                  disabled={registering || isSoldOut || !totalSlots}
-                  aria-disabled={registering || isSoldOut || !totalSlots}
-                  title={isSoldOut ? 'All spaces are taken.' : undefined}
-                >
-                  <IconCalendar />
-                  {registering ? 'Registering…' : isSoldOut ? 'Sold Out' : 'Register for Event'}
-                </button>
-                <button type="button" className="ed-btn ed-btn--secondary ed-btn--full">
-                  Add to Calendar
-                </button>
-              </>
+              <button
+                type="button"
+                className="ed-btn ed-btn--primary ed-btn--full"
+                onClick={handleRegister}
+                disabled={registering || isSoldOut || noPublishedCapacity}
+                aria-disabled={registering || isSoldOut || noPublishedCapacity}
+                title={
+                  isSoldOut ? 'All spaces are taken.' : noPublishedCapacity ? 'This event has no public seat capacity online.' : undefined
+                }
+              >
+                <IconCalendar />
+                {registering
+                  ? 'Registering…'
+                  : isSoldOut
+                    ? 'Sold Out'
+                    : noPublishedCapacity
+                      ? 'Registration closed'
+                      : 'Register for Event'}
+              </button>
             )}
           </div>
 

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { itemHasEligibleClaimForOwnerNotify } from '../api/lostFoundApi'
+import { getLostFoundAdminWorkflowPhase, itemHasEligibleClaimForOwnerNotify } from '../api/lostFoundApi'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import './LostAndFound.css'
 import './LostAndFoundAdmin.css'
@@ -79,12 +79,9 @@ export default function LostAndFoundAdminItemDetail() {
     )
   }
 
+  const workflow = getLostFoundAdminWorkflowPhase(item)
   const statusLabel =
-    item.adminStatus === 'Pending'
-      ? 'Newly Reported'
-      : item.adminStatus === 'Received'
-        ? 'In Office'
-        : 'Completed'
+    workflow === 'pending' ? 'Newly Reported' : workflow === 'received' ? 'In Office' : 'Completed'
 
   const handleVerifyApprove = async () => {
     if (isSubmitting) return
@@ -229,17 +226,17 @@ export default function LostAndFoundAdminItemDetail() {
               <section className="lf-detail-card">
                 <h2 className="lf-detail-card-title">Timeline</h2>
                 <ul className="lf-detail-timeline">
-                  <li className={`lf-detail-timeline-item ${item.adminStatus === 'Delivered' ? 'lf-detail-timeline-item--done' : ''}`}>
+                  <li className={`lf-detail-timeline-item ${workflow === 'pending' || workflow === 'received' || workflow === 'delivered' ? 'lf-detail-timeline-item--done' : ''}`}>
                     <span className="lf-detail-timeline-dot" aria-hidden="true"><IconCheck /></span>
-                    <span>Item {item.adminStatus === 'Delivered' ? 'delivered' : 'verified by staff'}</span>
+                    <span>Report submitted</span>
                   </li>
-                  <li className={`lf-detail-timeline-item ${['Received', 'Delivered'].includes(item.adminStatus) ? 'lf-detail-timeline-item--done' : ''}`}>
+                  <li className={`lf-detail-timeline-item ${workflow === 'received' || workflow === 'delivered' ? 'lf-detail-timeline-item--done' : ''}`}>
                     <span className="lf-detail-timeline-dot" aria-hidden="true"><IconCheck /></span>
-                    <span>Item reported and submitted</span>
+                    <span>Received at Lost &amp; Found office</span>
                   </li>
-                  <li className="lf-detail-timeline-item lf-detail-timeline-item--done">
+                  <li className={`lf-detail-timeline-item ${workflow === 'delivered' ? 'lf-detail-timeline-item--done' : ''}`}>
                     <span className="lf-detail-timeline-dot" aria-hidden="true"><IconCheck /></span>
-                    <span>Item found at {item.location}</span>
+                    <span>Item {workflow === 'delivered' ? 'delivered to claimant' : '— handover pending'}</span>
                   </li>
                 </ul>
               </section>
@@ -247,7 +244,7 @@ export default function LostAndFoundAdminItemDetail() {
               <section className="lf-detail-actions">
                 <h2 className="lf-detail-actions-title">Actions</h2>
                 <div className="lf-detail-actions-btns">
-                  {item.adminStatus === 'Pending' && (
+                  {workflow === 'pending' && (
                     <button
                       type="button"
                       className="lf-detail-btn lf-detail-btn--admin-confirm"
@@ -256,7 +253,7 @@ export default function LostAndFoundAdminItemDetail() {
                       Confirm Receipt
                     </button>
                   )}
-                  {item.adminStatus === 'Received' && (
+                  {workflow === 'received' && (
                     <>
                       {itemHasEligibleClaimForOwnerNotify(item) ? (
                         <button type="button" className="lf-detail-btn lf-detail-btn--admin-notify" onClick={handleNotifyOwner} disabled={isSubmitting}>
@@ -272,8 +269,8 @@ export default function LostAndFoundAdminItemDetail() {
                       </button>
                     </>
                   )}
-                  {item.adminStatus === 'Delivered' && (
-                    <button type="button" className="lf-detail-btn lf-detail-btn--admin-archived">
+                  {workflow === 'delivered' && (
+                    <button type="button" className="lf-detail-btn lf-detail-btn--admin-archived" disabled>
                       Archived
                     </button>
                   )}

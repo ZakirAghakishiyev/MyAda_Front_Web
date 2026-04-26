@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  clubAdminListItems,
   fetchClubAdminEvents,
   patchClubAdminEvent,
   fetchClubAdminEventAttendees,
@@ -76,37 +77,24 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const getEventCapacity = (event) => {
-  const parsed = Number.parseInt(event?.capacity ?? '', 10)
-  if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return 100
-}
-
-const seedFromEvent = (event) => {
-  const txt = `${event.id}-${event.title || ''}-${event.clubName || ''}`
-  let acc = 0
-  for (let i = 0; i < txt.length; i += 1) acc += txt.charCodeAt(i)
-  return acc
-}
-
-const generateMockAttendees = (event) => {
-  const capacity = getEventCapacity(event)
-  const seed = seedFromEvent(event)
-  const minRegistered = Math.max(8, Math.floor(capacity * 0.2))
-  const maxRegistered = Math.max(minRegistered, Math.floor(capacity * 0.85))
-  const registered = Math.min(capacity, minRegistered + (seed % (maxRegistered - minRegistered + 1)))
-  const entered = Math.floor(registered * (0.25 + ((seed % 30) / 100)))
-  const list = []
-
-  for (let i = 0; i < registered; i += 1) {
-    list.push({
-      id: `${event.id}-att-${i + 1}`,
-      fullName: `Attendee ${i + 1}`,
-      studentId: `SID-${String(event.id).padStart(2, '0')}${String(i + 1).padStart(4, '0')}`,
-      entered: i < entered,
-    })
-  }
-  return list
+/** @returns {number | null} Positive seat limit, or `null` if the API did not publish one. */
+const getEventSeatLimit = (event) => {
+  if (!event) return null
+  const fromSeat = Number(event.seatLimit)
+  if (Number.isFinite(fromSeat) && fromSeat > 0) return fromSeat
+  const raw = event.raw && typeof event.raw === 'object' ? event.raw : {}
+  const n = Number(
+    raw.seatLimit ??
+      raw.SeatLimit ??
+      raw.capacity ??
+      raw.Capacity ??
+      raw.maxCapacity ??
+      raw.MaxCapacity ??
+      raw.maxAttendees ??
+      raw.MaxAttendees
+  )
+  if (Number.isFinite(n) && n > 0) return n
+  return null
 }
 
 const ClubAdminEvents = () => {
@@ -313,8 +301,7 @@ const ClubAdminEvents = () => {
   const loadAttendees = useCallback(async (eventId) => {
     try {
       const res = await fetchClubAdminEventAttendees(clubIdParam, eventId)
-      const items = res?.items ?? res ?? []
-      const arr = Array.isArray(items) ? items : []
+      const arr = clubAdminListItems(res)
       setAttendeesByEvent((prev) => ({
         ...prev,
         [eventId]: arr.map((a, index) => ({
@@ -328,6 +315,11 @@ const ClubAdminEvents = () => {
       setAttendeesByEvent((prev) => ({ ...prev, [eventId]: [] }))
     }
   }, [clubIdParam])
+
+  useEffect(() => {
+    if (attendeesEventId == null) return
+    void loadAttendees(attendeesEventId)
+  }, [attendeesEventId, loadAttendees])
 
   const toggleAttendeeEntered = async (eventId, attendeeId) => {
     const attendee = (attendeesByEvent[eventId] || []).find((a) => String(a.id) === String(attendeeId))
@@ -612,7 +604,10 @@ const ClubAdminEvents = () => {
 
   if (attendeesEvent) {
     const enteredCount = attendeesForSelectedEvent.filter((a) => a.entered).length
-    const eventCapacity = getEventCapacity(attendeesEvent)
+    const regCount = attendeesForSelectedEvent.length
+    const seatLimit = getEventSeatLimit(attendeesEvent)
+    const remainingSlots =
+      seatLimit != null ? Math.max(0, seatLimit - regCount) : null
     return (
       <>
         <header className="club-admin-header">
@@ -641,14 +636,20 @@ const ClubAdminEvents = () => {
                 Back to events
               </button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(130px, 1fr))', gap: 12, marginBottom: 14 }}>
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
-                <div style={{ fontSize: 12, color: '#64748b' }}>Max Capacity</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{eventCapacity}</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Max capacity</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{seatLimit != null ? seatLimit : '—'}</div>
               </div>
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
                 <div style={{ fontSize: 12, color: '#64748b' }}>Registered</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{attendeesForSelectedEvent.length}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{regCount}</div>
+              </div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Spots left</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+                  {seatLimit == null ? '—' : `${remainingSlots} / ${seatLimit}`}
+                </div>
               </div>
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc' }}>
                 <div style={{ fontSize: 12, color: '#64748b' }}>Entered</div>
@@ -841,10 +842,10 @@ const ClubAdminEvents = () => {
                       <button
                         type="button"
                         className="club-admin-btn-secondary"
-                        onClick={async () => {
+                        onClick={() => {
                           setAttendeesEventId(e.id)
-                          await loadAttendees(e.id)
                         }}
+                        title="View attendees"
                       >
                         {eventAttendees.length}
                       </button>

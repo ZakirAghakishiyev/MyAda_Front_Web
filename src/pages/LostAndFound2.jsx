@@ -5,6 +5,7 @@ import {
   createLostReport,
   getLostFoundCategories,
   getLostFoundItems,
+  getLostFoundStatusBadgeVariant,
 } from '../api/lostFoundApi'
 import { getBuildings, getRoomsByBuildingId, validateRoomLocation } from '../api/locationApi'
 import './LostAndFound2.css'
@@ -115,18 +116,6 @@ function computeDaysAgo(item) {
   const dt = new Date(source)
   if (Number.isNaN(dt.getTime())) return 0
   return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 86400000))
-}
-
-/** Maps combined status (public + admin) to a card badge style. */
-function lostFoundStatusBadgeClass(status) {
-  const s = String(status || '').toLowerCase()
-  if (/\b(active|delivered|returned|completed|resolved|closed|claimed)\b/.test(s) || s === 'delivered' || s === 'returned') {
-    return 'active'
-  }
-  if (/\b(received|in office|in-office|ready for pickup|at office|stored)\b/.test(s) || s === 'received') {
-    return 'received'
-  }
-  return 'pending'
 }
 
 /** Composes a single human-readable location line from the shared building/campus form. */
@@ -339,7 +328,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       daysAgo: computeDaysAgo(item),
       location: item.location || 'Location not specified',
       description: item.description || '',
-      displayStatus: String(item.adminStatus || 'Pending'),
+      displayStatus: String(item.status || item.adminStatus || 'Pending verification'),
     }))
     return list
   }, [items])
@@ -947,7 +936,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
               onKeyDown={e => e.key === 'Enter' && navigate(`/lost-and-found/item/${item.id}`)}
             >
               <span
-                className={`lf2-card-status lf2-card-status--${lostFoundStatusBadgeClass(item.displayStatus)}`}
+                className={`lf2-card-status lf2-card-status--${getLostFoundStatusBadgeVariant(item.displayStatus)}`}
                 title={item.displayStatus}
               >
                 {String(item.displayStatus).toUpperCase()}

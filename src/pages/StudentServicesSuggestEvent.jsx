@@ -117,6 +117,7 @@ const StudentServicesSuggestEvent = () => {
   const [roomId, setRoomId] = useState('')
   const [locationLoadState, setLocationLoadState] = useState({ loading: true, error: '' })
   const [posterFile, setPosterFile] = useState(null)
+  const [posterImageUrl, setPosterImageUrl] = useState('')
   const posterInputRef = useRef(null)
   const [description, setDescription] = useState('')
   const [objectives, setObjectives] = useState('')
@@ -225,6 +226,7 @@ const StudentServicesSuggestEvent = () => {
     setCatering(Boolean(draft.catering))
     setCleaning(draft.cleaning !== undefined ? Boolean(draft.cleaning) : true)
     setOtherNeeds(draft.otherNeeds || '')
+    if (draft.posterImageUrl != null) setPosterImageUrl(String(draft.posterImageUrl))
   }, [])
 
   const handleSaveDraft = () => {
@@ -246,6 +248,7 @@ const StudentServicesSuggestEvent = () => {
       catering,
       cleaning,
       otherNeeds,
+      posterImageUrl,
       savedAt: Date.now()
     }
     setDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY, payload)
@@ -254,24 +257,29 @@ const StudentServicesSuggestEvent = () => {
 
   const handleSubmit = async () => {
     try {
-      await submitStudentServicesEventProposal({
-        name: eventName.trim() || 'Event proposal',
-        dateTime: composeProposalStartDateTime(eventDate, eventTime),
-        duration,
-        attendance,
-        venue: venue || 'TBD',
-        description,
-        objectives,
-        subEvents,
-        logistics: {
-          avSetup,
-          security,
-          catering,
-          cleaning,
-          otherNeeds,
+      const url = posterImageUrl.trim()
+      await submitStudentServicesEventProposal(
+        {
+          name: eventName.trim() || 'Event proposal',
+          dateTime: composeProposalStartDateTime(eventDate, eventTime),
+          duration,
+          attendance,
+          venue: venue || 'TBD',
+          description,
+          objectives,
+          subEvents,
+          logistics: {
+            avSetup,
+            security,
+            catering,
+            cleaning,
+            otherNeeds,
+          },
+          submittedByOrganization: 'Student Services',
+          ...(url ? { imageUrl: url } : {}),
         },
-        submittedByOrganization: 'Student Services',
-      })
+        posterFile
+      )
     } catch (err) {
       alert(err?.message || 'Could not submit event proposal.')
       return
@@ -437,7 +445,7 @@ const StudentServicesSuggestEvent = () => {
                 id="suggest-event-poster-upload"
                 ref={posterInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                 onChange={(e) => setPosterFile(e.target.files?.[0] ?? null)}
               />
               <IconUpload style={{ color: '#2563eb', marginBottom: 8 }} />
@@ -452,6 +460,18 @@ const StudentServicesSuggestEvent = () => {
                 Select File
               </button>
               {posterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{posterFile.name}</div>}
+              <div className="club-admin-field" style={{ marginTop: 14 }}>
+                <label style={{ fontSize: 12 }}>Or image URL (optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://… (used if you do not upload a file; upload wins if both are set)"
+                  value={posterImageUrl}
+                  onChange={(e) => setPosterImageUrl(e.target.value)}
+                />
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
+                Per API: use an upload or a public image URL. If both are provided, the uploaded file is used.
+              </p>
             </div>
           </div>
         </div>

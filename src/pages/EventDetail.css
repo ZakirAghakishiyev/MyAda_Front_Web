@@ -327,11 +327,20 @@
   background: #f9fafb;
 }
 
+.ed-sidebar-registered-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 12px;
+  line-height: 1.2;
+}
+
 .ed-sidebar-slots {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: #1f2937;
   margin: 0 0 10px;
+  line-height: 1.35;
 }
 
 .ed-progress {

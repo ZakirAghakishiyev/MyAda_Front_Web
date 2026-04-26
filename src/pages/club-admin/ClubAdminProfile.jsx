@@ -706,8 +706,12 @@ export default function ClubAdminProfile() {
             <h2 className="club-admin-card-title">Branding</h2>
           </div>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
-            Save the logo and the wide background separately (each upload uses its own request so they are not mixed up).
-            The public club page uses the logo in the card and the background across the hero banner.
+            Save the logo and the wide background separately: <code>logoFile</code> and <code>backgroundFile</code> on
+            {' '}
+            <code>PATCH /club-admin/&#123;id&#125;/profile</code> (per API). Published values map to{' '}
+            <code>profileImageUrl</code> (round logo) and <code>backgroundImageUrl</code> for the hero. The top-level
+            <code>image</code> field, if present, is used as a background/hero candidate, not the round logo. Each
+            upload is a separate request so the two are not mixed up.
           </p>
 
           <div className="club-admin-profile-branding-grid">

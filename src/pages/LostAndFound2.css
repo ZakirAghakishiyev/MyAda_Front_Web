@@ -298,6 +298,11 @@
   color: white;
 }
 
+.lf2-card-status--declined {
+  background: #dc2626;
+  color: white;
+}
+
 .lf2-card-image {
   width: 100%;
   aspect-ratio: 16 / 10;

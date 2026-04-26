@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { itemHasEligibleClaimForOwnerNotify } from '../api/lostFoundApi'
+import { itemHasEligibleClaimForOwnerNotify, getLostFoundAdminWorkflowPhase } from '../api/lostFoundApi'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import AdminSidebar from '../components/AdminSidebar'
 import './LostAndFoundAdmin.css'
@@ -42,7 +42,7 @@ export default function LostAndFoundAdmin() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All Categories')
   const [locationFilter, setLocationFilter] = useState('Main Campus')
-  const [tableFilter, setTableFilter] = useState('All') // All | Pending | Ready | Completed
+  const [tableFilter, setTableFilter] = useState('All') // All | Pending | In office | Completed
   const [verifyModalItem, setVerifyModalItem] = useState(null)
   const [handoverItem, setHandoverItem] = useState(null)
   const [receiptStorageBin, setReceiptStorageBin] = useState('')
@@ -60,7 +60,7 @@ export default function LostAndFoundAdmin() {
   const manualEntryRef = useRef(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 5
-  const getStatus = (item) => String(item?.adminStatus || 'Pending')
+  const adminPhase = (item) => getLostFoundAdminWorkflowPhase(item)
 
   useEffect(() => {
     if (!manualEntryOpen) return
@@ -90,9 +90,9 @@ export default function LostAndFoundAdmin() {
       )
     }
     if (categoryFilter !== 'All Categories') list = list.filter((i) => i.category === categoryFilter)
-    if (tableFilter === 'Pending') list = list.filter((i) => i.adminStatus === 'Pending')
-    if (tableFilter === 'Ready') list = list.filter((i) => i.adminStatus === 'Received')
-    if (tableFilter === 'Completed') list = list.filter((i) => i.adminStatus === 'Delivered')
+    if (tableFilter === 'Pending') list = list.filter((i) => adminPhase(i) === 'pending')
+    if (tableFilter === 'In office' || tableFilter === 'Ready') list = list.filter((i) => adminPhase(i) === 'received')
+    if (tableFilter === 'Completed') list = list.filter((i) => adminPhase(i) === 'delivered')
     return list
   }, [items, searchKeyword, categoryFilter, tableFilter])
 
@@ -103,9 +103,9 @@ export default function LostAndFoundAdmin() {
   }, [filteredItems, currentPage])
 
   const kpis = useMemo(() => {
-    const pending = items.filter((i) => i.adminStatus === 'Pending').length
-    const received = items.filter((i) => i.adminStatus === 'Received').length
-    const delivered = items.filter((i) => i.adminStatus === 'Delivered').length
+    const pending = items.filter((i) => adminPhase(i) === 'pending').length
+    const received = items.filter((i) => adminPhase(i) === 'received').length
+    const delivered = items.filter((i) => adminPhase(i) === 'delivered').length
     return {
       newlyReported: pending,
       inOffice: received,
@@ -309,11 +309,13 @@ export default function LostAndFoundAdmin() {
           <div className="lf-admin-table-header">
             <h2>Active Inventory</h2>
             <div className="lf-admin-table-tabs">
-              {['All', 'Pending', 'Ready', 'Completed'].map((tab) => (
+              {['All', 'Pending', 'In office', 'Completed'].map((tab) => (
                 <button
                   key={tab}
                   type="button"
-                  className={`lf-admin-tab ${tableFilter === tab ? 'lf-admin-tab--active' : ''}`}
+                  className={`lf-admin-tab ${
+                    tableFilter === tab || (tab === 'In office' && tableFilter === 'Ready') ? 'lf-admin-tab--active' : ''
+                  }`}
                   onClick={() => setTableFilter(tab)}
                 >
                   {tab}
@@ -359,15 +361,15 @@ export default function LostAndFoundAdmin() {
                     <td>{item.category}</td>
                     <td>{item.datePosted || (item.postedAt ? new Date(item.postedAt).toLocaleDateString() : '-')}</td>
                     <td>
-                      <span className={`lf-admin-status lf-admin-status--${getStatus(item).toLowerCase()}`}>
-                        {getStatus(item) === 'Pending' && 'Newly Reported'}
-                        {getStatus(item) === 'Received' && 'In Office'}
-                        {getStatus(item) === 'Delivered' && 'Completed'}
+                      <span className={`lf-admin-status lf-admin-status--${adminPhase(item)}`}>
+                        {adminPhase(item) === 'pending' && 'Newly Reported'}
+                        {adminPhase(item) === 'received' && 'In Office'}
+                        {adminPhase(item) === 'delivered' && 'Completed'}
                       </span>
                     </td>
                     <td>
                       <div className="lf-admin-actions">
-                        {getStatus(item) === 'Pending' && (
+                        {adminPhase(item) === 'pending' && (
                           <button
                             type="button"
                             className="lf-admin-action-btn lf-admin-action-btn--blue"
@@ -376,7 +378,7 @@ export default function LostAndFoundAdmin() {
                             Confirm Receipt
                           </button>
                         )}
-                        {getStatus(item) === 'Received' && (
+                        {adminPhase(item) === 'received' && (
                           <>
                             {itemHasEligibleClaimForOwnerNotify(item) ? (
                               <button type="button" className="lf-admin-action-btn lf-admin-action-btn--orange" onClick={() => handleNotifyOwner(item)} disabled={isSubmitting}>
@@ -392,8 +394,8 @@ export default function LostAndFoundAdmin() {
                             </button>
                           </>
                         )}
-                        {getStatus(item) === 'Delivered' && (
-                          <button type="button" className="lf-admin-action-btn lf-admin-action-btn--gray">
+                        {adminPhase(item) === 'delivered' && (
+                          <button type="button" className="lf-admin-action-btn lf-admin-action-btn--gray" disabled>
                             Archived
                           </button>
                         )}

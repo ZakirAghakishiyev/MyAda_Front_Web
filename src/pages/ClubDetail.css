@@ -48,11 +48,11 @@
 }
 
 .club-detail-nav-inner {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
 }
 
 .club-detail-nav-back {
@@ -163,12 +163,12 @@
 /* Hero */
 .club-detail-hero {
   position: relative;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .club-detail-hero-banner {
   width: 100%;
-  height: 280px;
+  height: 200px;
   background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 50%, #10b981 100%);
   background-size: cover;
   background-position: center;
@@ -176,23 +176,22 @@
 
 .club-detail-hero-card {
   position: relative;
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 0 24px;
   display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-top: -56px;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: -44px;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.1);
-  padding: 20px 28px;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.09);
+  padding: 14px 20px;
   flex-wrap: wrap;
 }
 
 .club-detail-hero-card-logo {
-  width: 88px;
-  height: 88px;
+  width: 78px;
+  height: 78px;
   border-radius: 12px;
   background: #e2e8f0;
   background-size: cover;
@@ -206,28 +205,28 @@
 }
 
 .club-detail-hero-title {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
   color: #0f172a;
-  margin: 0 0 8px 0;
-  line-height: 1.3;
+  margin: 0 0 4px 0;
+  line-height: 1.25;
 }
 
 .club-detail-hero-tag {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 3px 10px;
   font-size: 12px;
   font-weight: 600;
   color: #fff;
   background: #2563eb;
   border-radius: 999px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .club-detail-hero-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 10px 14px;
   font-size: 13px;
   color: #64748b;
 }
@@ -244,7 +243,7 @@
 
 .club-detail-hero-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
   align-items: center;
   flex-wrap: wrap;
@@ -255,9 +254,9 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-  padding: 10px 12px;
+  padding: 6px 10px;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(6px);
 }
@@ -282,7 +281,7 @@
 }
 
 .club-detail-officers-toggle {
-  margin-top: 12px;
+  margin-top: 8px;
   width: 100%;
   justify-content: center;
 }
@@ -290,8 +289,8 @@
 .club-detail-btn-primary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  gap: 6px;
+  padding: 8px 16px;
   border: none;
   border-radius: 10px;
   background: #2563eb;
@@ -306,19 +305,44 @@
   background: #1d4ed8;
 }
 
+.club-detail-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.club-detail-btn-danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.club-detail-btn-danger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Layout: main + sidebar */
 .club-detail-layout {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 0 24px 48px;
+  padding: 0 20px 28px;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 32px;
+  gap: 22px;
 }
 
 @media (min-width: 900px) {
   .club-detail-layout {
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr minmax(280px, 300px);
   }
 }
 
@@ -329,13 +353,13 @@
 /* Tabs */
 .club-detail-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   border-bottom: 2px solid #e2e8f0;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .club-detail-tab {
-  padding: 12px 20px;
+  padding: 8px 16px 10px;
   border: none;
   background: transparent;
   font-size: 14px;
@@ -358,25 +382,25 @@
 
 /* Main content */
 .club-detail-content {
-  padding-bottom: 32px;
+  padding-bottom: 8px;
 }
 
 .club-detail-section {
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .club-detail-section-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: #0f172a;
-  margin: 0 0 12px 0;
+  margin: 0 0 6px 0;
 }
 
 .club-detail-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .club-detail-section-head .club-detail-section-title {
@@ -396,7 +420,7 @@
 
 .club-detail-mission {
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: #475569;
   margin: 0;
 }
@@ -404,28 +428,28 @@
 /* Key focus areas */
 .club-detail-focus-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
 }
 
 .club-detail-focus-card {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 20px;
+  padding: 14px 16px;
 }
 
 .club-detail-focus-icon {
   display: inline-flex;
   color: #2563eb;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .club-detail-focus-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #0f172a;
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
 }
 
 .club-detail-focus-desc {
@@ -439,7 +463,7 @@
 .club-detail-activities-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .club-detail-activity-card {
@@ -459,7 +483,7 @@
 
 .club-detail-activity-img {
   width: 100%;
-  padding-top: 70%;
+  padding-top: 58%;
   background: #e2e8f0;
   background-size: cover;
   background-position: center;
@@ -467,10 +491,11 @@
 
 .club-detail-activity-title {
   display: block;
-  padding: 12px 14px;
-  font-size: 14px;
+  padding: 8px 10px 10px;
+  font-size: 13px;
   font-weight: 600;
   color: #334155;
+  line-height: 1.35;
 }
 
 /* Testimonial */
@@ -525,8 +550,18 @@
 
 .club-detail-placeholder {
   font-size: 14px;
+  line-height: 1.4;
   color: #64748b;
-  margin: 0 0 16px 0;
+  margin: 0 0 8px 0;
+}
+
+/* Tighter empty “Club officers” block: hide empty list, avoid extra margin under message */
+.club-detail-sidebar-block .club-detail-officers:empty {
+  display: none;
+}
+
+.club-detail-sidebar-block .club-detail-placeholder {
+  margin-bottom: 0;
 }
 
 /* Members */
@@ -630,21 +665,21 @@
 .club-detail-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
 }
 
 .club-detail-sidebar-block {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 20px;
+  padding: 14px 16px;
 }
 
 .club-detail-sidebar-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
-  margin: 0 0 16px 0;
+  margin: 0 0 10px 0;
 }
 
 .club-detail-officers {
@@ -656,8 +691,8 @@
 .club-detail-officer {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 10px;
+  padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
 }
 
@@ -694,13 +729,13 @@
 .club-detail-events {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px 0;
+  margin: 0 0 10px 0;
 }
 
 .club-detail-event {
   display: flex;
-  gap: 14px;
-  padding: 12px 0;
+  gap: 10px;
+  padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
 }
 
@@ -805,13 +840,13 @@
 /* Footer */
 .club-detail-footer {
   margin-top: auto;
-  padding: 24px;
+  padding: 16px 20px;
   background: #fff;
   border-top: 1px solid #e2e8f0;
 }
 
 .club-detail-footer-inner {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;

@@ -1,10 +1,80 @@
 import { AUTH_API_BASE } from './config'
+import { getAccessTokenExpirationMs } from './jwtRoles'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './tokenStorage'
 
 let refreshInFlight = null
+/** @type {ReturnType<typeof setTimeout> | null} */
+let proactiveRefreshTimer = null
+
+const REFRESH_BEFORE_ACCESS_EXPIRY_MS = 90 * 1000
+const RESUME_REFRESH_IF_REMAINING_MS = 2 * 60 * 1000
+
+function clearProactiveRefresh() {
+  if (proactiveRefreshTimer) {
+    clearTimeout(proactiveRefreshTimer)
+    proactiveRefreshTimer = null
+  }
+}
+
+/**
+ * Re-issue access token shortly before the JWT `exp` (per AUTH_API_DOC, access ~15m).
+ * Called after every successful token set (login or refresh).
+ */
+function scheduleProactiveAccessRefresh() {
+  clearProactiveRefresh()
+  const t = getAccessToken()
+  if (!t) return
+  if (!getRefreshToken()) return
+  const expMs = getAccessTokenExpirationMs(t)
+  if (expMs == null) return
+  const delay = Math.max(0, expMs - Date.now() - REFRESH_BEFORE_ACCESS_EXPIRY_MS)
+  if (delay === 0) {
+    void refreshSession()
+    return
+  }
+  proactiveRefreshTimer = setTimeout(() => {
+    proactiveRefreshTimer = null
+    if (!getRefreshToken()) return
+    if (!getAccessToken()) {
+      void refreshSession()
+      return
+    }
+    const exp = getAccessTokenExpirationMs(getAccessToken())
+    if (exp == null) return
+    if (exp - Date.now() <= REFRESH_BEFORE_ACCESS_EXPIRY_MS + 5000) {
+      void refreshSession()
+    }
+  }, Math.min(delay, 2147483647))
+}
+
+function clearClientSession() {
+  clearProactiveRefresh()
+  clearTokens()
+}
+
+if (typeof window !== 'undefined') {
+  const onResume = () => {
+    if (document.hidden) return
+    void (async () => {
+      if (!getRefreshToken()) return
+      const t = getAccessToken()
+      if (!t) {
+        await refreshSession()
+        return
+      }
+      const exp = getAccessTokenExpirationMs(t)
+      if (exp == null) return
+      if (exp - Date.now() < RESUME_REFRESH_IF_REMAINING_MS) {
+        await refreshSession()
+      }
+    })()
+  }
+  document.addEventListener('visibilitychange', onResume)
+  window.addEventListener('focus', onResume, true)
+}
 
 export function forceLogoutAndRedirectLogin() {
-  clearTokens()
+  clearClientSession()
   if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
     window.location.assign('/login')
   }
@@ -21,8 +91,8 @@ async function parseJsonSafe(res) {
 }
 
 /**
- * Refresh access token using cookie-stored refresh token.
- * Single-flight: concurrent callers share one refresh.
+ * Refresh access token: POST /api/auth/refresh with { refreshToken }.
+ * Single-flight: concurrent callers share one refresh. Rotates both tokens (AUTH_API_DOC).
  */
 export async function refreshSession() {
   if (refreshInFlight) return refreshInFlight
@@ -39,20 +109,21 @@ export async function refreshSession() {
       })
 
       if (!res.ok) {
-        clearTokens()
+        clearClientSession()
         return null
       }
 
       const data = await parseJsonSafe(res)
       if (!data.accessToken || !data.refreshToken) {
-        clearTokens()
+        clearClientSession()
         return null
       }
 
       setTokens(data.accessToken, data.refreshToken)
+      scheduleProactiveAccessRefresh()
       return data.accessToken
     } catch {
-      clearTokens()
+      clearClientSession()
       return null
     }
   })().finally(() => {
@@ -86,6 +157,7 @@ export async function login(username, password) {
   }
 
   setTokens(data.accessToken, data.refreshToken)
+  scheduleProactiveAccessRefresh()
   return data
 }
 
@@ -106,7 +178,7 @@ export async function logout() {
   } catch {
     // still clear client session
   }
-  clearTokens()
+  clearClientSession()
 }
 
 export async function forgotPassword(email) {
@@ -183,10 +255,8 @@ export async function changePassword(email, oldPassword, newPassword) {
 }
 
 /**
- * Fetch with Authorization header from sessionStorage.
- * If the request used a Bearer token and the response is 401 or 400 (expired access per backend),
- * refreshes tokens once, updates sessionStorage + cookies, retries the request once.
- * On refresh failure: clears storage and redirects to /login.
+ * Fetch with Authorization. On 401, call POST /api/auth/refresh once, then retry the request once
+ * (AUTH_API_DOC: Frontend Integration Notes). If refresh fails, clear session and redirect to login.
  */
 export async function authFetch(input, init = {}) {
   const safeInit = init && typeof init === 'object' ? init : {}
@@ -202,16 +272,10 @@ export async function authFetch(input, init = {}) {
   const response = await fetch(input, { ...fetchInit, headers })
   const hadBearer = Boolean(accessToken)
 
-  if (
-    hadBearer &&
-    !hadRetry &&
-    (response.status === 401 || response.status === 400)
-  ) {
+  if (hadBearer && !hadRetry && response.status === 401) {
     const newAccess = await refreshSession()
     if (newAccess) {
-      const retryHeaders = new Headers(fetchInit.headers ?? undefined)
-      retryHeaders.set('Authorization', `Bearer ${newAccess}`)
-      return fetch(input, { ...fetchInit, headers: retryHeaders })
+      return authFetch(input, { ...fetchInit, _authRetry: true })
     }
     forceLogoutAndRedirectLogin()
     const err = new Error('Session expired. Please sign in again.')

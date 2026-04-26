@@ -1,5 +1,7 @@
 const ACCESS_STORAGE_KEY = 'accessToken'
 const REFRESH_COOKIE_NAME = 'refreshToken'
+/** Aligned with AUTH API (refresh token lifetime, e.g. 30 days) — keeps session after browser restarts. */
+const REFRESH_COOKIE_MAX_AGE_SEC = 30 * 24 * 60 * 60
 
 function getCookie(name) {
   const match = document.cookie.match(
@@ -36,9 +38,8 @@ export function getRefreshToken() {
 }
 
 export function setTokens(accessToken, refreshToken) {
-  /** Access JWT: cleared when the tab/window session ends. Refresh: session cookie (no Max-Age) so both go away on full browser close. */
   sessionStorage.setItem(ACCESS_STORAGE_KEY, accessToken)
-  setCookie(REFRESH_COOKIE_NAME, refreshToken)
+  setCookie(REFRESH_COOKIE_NAME, refreshToken, REFRESH_COOKIE_MAX_AGE_SEC)
 }
 
 export function clearTokens() {

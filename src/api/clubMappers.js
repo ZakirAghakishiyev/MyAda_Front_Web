@@ -127,6 +127,64 @@ function mapEmailFromApi(dto) {
   return t || null
 }
 
+/**
+ * Member count for list/detail DTOs: prefers numeric fields, then `members`/`Members` array length.
+ * @param {Record<string, unknown>} dto
+ */
+function memberCountFromClubDto(dto) {
+  if (!dto || typeof dto !== 'object') return 0
+  const tryNumeric = (o) => {
+    if (!o || typeof o !== 'object') return null
+    const keys = [
+      'memberCount',
+      'MemberCount',
+      'membersCount',
+      'MembersCount',
+      'totalMembers',
+      'TotalMembers',
+      'rosterSize',
+      'RosterSize',
+      'activeMembers',
+      'ActiveMembers',
+    ]
+    for (const k of keys) {
+      if (!(k in o)) continue
+      const v = o[k]
+      if (v == null || Array.isArray(v)) continue
+      const n = Number(v)
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+    }
+    if (typeof o.members === 'number') {
+      const n = Number(o.members)
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+    }
+    if (typeof o.Members === 'number') {
+      const n = Number(o.Members)
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+    }
+    if (o.stats && typeof o.stats === 'object') {
+      for (const sk of ['memberCount', 'totalMembers', 'count', 'Count']) {
+        if (!(sk in o.stats)) continue
+        const n = Number(o.stats[sk])
+        if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+      }
+    }
+    return null
+  }
+  const nested = [dto, dto.club, dto.result, dto.Result, dto.Club, dto.data, dto.Data].filter(
+    (x) => x && typeof x === 'object'
+  )
+  for (const c of nested) {
+    const n = tryNumeric(c)
+    if (n != null) return n
+  }
+  for (const c of nested) {
+    if (Array.isArray(c.members)) return c.members.length
+    if (Array.isArray(c.Members)) return c.Members.length
+  }
+  return 0
+}
+
 /** @param {Record<string, unknown>} dto */
 export function mapClubFromApi(dto) {
   if (!dto || typeof dto !== 'object') return null
@@ -143,12 +201,10 @@ export function mapClubFromApi(dto) {
       ? dto.socialLinks
       : {}
   const sl = /** @type {Record<string, unknown>} */ (socialLinks)
-  // API: `image` is display-safe; some payloads only set `profileImageUrl` / PascalCase variants.
+  // Per CLUB_API: round profile/logo → `profileImageUrl`; `image` / `Image` align with background/hero, not the logo.
   const rawClubImage = pickPreferredClubImage(
     dto.profileImageUrl,
     dto.ProfileImageUrl,
-    dto.image,
-    dto.Image,
   )
   const clubImageDisplay = rawClubImage
     ? resolvePublishedClubImageDisplayUrls(rawClubImage)
@@ -159,6 +215,8 @@ export function mapClubFromApi(dto) {
     dto.BannerImageUrl,
     dto.backgroundImageUrl,
     dto.BackgroundImageUrl,
+    dto.image,
+    dto.Image,
     dto.coverImageUrl,
     dto.CoverImageUrl,
     dto.heroImageUrl,
@@ -180,7 +238,7 @@ export function mapClubFromApi(dto) {
     backgroundImageUrl: bannerImageDisplay.primary ?? undefined,
     backgroundImageUrlAlt: bannerImageDisplay.alt ?? undefined,
     tags,
-    members: Number(dto.members) || 0,
+    members: memberCountFromClubDto(dto),
     about: aboutText,
     description: dto.description != null ? String(dto.description) : '',
     status: dto.status != null ? String(dto.status) : '',
@@ -488,14 +546,38 @@ export function mapStudentServicesEventProposal(p, index = 0) {
       return { title, capacity, start, end, date, timeRange, venueNotes, raw: se }
     })
     .filter(Boolean)
+  const rawPoster = firstNonEmptyLink(
+    p.imageUrl,
+    p.ImageUrl,
+    p.posterUrl,
+    p.PosterUrl,
+    p.eventImageUrl,
+    p.EventImageUrl
+  )
+  const posterDisplay = rawPoster ? resolvePublishedClubImageDisplayUrls(rawPoster) : { primary: null, alt: null }
+  const posterImageUrl = posterDisplay.primary ?? null
+  const posterImageUrlAlt = posterDisplay.alt ?? null
+  const obj = p.objectives
+  const objectives = (() => {
+    if (Array.isArray(obj)) return obj.map((x) => String(x))
+    if (typeof obj === 'string' && obj.trim()) {
+      const lines = obj.split(/\n+/).map((s) => s.trim()).filter(Boolean)
+      return lines.length ? lines : [obj.trim()]
+    }
+    return []
+  })()
   return {
     id,
     proposalId: String(p.proposalId ?? p.id ?? id),
     eventTitle: String(p.eventTitle ?? p.name ?? p.title ?? 'Event proposal'),
     submittedOn: p.submittedOn ?? (p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : '—'),
-    submittedBy: String(p.submittedBy ?? '—'),
+    submittedBy: String(
+      p.submittedBy ?? p.submittedByOrganization ?? p.SubmittedByOrganization ?? p.submittedByStudentId ?? '—'
+    ),
     submittedAgo: String(p.submittedAgo ?? ''),
-    clubName: String(p.clubName ?? ''),
+    clubName: String(
+      p.clubName ?? (p.club && typeof p.club === 'object' ? p.club.name : '') ?? ''
+    ),
     status: String(p.status ?? 'PENDING REVIEW').toUpperCase(),
     eventDateShort: String(p.eventDateShort ?? ''),
     dateTime: String(p.dateTime ?? ''),
@@ -509,13 +591,11 @@ export function mapStudentServicesEventProposal(p, index = 0) {
     requestedBuildingId: p.requestedBuildingId ?? 'b1',
     requestedRoomId: p.requestedRoomId ?? 'r1',
     description: String(p.description ?? ''),
-    objectives: Array.isArray(p.objectives)
-      ? p.objectives
-      : typeof p.objectives === 'string' && p.objectives.trim()
-        ? [p.objectives.trim()]
-        : [],
+    objectives,
     subEvents,
-    posterPlaceholder: true,
+    posterImageUrl,
+    posterImageUrlAlt,
+    posterPlaceholder: !posterImageUrl,
     raw: p,
   }
 }
@@ -538,8 +618,6 @@ export function mapStudentServicesDirectoryClub(c) {
   const rawProfile = firstNonEmptyLink(
     c.profileImageUrl,
     c.ProfileImageUrl,
-    c.image,
-    c.Image,
     typeof c.club === 'object' && c.club ? c.club.profileImageUrl : undefined,
     typeof c.club === 'object' && c.club ? c.club.ProfileImageUrl : undefined
   )
@@ -575,7 +653,7 @@ export function mapStudentServicesDirectoryClub(c) {
     established: c.established != null ? String(c.established) : '—',
     president: String(c.president ?? c.presidentName ?? '—'),
     presidentId: String(c.presidentId ?? ''),
-    members: Number(c.members) || 0,
+    members: memberCountFromClubDto(c),
     category: String(c.category ?? ''),
     status: normalizeStatus(c.status),
     iconColor: c.iconColor ?? 'blue',

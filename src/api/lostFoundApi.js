@@ -1,8 +1,10 @@
 import { authFetch } from '../auth'
 
-const LOST_FOUND_HOST = (
-  import.meta.env.VITE_LOST_FOUND_HOST ?? 'http://13.60.31.141:5000'
-).replace(/\/+$/, '')
+// Gateway base (override with VITE_LOST_FOUND_HOST). Default port matches this deployment: 5000
+const LOST_FOUND_HOST = (import.meta.env.VITE_LOST_FOUND_HOST ?? 'http://13.60.31.141:5000').replace(
+  /\/+$/,
+  '',
+)
 const LOST_FOUND_API_BASE = `${LOST_FOUND_HOST}/lostfound/api/lost-and-found`
 const LOST_FOUND_CATEGORIES_URL = `${LOST_FOUND_HOST}/lostfound/api/v1/categories`
 
@@ -21,15 +23,343 @@ function normalizeMediaUrl(value) {
   return raw
 }
 
-function formatAdminStatusLabel(raw) {
-  const s = String(raw ?? '').trim().toLowerCase()
-  if (s === 'received') return 'Received'
-  if (s === 'delivered') return 'Delivered'
+/**
+ * Public `status` from modern API (list/detail projection): `active` | `pending_verification` (snake_case; see LostFound-Frontend-API.md §7).
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function formatPublicStatusForDisplay(raw) {
+  if (raw == null && raw !== 0) return 'Pending verification'
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw === 0) return 'Pending verification'
+    if (raw === 1) return 'Active'
+  }
+  const s = String(raw).trim()
+  if (!s) return 'Pending verification'
+  if (/^\d+$/.test(s)) {
+    const n = Math.floor(Number(s))
+    if (n === 0) return 'Pending verification'
+    if (n === 1) return 'Active'
+  }
+  const c = s.toLowerCase().replace(/[\s-]+/g, '_')
+  if (c === 'active' || c === 'live' || c === 'published' || c === 'listed' || c === 'open') return 'Active'
+  if (
+    c === 'pending_verification' ||
+    c === 'pending' ||
+    c === 'new' ||
+    c === 'submitted' ||
+    c === 'draft' ||
+    c === 'unverified' ||
+    (c.includes('pending') && c.includes('verif')) ||
+    s.toLowerCase().includes('pending verification') ||
+    s.toLowerCase().includes('under review') ||
+    s.toLowerCase().includes('in review')
+  ) {
+    return 'Pending verification'
+  }
+  if (s.length <= 48) {
+    return s
+      .split(/\s+/)
+      .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+      .join(' ')
+  }
+  return s
+}
+
+/**
+ * Admin `adminStatus`: `pending` | `received` | `delivered` (case-insensitive; §7).
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+export function formatAdminStatusForDisplay(raw) {
+  if (raw == null && raw !== 0) return null
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw === 0) return 'Pending'
+    if (raw === 1) return 'Received'
+    if (raw === 2) return 'Delivered'
+  }
+  const s = String(raw).trim()
+  if (!s) return null
+  if (/^\d+$/.test(s)) {
+    const n = Math.floor(Number(s))
+    if (n === 0) return 'Pending'
+    if (n === 1) return 'Received'
+    if (n === 2) return 'Delivered'
+  }
+  const c = s.toLowerCase()
+  if (c === 'pending' || c === 'new' || c === 'draft' || c === 'submitted') return 'Pending'
+  if (c === 'received' || c === 'in_office' || c === 'in office' || c === 'in-office' || c === 'at office' || c === 'at_office' || c === 'atoffice' || c === 'intake' || c === 'stored' || c === 'in_lostfound') {
+    return 'Received'
+  }
+  if (c === 'delivered' || c === 'completed' || c === 'closed' || c === 'resolved' || c === 'returned' || c === 'handed' || c === 'pickedup') {
+    return 'Delivered'
+  }
+  if (c.length <= 32) {
+    return s
+      .split(/[\s_-]+/)
+      .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+      .join(' ')
+  }
+  return s
+}
+
+/**
+ * When `adminStatus` is missing, infer a workflow for admin UIs.
+ * @param {unknown} rawPublic — raw public status from the API (not a display string when avoidable)
+ * @returns {'Pending'|'Received'|'Delivered'}
+ */
+function inferAdminWorkflowFromPublicStatus(rawPublic) {
+  if (rawPublic == null) return 'Pending'
+  const p = String(rawPublic).toLowerCase().replace(/[\s-]+/g, '_')
+  if (
+    p === 'returned' ||
+    p === 'returned_to_owner' ||
+    p === 'returnedtoowner' ||
+    p === 'collected' ||
+    p === 'handed' ||
+    p === 'handedover' ||
+    p === 'closed' ||
+    p === 'resolved' ||
+    p === 'archived' ||
+    p === 'fulfilled' ||
+    (p.includes('deliver') && p.includes('complet')) ||
+    (p.includes('pickup') && p.includes('complet'))
+  ) {
+    return 'Delivered'
+  }
+  if (p === 'in_office' || p === 'inoffice' || p === 'in_offce' || p === 'at_office' || p === 'atoffice' || p === 'stored' || p === 'receipt' || p === 'receiv') {
+    return 'Received'
+  }
+  if (p === 'pending' || p === 'pending_verification' || p.includes('verif') || p === 'unverified' || p === 'submitted' || p === 'draft' || p === 'new') {
+    return 'Pending'
+  }
+  if (p === 'active' || p === 'live' || p === 'published' || p === 'listed' || p === 'open') return 'Pending'
   return 'Pending'
 }
 
 /**
- * Workflow labels for UI; `status` mirrors `adminStatus` for display (not public listing status).
+ * Gather admin workflow value from the API, including nested or alternate property names.
+ * @param {Record<string, unknown> | null | undefined} item
+ * @returns {unknown}
+ */
+function collectAdminRawValue(item) {
+  if (!item || typeof item !== 'object') return null
+  const cands = [
+    item.adminStatus,
+    item.AdminStatus,
+    item.admin_status,
+    item.itemAdminStatus,
+    item.ItemAdminStatus,
+    item.staffStatus,
+    item.StaffStatus,
+    item.staff_status,
+    item.processingStatus,
+    item.ProcessingStatus,
+    item.workFlowStatus,
+    item.WorkflowStatus,
+    item.workflow,
+    item.Workflow,
+    item.ItemWorkflow,
+    item.adminWorkflowStatus,
+    item.AdminWorkflowStatus,
+    item.adminWorkflow,
+    item.AdminWorkflow,
+  ]
+  for (const c of cands) {
+    if (c == null) continue
+    if (c === '' && c !== 0) continue
+    if (typeof c === 'string' && !c.trim()) continue
+    return c
+  }
+  const ext = item.admin
+  if (ext && typeof ext === 'object') {
+    return ext.status ?? ext.Status ?? ext.adminStatus ?? null
+  }
+  return null
+}
+
+const pickStr = (o, keys) => {
+  if (!o) return ''
+  for (const k of keys) {
+    const v = o[k]
+    if (v == null || v === false) continue
+    const s = String(v).trim()
+    if (s) return s
+  }
+  return ''
+}
+
+const pickTimeLike = (o, keys) => {
+  for (const k of keys) {
+    const v = o[k]
+    if (v == null) continue
+    if (v instanceof Date && !Number.isNaN(v.getTime())) return v
+    const t = new Date(String(v))
+    if (!Number.isNaN(t.getTime())) return t
+  }
+  return null
+}
+
+/**
+ * When the API does not return `adminStatus` but the item was processed, infer from other fields
+ * (storage, intake, handover) so a full page refresh still matches the server.
+ * @param {Record<string, unknown> | null | undefined} item
+ * @returns {'Pending' | 'Received' | 'Delivered' | null}
+ */
+function inferAdminStatusFromItemSignals(item) {
+  if (!item || typeof item !== 'object') return null
+  if (item.deliveryComplete === true || item.DeliveryComplete === true || item.isDelivered === true) return 'Delivered'
+  if (item.handoverComplete === true || item.HandoverComplete === true) return 'Delivered'
+  if (item.returnedToOwner === true || item.ReturnedToOwner === true) return 'Delivered'
+  if (
+    pickTimeLike(item, [
+      'handoverCompletedAt',
+      'HandoverCompletedAt',
+      'deliveredAt',
+      'DeliveredAt',
+      'pickedUpAt',
+      'PickedUpAt',
+      'returnedAt',
+      'ReturnedAt',
+      'collectionClosedAt',
+    ])
+  ) {
+    return 'Delivered'
+  }
+  const outStatus = String(item.outboundStatus || item.fulfillmentStatus || '').toLowerCase()
+  if (outStatus && (outStatus.includes('deliver') || outStatus.includes('complet') || outStatus.includes('return'))) {
+    if (!outStatus.includes('receiv') && !outStatus.includes('pend')) return 'Delivered'
+  }
+  if (String(item.publishingStatus || '').toLowerCase().includes('delivered')) return 'Delivered'
+  const carry = String(item.carryStatus || item.CarryStatus || '')
+    .toLowerCase()
+  if (carry.includes('deliv')) return 'Delivered'
+  if (carry.includes('receiv') || carry.includes('office') || carry.includes('store')) return 'Received'
+
+  const storageBin = pickStr(item, ['storageBinId', 'StorageBinId', 'binId', 'storageBin', 'StorageBin', 'intakeBin'])
+  if (storageBin && !/^(n\/a|none|—|-|null)$/i.test(storageBin)) return 'Received'
+  if (
+    pickTimeLike(item, [
+      'receiptConfirmedAt',
+      'ReceiptConfirmedAt',
+      'intakeAt',
+      'IntakeAt',
+      'officeReceivedAt',
+      'OfficeReceivedAt',
+      'ReceivedAt',
+      'receivedAt',
+    ])
+  ) {
+    return 'Received'
+  }
+  if (item.receiptVerified === true || item.intakeComplete === true || item.receiptComplete === true) {
+    return 'Received'
+  }
+  const intakeRef = pickStr(item, [
+    'intakePhotoUrl',
+    'intakeImageUrl',
+    'IntakeImageUrl',
+    'intakeFileUrl',
+    'IntakeFileUrl',
+    'verifiedIntakeImageUrl',
+  ])
+  if (intakeRef) return 'Received'
+  const vcond = pickStr(item, ['verifiedCondition', 'VerifiedCondition', 'itemCondition', 'receiptCondition'])
+  if (vcond && (storageBin || intakeRef)) return 'Received'
+
+  return null
+}
+
+/**
+ * Resolves a single display admin label (Pending | Received | …) for both normalized
+ * and raw DTOs: explicit admin fields, then item signals, then public status fallbacks.
+ * @param {Record<string, unknown> | null | undefined} item
+ * @param {unknown} [rawPublicHint] — prefer API `status` (before display normalization) when you have it
+ * @returns {string}
+ */
+function resolveDisplayAdminStatus(item, rawPublicHint) {
+  const fromApi = formatAdminStatusForDisplay(collectAdminRawValue(item))
+  if (fromApi != null) return fromApi
+  const fromSig = inferAdminStatusFromItemSignals(item)
+  if (fromSig != null) return fromSig
+  const fromRest = formatAdminStatusForDisplay(item?.adminStatus)
+  if (fromRest != null) return fromRest
+  const rawPub = rawPublicHint !== undefined
+    ? rawPublicHint
+    : item
+      ? item.status != null
+        ? item.status
+        : item.Status
+      : null
+  return inferAdminWorkflowFromPublicStatus(rawPub)
+}
+
+/**
+ * Resolves staff workflow for admin dashboard buttons (pending → received → delivered).
+ * Tolerates casing, minor API label drift, and `admin_status` snake_case on DTOs.
+ * @param {Record<string, unknown> | null | undefined} item
+ * @returns {'pending' | 'received' | 'delivered'}
+ */
+export function getLostFoundAdminWorkflowPhase(item) {
+  if (!item || typeof item !== 'object') return 'pending'
+  // Same public hint as normalizeLostFoundItem, plus a few common alternate names on DTOs.
+  const publicHint =
+    item?.status != null
+      ? item.status
+      : (item?.Status != null
+          ? item.Status
+          : item.state ?? item.State ?? item.itemStatus)
+  const display = resolveDisplayAdminStatus(item, publicHint)
+  const t = String(display).trim().toLowerCase()
+  if (
+    t === 'delivered' ||
+    t === 'returned' ||
+    t === 'completed' ||
+    t === 'closed' ||
+    t === 'resolved' ||
+    t.includes('handover') ||
+    (t.includes('pickup') && t.includes('complet'))
+  ) {
+    return 'delivered'
+  }
+  if (
+    t === 'received' ||
+    t.includes('in office') ||
+    t.includes('intake') ||
+    t === 'stored' ||
+    (t.includes('receiv') && !t.includes('unreceiv') && t !== 'delivered')
+  ) {
+    return 'received'
+  }
+  return 'pending'
+}
+
+/**
+ * Map a display status label to badge CSS: active | pending | received | declined.
+ * @param {string} statusLabel
+ */
+export function getLostFoundStatusBadgeVariant(statusLabel) {
+  const t = String(statusLabel || '').toLowerCase()
+  if (t === 'active' || t === 'claimed') return 'active'
+  if (t === 'delivered' || t === 'returned' || t === 'completed' || t === 'closed' || t === 'resolved') {
+    return 'active'
+  }
+  if (t === 'received' || t.includes('in office') || t === 'in-office' || t.includes('at office') || t === 'in lostfound' || t === 'stored' || t === 'intake' || t === 'inoffice' || t.includes('ready for pickup')) {
+    return 'received'
+  }
+  if (t.includes('declin') || t === 'canceled' || t === 'cancelled' || t.includes('reject') || t.includes('archiv')) {
+    return 'declined'
+  }
+  if (t === 'pending verification' || t.includes('pending verif') || t.includes('verif') || t === 'pending' || t.includes('review') || t === 'unverified' || t === 'submitted' || t === 'draft' || t === 'new') {
+    return 'pending'
+  }
+  return 'pending'
+}
+
+/**
+ * `status` = public catalog label (Active | Pending verification).
+ * `adminStatus` = staff workflow (Pending | Received | Delivered), inferred when the API omits it.
+ * @param {Record<string, unknown> | null | undefined} item
  */
 function normalizeLostFoundItem(item) {
   if (!item || typeof item !== 'object') return item
@@ -38,15 +368,17 @@ function normalizeLostFoundItem(item) {
   const mappedImages = images.map(normalizeMediaUrl).filter(Boolean)
   const mappedImageUrls = imageUrls.map(normalizeMediaUrl).filter(Boolean)
   const image = normalizeMediaUrl(item.image || mappedImageUrls[0] || mappedImages[0])
-  const adminStatus = formatAdminStatusLabel(item.adminStatus)
+  const rawPublic = item.status ?? item.Status
+  const publicLabel = formatPublicStatusForDisplay(rawPublic)
+  const adminStatus = resolveDisplayAdminStatus(item, rawPublic)
   const ownerClaimsCount = Number(item.ownerClaimsCount ?? item.OwnerClaimsCount ?? 0) || 0
   const finderClaimsCount = Number(item.finderClaimsCount ?? item.FinderClaimsCount ?? 0) || 0
   const title = String(item.title || item.itemName || '').trim() || 'Untitled item'
   return {
     ...item,
     title,
+    status: publicLabel,
     adminStatus,
-    status: adminStatus,
     image,
     imageUrls: mappedImageUrls.length ? mappedImageUrls : mappedImages,
     images: mappedImages,
@@ -218,7 +550,12 @@ export async function createFoundReport(fields, files = []) {
 }
 
 export async function getLostFoundItems(params = {}) {
-  /** When false (default), hide admin workflow items not meant for the public board. */
+  /**
+   * `adminListingMode: true` — do not client-filter; admin/leader need all workflow states.
+   * `false` — public board: from the raw response, show everything except **handover complete**
+   * (`adminStatus` phase `delivered`), so items **in office** (`received`) stay discoverable
+   * for pickup. (Gateway §1.2 may still omit `received`/`delivered` for non–role callers; that is server-side.)
+   */
   const adminListingMode = params.adminListingMode === true
   const qs = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -228,13 +565,14 @@ export async function getLostFoundItems(params = {}) {
   })
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   const result = await request(`/items${suffix}`)
-  let items = Array.isArray(result?.items) ? result.items.map(normalizeLostFoundItem) : []
+  let rawItems = Array.isArray(result?.items) ? result.items : []
   if (!adminListingMode) {
-    items = items.filter((i) => {
-      const a = String(i.adminStatus).toLowerCase()
-      return a !== 'delivered' && a !== 'received'
+    rawItems = rawItems.filter((i) => {
+      const ph = getLostFoundAdminWorkflowPhase(i)
+      return ph !== 'delivered'
     })
   }
+  const items = rawItems.map(normalizeLostFoundItem)
   return {
     items,
     total: Number(result?.total || 0),

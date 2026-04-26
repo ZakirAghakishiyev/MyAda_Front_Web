@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { fetchClub, fetchClubMembers, fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
+import { fetchClub, fetchClubMembers, fetchEvents, fetchMyClubMemberships, leaveClubMembership } from '../api/clubApi'
 import {
   mapClubFromApi,
   mapEventFromApi,
@@ -130,6 +130,7 @@ const ClubDetail = () => {
   const [upcomingEvents, setUpcomingEvents] = useState([])
   const [loadState, setLoadState] = useState({ loading: true, error: null })
   const [isClubMember, setIsClubMember] = useState(false)
+  const [membershipActionLoading, setMembershipActionLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -284,6 +285,52 @@ const ClubDetail = () => {
     })()
     return () => { cancelled = true }
   }, [id])
+
+  const handleCancelMembership = async () => {
+    if (!id || membershipActionLoading) return
+    const ok = window.confirm('Cancel your membership in this club? You can join again later if the club allows it.')
+    if (!ok) return
+    setMembershipActionLoading(true)
+    try {
+      await leaveClubMembership(id)
+      setIsClubMember(false)
+      const rawM = await fetchClubMembers(id).catch(() => null)
+      if (rawM) {
+        const mItems = rawM?.items ?? rawM ?? []
+        const next = (Array.isArray(mItems) ? mItems : []).map((m, index) => ({
+          ...m,
+          _userId: pickUserGuidForAuthLookup(m) || '',
+          _idx: index,
+        }))
+        setMemberRows(next)
+        const uniqueUserIds = Array.from(new Set(next.map((m) => m._userId).filter(Boolean)))
+        if (uniqueUserIds.length) {
+          const byId = await fetchAuthProfilesByLookupKey(uniqueUserIds)
+          setMemberRows((prev) =>
+            prev.map((m) => {
+              const p = m._userId ? byId.get(m._userId) : null
+              const fullName = firstLastNameFromAuthUserDto(p) || firstLastNameFromAuthUserDto(m)
+              if (!p && !fullName) return m
+              return {
+                ...m,
+                name: fullName || m.name,
+                fullName: fullName || m.fullName,
+                email: emailFromAuthUserDto(p) || m.email,
+              }
+            })
+          )
+        }
+        setClub((c) => (c ? { ...c, members: next.length } : c))
+      } else {
+        setMemberRows([])
+        setClub((c) => (c ? { ...c, members: Math.max(0, (Number(c.members) || 0) - 1) } : c))
+      }
+    } catch (e) {
+      alert(e?.message || 'Could not cancel membership.')
+    } finally {
+      setMembershipActionLoading(false)
+    }
+  }
 
   const focusAreas = useMemo(() => {
     const raw = club?.focusAreas || []
@@ -490,9 +537,20 @@ const ClubDetail = () => {
                 <div className="club-detail-president-name">{president.name}</div>
               </div>
             ) : null}
-            <button type="button" className="club-detail-btn-primary" onClick={() => navigate(`/clubs/${id}/join`)}>
-              <IconPlus /> Join Club
-            </button>
+            {isClubMember ? (
+              <button
+                type="button"
+                className="club-detail-btn-danger"
+                disabled={membershipActionLoading}
+                onClick={() => void handleCancelMembership()}
+              >
+                {membershipActionLoading ? 'Leaving…' : 'Cancel membership'}
+              </button>
+            ) : (
+              <button type="button" className="club-detail-btn-primary" onClick={() => navigate(`/clubs/${id}/join`)}>
+                <IconPlus /> Join Club
+              </button>
+            )}
           </div>
         </div>
       </section>

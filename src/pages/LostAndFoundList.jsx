@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getLostFoundItems } from '../api/lostFoundApi'
+import { getLostFoundItems, getLostFoundStatusBadgeVariant } from '../api/lostFoundApi'
 import './LostAndFound.css'
 
 const IconPin = () => (
@@ -29,7 +29,7 @@ function computeDaysAgo(item) {
 }
 
 function normalizeItem(item) {
-  const status = String(item?.adminStatus || item?.status || 'Pending').trim() || 'Pending'
+  const status = String(item?.status || item?.adminStatus || 'Pending verification').trim() || 'Pending verification'
   return {
     ...item,
     title: item?.title || item?.itemName || 'Untitled item',
@@ -77,7 +77,7 @@ const LostAndFoundList = () => {
     let list = items
 
     if (statusFilter === 'pending') {
-      list = list.filter((item) => String(item.status).toLowerCase() === 'pending')
+      list = list.filter((item) => getLostFoundStatusBadgeVariant(item.status) === 'pending')
     }
 
     if (!searchQuery.trim()) return list
@@ -94,7 +94,9 @@ const LostAndFoundList = () => {
 
   const visible = items
   const totalCount = visible.length
-  const pendingCount = visible.filter((item) => String(item.status).toLowerCase() === 'pending').length
+  const pendingCount = visible.filter(
+    (item) => getLostFoundStatusBadgeVariant(item.status) === 'pending',
+  ).length
 
   return (
     <div className="lf-page lf-list-page">
@@ -196,7 +198,11 @@ const LostAndFoundList = () => {
                   </div>
                 </div>
                 <div className="lf-card-status-row">
-                  <span className="lf-status-badge lf-status-badge--pending">
+                  <span
+                    className={`lf-status-badge lf-status-badge--${getLostFoundStatusBadgeVariant(
+                      item.status,
+                    )}`}
+                  >
                     {item.status}
                   </span>
                   <span className="lf-days-ago">

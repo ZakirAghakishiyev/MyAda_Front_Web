@@ -164,6 +164,97 @@ async function clubAuthJsonPrimaryOrFallback(primaryPath, fallbackPath, init = {
   }
 }
 
+/**
+ * Normalizes form state to `EventProposalSubmitDto` (JSON) / multipart field values.
+ * @see CLUB_API_DOC / FRONTEND_CLUB_API_GUIDE — `dateTime` local `YYYY-MM-DDTHH:mm:ss` (no Z);
+ * JSON uses nested `subEvents` + `logistics`; multipart uses `subEventsJson` + `logisticsJson` strings.
+ */
+export function buildEventProposalSubmitDto(form) {
+  const f = form && typeof form === 'object' ? form : {}
+  const subEvents = Array.isArray(f.subEvents) ? f.subEvents : []
+  const log = f.logistics && typeof f.logistics === 'object' ? f.logistics : {}
+  const otherNeeds = log.otherNeeds != null ? String(log.otherNeeds).trim() : ''
+  const objectives =
+    typeof f.objectives === 'string'
+      ? f.objectives
+      : f.objectives != null
+        ? String(f.objectives)
+        : ''
+  const base = {
+    name: String(f.name || '').trim() || 'Event proposal',
+    dateTime: String(f.dateTime ?? '').trim(),
+    duration: String(f.duration ?? '').trim(),
+    attendance: String(f.attendance ?? '').trim(),
+    venue: String(f.venue || 'TBD'),
+    description: String(f.description ?? ''),
+    objectives,
+    subEvents: subEvents.map((se) => ({
+      title: String(se?.title ?? '').trim(),
+      capacity: String(se?.capacity ?? '').trim(),
+      start: String(se?.start ?? '').trim(),
+      end: String(se?.end ?? '').trim(),
+      date: String(se?.date ?? '').trim(),
+    })),
+    logistics: {
+      avSetup: Boolean(log.avSetup),
+      security: Boolean(log.security),
+      catering: Boolean(log.catering),
+      cleaning: Boolean(log.cleaning),
+      ...(otherNeeds ? { otherNeeds } : {}),
+    },
+  }
+  const out = { ...base }
+  const so = f.submittedByOrganization != null ? String(f.submittedByOrganization).trim() : ''
+  if (so) out.submittedByOrganization = so
+  const iu = f.imageUrl != null ? String(f.imageUrl).trim() : ''
+  if (iu) out.imageUrl = iu
+  return out
+}
+
+/**
+ * Multipart fields for `EventProposalSubmitDto` (student-services + shared builder).
+ * @param {{ includeImageUrl?: boolean }} [options] — set `includeImageUrl: false` for club-admin proposals (that route rejects `imageUrl`).
+ */
+function buildEventProposalFormData(dto, options = {}) {
+  const includeImageUrl = options.includeImageUrl !== false
+  const fd = new FormData()
+  fd.append('name', dto.name)
+  fd.append('dateTime', dto.dateTime)
+  fd.append('duration', dto.duration)
+  fd.append('attendance', dto.attendance)
+  fd.append('venue', dto.venue)
+  fd.append('description', dto.description)
+  fd.append('objectives', dto.objectives)
+  fd.append('subEventsJson', JSON.stringify(dto.subEvents))
+  fd.append('logisticsJson', JSON.stringify(dto.logistics))
+  if (dto.submittedByOrganization) fd.append('submittedByOrganization', dto.submittedByOrganization)
+  if (includeImageUrl && dto.imageUrl) fd.append('imageUrl', dto.imageUrl)
+  return fd
+}
+
+/** Student Services POST /student-services/events/proposals: `application/json` or `multipart/form-data` with `imageFile` / optional `imageUrl` (file wins if both). */
+function postEventProposalResolvingPath(pathPrimary, pathFallback, dto, imageFile) {
+  if (imageFile instanceof File) {
+    const fd = buildEventProposalFormData(dto, { includeImageUrl: true })
+    fd.append('imageFile', imageFile, imageFile.name)
+    const doPost = (p) => clubAuthJson(p, { method: 'POST', body: fd })
+    return (async () => {
+      try {
+        return await doPost(pathPrimary)
+      } catch (e) {
+        if (e.status === 404 && pathFallback) return doPost(pathFallback)
+        throw e
+      }
+    })()
+  }
+  const init = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  }
+  return clubAuthJsonPrimaryOrFallback(pathPrimary, pathFallback, init)
+}
+
 /* --- Categories (public) --- */
 
 export function fetchCategories() {
@@ -224,6 +315,47 @@ export function registerForEvent(eventId) {
   })
 }
 
+/**
+ * GET all registrations for an event (paged DTO, array, or club-style `{ items, total }`). Used to show real
+ * headcount on the public event page when the event DTO does not include `registeredCount` / similar.
+ */
+export function fetchEventRegistrationsList(eventId, params = {}) {
+  const q = new URLSearchParams()
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 500))
+  return clubAuthJson(
+    `events/${encodeURIComponent(eventId)}/registrations?${q.toString()}`,
+    { method: 'GET' }
+  )
+}
+
+/** Derive total count from a registrations list response (totals from pagination preferred over page length). */
+export function countEventRegistrationsInResponse(data) {
+  if (data == null) return null
+  if (Array.isArray(data)) return data.length
+  if (typeof data === 'object') {
+    const directTotal = toFiniteIntNonNegative(
+      data.totalCount ?? data.TotalCount ?? data.total ?? data.Total ?? data.count ?? data.Count
+    )
+    if (directTotal != null) return directTotal
+    if (data.meta && typeof data.meta === 'object') {
+      const m = toFiniteIntNonNegative(data.meta.total ?? data.meta.Total ?? data.meta.count)
+      if (m != null) return m
+    }
+    const items = clubAdminListItems(data)
+    if (Array.isArray(items)) return items.length
+  }
+  return null
+}
+
+function toFiniteIntNonNegative(v) {
+  if (v == null) return null
+  const n = Number(v)
+  if (!Number.isFinite(n)) return null
+  const i = Math.floor(n)
+  return i >= 0 ? i : null
+}
+
 export function unregisterFromEvent(eventId) {
   return clubAuthFetch(`events/${encodeURIComponent(eventId)}/registrations`, {
     method: 'DELETE',
@@ -269,6 +401,58 @@ export function submitVacancyApplication(vacancyId, formData) {
 
 export function fetchMyClubMemberships() {
   return clubAuthJson(usersScopedPath('club-memberships'), { method: 'GET' })
+}
+
+/**
+ * End the current user's membership in a club. Tries several common gateway routes (DELETE and POST fallbacks).
+ */
+export async function leaveClubMembership(clubId) {
+  const raw = String(clubId ?? '').trim()
+  if (!raw) {
+    const err = new Error('Club id required')
+    err.status = 400
+    throw err
+  }
+  const enc = encodeURIComponent(raw)
+  const deletePaths = [
+    `users/me/club-memberships/${enc}`,
+    `${usersScopedPath(`club-memberships/${enc}`)}`,
+    `clubs/${enc}/members/me`,
+    `clubs/${enc}/membership`,
+  ]
+  let lastErr
+  for (const p of deletePaths) {
+    try {
+      await clubAuthDeleteExpectOk(p)
+      return
+    } catch (e) {
+      lastErr = e
+      if (e?.status === 404) continue
+      throw e
+    }
+  }
+  try {
+    await clubAuthJson(`clubs/${enc}/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    return
+  } catch (e) {
+    if (e?.status === 404) {
+      try {
+        await clubAuthJson(`clubs/${enc}/cancel-membership`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+        return
+      } catch (e2) {
+        throw lastErr || e2
+      }
+    }
+    throw e
+  }
 }
 
 export function fetchMyVacancyApplications(params = {}) {
@@ -763,12 +947,22 @@ export function patchClubAdminEvent(clubId, eventId, body) {
   })
 }
 
-export function proposeClubAdminEvent(clubId, body) {
-  return clubAuthJson(clubAdminPath(clubId, 'events/proposals'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+/**
+ * `POST /api/v1/club-admin/{clubId}/events/proposals` — **multipart/form-data only**; attach image with `imageFile`.
+ * `imageUrl` is rejected on this route (CLUB_API_DOC).
+ * @param {string|number} clubId
+ * @param {Record<string, unknown>} formState — fields for {@link buildEventProposalSubmitDto} (do not set `imageUrl` for this route)
+ * @param {File|null|undefined} [imageFile] — optional event poster / image
+ */
+export function proposeClubAdminEvent(clubId, formState, imageFile) {
+  const built = buildEventProposalSubmitDto(formState)
+  const { imageUrl: _discarded, ...dto } = built
+  void _discarded
+  const fd = buildEventProposalFormData(dto, { includeImageUrl: false })
+  if (imageFile instanceof File) {
+    fd.append('imageFile', imageFile, imageFile.name)
+  }
+  return clubAuthJson(clubAdminPath(clubId, 'events/proposals'), { method: 'POST', body: fd })
 }
 
 export function fetchClubAdminEventAttendees(clubId, eventId) {
@@ -1008,14 +1202,20 @@ export function fetchStudentServicesEventProposals(params = {}) {
   )
 }
 
-/** Submit a new event proposal for institutional review (Student Services; mirrors `club-admin/.../events/proposals`). */
-export function submitStudentServicesEventProposal(body) {
-  const init = {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }
-  return clubAuthJsonPrimaryOrFallback('student-services/events/proposals', 'student-services/event-proposals', init)
+/**
+ * `POST /api/v1/student-services/events/proposals` — `application/json` or `multipart/form-data`;
+ * optional `imageUrl` + `imageFile` (upload wins if both; CLUB_API_DOC).
+ * @param {Record<string, unknown>} formState — include `imageUrl` when using a pre-hosted URL
+ * @param {File|null|undefined} [imageFile]
+ */
+export function submitStudentServicesEventProposal(formState, imageFile) {
+  const dto = buildEventProposalSubmitDto(formState)
+  return postEventProposalResolvingPath(
+    'student-services/events/proposals',
+    'student-services/event-proposals',
+    dto,
+    imageFile
+  )
 }
 
 export function fetchStudentServicesEventProposal(proposalId) {
@@ -1027,12 +1227,25 @@ export function fetchStudentServicesEventProposal(proposalId) {
   )
 }
 
-export function approveStudentServicesEventProposal(proposalId, assignments) {
+/**
+ * `POST /api/v1/student-services/events/proposals/{id}/approve` — optional body `EventProposalApproveDto` (e.g. `{ assignments: [...] }`).
+ * @param {string|number} proposalId
+ * @param {Record<string, unknown>|Array<unknown>|null|undefined} [approveDtoOrAssignments] — full DTO object, or an **assignments array** (wrapped as `{ assignments }`)
+ */
+export function approveStudentServicesEventProposal(proposalId, approveDtoOrAssignments) {
   const enc = encodeURIComponent(proposalId)
+  let body = {}
+  if (approveDtoOrAssignments != null) {
+    if (Array.isArray(approveDtoOrAssignments)) {
+      body = { assignments: approveDtoOrAssignments }
+    } else if (typeof approveDtoOrAssignments === 'object') {
+      body = { ...approveDtoOrAssignments }
+    }
+  }
   const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assignments }),
+    body: JSON.stringify(body),
   }
   return clubAuthJsonPrimaryOrFallback(
     `student-services/events/proposals/${enc}/approve`,
@@ -1141,7 +1354,7 @@ export async function uploadStudentServicesClubBackgroundImage(clubId, file) {
       body: fd,
     })
   } catch (e) {
-    if (e.status === 404) {
+    if (e?.status === 403 || e?.status === 404) {
       const fd2 = new FormData()
       fd2.append('backgroundFile', file)
       return patchClubAdminProfile(clubId, fd2)
