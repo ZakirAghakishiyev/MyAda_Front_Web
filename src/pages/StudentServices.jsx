@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
-import { displayNameFromAuthUserDto, fetchAuthUserForClubRoster } from '../api/authUsersApi'
+import {
+  displayNameFromAuthUserDto,
+  fetchAuthUserForClubRoster,
+  personNamePartsFromClubRosterDto,
+} from '../api/authUsersApi'
 import {
   fetchStudentServicesClubProposals,
   fetchStudentServicesEventProposals,
@@ -20,13 +24,16 @@ import {
   patchStudentServicesClub,
   fetchStudentServicesClub,
   fetchStudentServicesClubProposal,
-  uploadStudentServicesClubProfileImage,
   approveStudentServicesClubProfileImage,
+  patchClubAdminProfileLogoOnly,
   deleteStudentServicesClubMember,
+  patchStudentServicesClubMember,
   createStudentServicesClubEmployee,
   patchStudentServicesClubEmployee,
   deleteStudentServicesClubEmployee,
   putStudentServicesProposalRequirements,
+  fetchClubAdminPositions,
+  clubAdminListItems,
 } from '../api/clubApi'
 import {
   mapStudentServicesClubProposal,
@@ -34,30 +41,40 @@ import {
   mapStudentServicesDirectoryClub,
   mapStudentServicesApprovedEvent,
 } from '../api/clubMappers'
-import { mockClubMembers as initialMembers, mockClubEmployees as initialEmployees, MEMBER_POSITIONS as MEMBER_POSITIONS_LIST, EMPLOYEE_POSITIONS as EMPLOYEE_POSITIONS_LIST } from '../data/clubAdminData'
+import {
+  MEMBER_POSITIONS as MEMBER_POSITIONS_LIST,
+  EMPLOYEE_POSITIONS as EMPLOYEE_POSITIONS_LIST,
+  findClubPositionByName,
+  clubEmployeePositionDropdownFromApi,
+} from '../data/clubAdminData'
+import { pickClubEmployeePersonLookupKey, pickClubRosterLookupKey } from '../utils/userGuids'
 import adaLogo from '../assets/ada-logo.png'
 import './StudentServices.css'
 import './club-admin/ClubAdmin.css'
 
+/** Items array from club members/employees list (handles AutoWrapper + PascalCase). */
+function clubRosterItemsFromResponse(raw) {
+  if (raw == null) return []
+  const data = raw.result ?? raw.Result ?? raw.data ?? raw.Data ?? raw
+  if (Array.isArray(data)) return data
+  const items = data?.items ?? data?.Items
+  return Array.isArray(items) ? items : []
+}
+
 function mapSsMemberRow(row, index) {
   if (!row || typeof row !== 'object') return null
-  const userId =
-    row.userId ??
-    row.userID ??
-    row.UserId ??
-    row.applicantUserId ??
-    row.user?.id ??
-    row.organizationalId ??
-    row.OrganizationalId ??
-    row.studentId
+  const lookupKey = pickClubRosterLookupKey(row) ?? ''
+  const pre = personNamePartsFromClubRosterDto(row)
+  const orgId = String(row.studentId ?? row.StudentId ?? row.organizationalId ?? row.OrganizationalId ?? '').trim()
+  const idForApi = lookupKey || String(row.id ?? row.memberId ?? row.MemberId ?? `ss-m-${index}`)
   return {
-    id: row.id ?? row.memberId ?? `ss-m-${index}`,
-    userId: userId != null ? String(userId) : '',
-    name: String(row.name ?? row.firstName ?? '—'),
-    surname: String(row.surname ?? row.lastName ?? ''),
-    email: String(row.email ?? ''),
-    studentId: row.studentId != null ? String(row.studentId) : undefined,
-    position: String(row.position ?? row.role ?? 'Member'),
+    id: idForApi,
+    userId: lookupKey,
+    name: pre.name,
+    surname: pre.surname,
+    email: pre.email,
+    studentId: orgId || undefined,
+    position: String(row.position ?? row.role ?? row.memberPosition ?? 'Member'),
     joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
     age: row.age != null ? Number(row.age) : null,
     raw: row,
@@ -66,21 +83,62 @@ function mapSsMemberRow(row, index) {
 
 function mapSsEmployeeRow(row, index) {
   if (!row || typeof row !== 'object') return null
-  const userId = row.userId ?? row.userID ?? row.user?.id ?? row.employeeUserId
-  const positionIdRaw = row.positionId ?? row.positionID ?? row.roleId ?? row.position?.id
+  const lookupKey = pickClubEmployeePersonLookupKey(row) ?? ''
+  const pre = personNamePartsFromClubRosterDto(row)
+  const positionIdRaw = row.positionId ?? row.positionID ?? row.roleId ?? row.position?.id ?? row.Position?.id
   return {
-    id: row.id ?? row.employeeId ?? `ss-e-${index}`,
-    userId: userId != null ? String(userId) : '',
+    id: String(row.id ?? row.employeeId ?? row.EmployeeId ?? `ss-e-${index}`),
+    userId: lookupKey,
     positionId: positionIdRaw != null ? String(positionIdRaw) : null,
-    name: String(row.name ?? row.firstName ?? '—'),
-    surname: String(row.surname ?? row.lastName ?? ''),
-    email: String(row.email ?? ''),
+    name: pre.name,
+    surname: pre.surname,
+    email: pre.email,
     position: String(row.position ?? row.positionName ?? row.role ?? row.positionTitle ?? '—'),
     department: row.department != null ? String(row.department) : '',
     studentId: row.studentId != null ? String(row.studentId) : undefined,
     joinedDate: row.joinedDate != null ? String(row.joinedDate) : row.createdAt != null ? String(row.createdAt) : '—',
     age: row.age != null ? Number(row.age) : null,
+    raw: row,
   }
+}
+
+/**
+ * Club employee `positionId` from the API is the club **position** row id (string/guid), not the static
+ * mock 1..n list. Align the row with `clubEmployeePositionDropdownFromApi` (or static titles) so select `value` matches.
+ * @param {{ positionId: string | null, position: string } & object} emp
+ * @param {{ id: string, name: string }[]} positionOptions
+ */
+function applySsEmployeeResolvedPosition(emp, positionOptions) {
+  if (!emp || typeof emp !== 'object') return emp
+  const posText = emp.position && String(emp.position) !== '—' ? String(emp.position).trim() : ''
+  let positionId = emp.positionId != null && String(emp.positionId).trim() ? String(emp.positionId) : ''
+  const staticList = Array.isArray(EMPLOYEE_POSITIONS_LIST) ? EMPLOYEE_POSITIONS_LIST : []
+  const toId = (p) => (typeof p === 'object' && p != null ? String(p.id) : String(p))
+  if (Array.isArray(positionOptions) && positionOptions.length) {
+    const inList = positionId && positionOptions.some((p) => p.id === positionId)
+    if (!inList && posText) {
+      const hit = findClubPositionByName(positionOptions, posText)
+      if (hit) return { ...emp, positionId: hit.id }
+    } else if (inList) {
+      return { ...emp, positionId }
+    } else if (!positionId && posText) {
+      const hit = findClubPositionByName(positionOptions, posText)
+      if (hit) return { ...emp, positionId: hit.id }
+    }
+  }
+  if (positionId && staticList.some((p) => toId(p) === positionId)) {
+    return { ...emp, positionId }
+  }
+  if (posText && staticList.length) {
+    const staticAsNamed = staticList.map((p) =>
+      typeof p === 'object' && p != null
+        ? { id: toId(p), name: p.title }
+        : { id: toId(p), name: toId(p) }
+    )
+    const hit = findClubPositionByName(staticAsNamed, posText)
+    if (hit) return { ...emp, positionId: hit.id }
+  }
+  return { ...emp, positionId: positionId || null }
 }
 
 const ADD_EVENT_DRAFT_COOKIE_KEY = 'student_services_add_event_draft'
@@ -769,10 +827,12 @@ const StudentServices = () => {
   const [directorySelectedClubId, setDirectorySelectedClubId] = useState(null)
   const [directoryClubTab, setDirectoryClubTab] = useState('members')
   const [clubsSearch, setClubsSearch] = useState('')
-  const [clubMembers, setClubMembers] = useState([...(Array.isArray(initialMembers) ? initialMembers : [])])
-  const [clubEmployees, setClubEmployees] = useState([...(Array.isArray(initialEmployees) ? initialEmployees : [])])
+  const [clubMembers, setClubMembers] = useState([])
+  const [clubEmployees, setClubEmployees] = useState([])
   const [clubMemberSearch, setClubMemberSearch] = useState('')
   const [clubEmployeeSearch, setClubEmployeeSearch] = useState('')
+  /** Per selected club: API positions for employee `<select>` (ids match `positionId` on each row). */
+  const [ssClubEmployeePositionOptions, setSsClubEmployeePositionOptions] = useState([])
   const [clubRosterLoadState, setClubRosterLoadState] = useState({ loading: false, error: '' })
   const [addEmployeeOpen, setAddEmployeeOpen] = useState(false)
   const [addEmployeeId, setAddEmployeeId] = useState('')
@@ -780,6 +840,7 @@ const StudentServices = () => {
   const [removeMemberId, setRemoveMemberId] = useState(null)
   const [removeEmployeeId, setRemoveEmployeeId] = useState(null)
   const [pendingEmployeePosition, setPendingEmployeePosition] = useState({})
+  const [pendingMemberPosition, setPendingMemberPosition] = useState({})
   const [clubEditName, setClubEditName] = useState('')
   const [clubEditStatus, setClubEditStatus] = useState('')
   const [clubEditDescription, setClubEditDescription] = useState('')
@@ -1346,12 +1407,8 @@ const StudentServices = () => {
     }
     try {
       if (hasStagedLogo) {
-        await uploadStudentServicesClubProfileImage(cid, clubEditImage)
-        try {
-          await approveStudentServicesClubProfileImage(cid)
-        } catch {
-          /* no pending row (e.g. already applied via club-admin PATCH) */
-        }
+        // Same as Club Admin profile: persist logo immediately via club-admin PATCH (no pending/approve flow).
+        await patchClubAdminProfileLogoOnly(cid, clubEditImage)
         setClubEditImage(null)
         if (clubSettingsLogoInputRef.current) clubSettingsLogoInputRef.current.value = ''
       }
@@ -1406,14 +1463,26 @@ const StudentServices = () => {
   }
 
   const handleAddEmployee = async () => {
-    const userId = addEmployeeId.trim()
+    const idOrOrg = addEmployeeId.trim()
     const positionId = addEmployeePosition && addEmployeePosition !== 'Select position' ? String(addEmployeePosition) : null
-    if (!userId || !positionId || !selectedDirectoryClub) return
+    if (!idOrOrg || !positionId || !selectedDirectoryClub) return
+    const staticList = Array.isArray(EMPLOYEE_POSITIONS_LIST) ? EMPLOYEE_POSITIONS_LIST : []
+    const asNamed =
+      ssClubEmployeePositionOptions.length > 0
+        ? ssClubEmployeePositionOptions
+        : staticList.map((p) =>
+            typeof p === 'object' && p != null
+              ? { id: String(p.id), name: p.title }
+              : { id: String(p), name: String(p) }
+          )
+    const posMatch = asNamed.find((p) => p.id === positionId)
+    const positionTitle = posMatch ? posMatch.name : ''
+    const body = { positionId }
+    if (positionTitle) body.position = positionTitle
+    if (/^\d{9}$/.test(idOrOrg)) body.studentId = idOrOrg
+    else body.userId = idOrOrg
     try {
-      await createStudentServicesClubEmployee(selectedDirectoryClub.id, {
-        userId,
-        positionId,
-      })
+      await createStudentServicesClubEmployee(selectedDirectoryClub.id, body)
     } catch (e) {
       alert(e?.message || 'Could not add employee.')
       return
@@ -1422,9 +1491,20 @@ const StudentServices = () => {
     setAddEmployeeId('')
     setAddEmployeePosition('')
     try {
-      const rawE = await fetchStudentServicesClubEmployees(selectedDirectoryClub.id, { page: 1, limit: 200 })
-      const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
-      setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+      const [rawE, posRes] = await Promise.all([
+        fetchStudentServicesClubEmployees(selectedDirectoryClub.id, { page: 1, limit: 200 }),
+        fetchClubAdminPositions(selectedDirectoryClub.id).catch(() => ({ items: [] })),
+      ])
+      const eItems = clubRosterItemsFromResponse(rawE)
+      const posItems = clubAdminListItems(posRes)
+      const positionOptions = clubEmployeePositionDropdownFromApi(posItems)
+      setSsClubEmployeePositionOptions(positionOptions)
+      setClubEmployees(
+        eItems
+          .map(mapSsEmployeeRow)
+          .filter(Boolean)
+          .map((e) => applySsEmployeeResolvedPosition(e, positionOptions))
+      )
     } catch {
       /* ignore */
     }
@@ -1458,18 +1538,60 @@ const StudentServices = () => {
     })
   }
 
+  const handleMemberPositionChange = (memberId, newPosition, currentPosition) => {
+    const value = newPosition || ''
+    if (value === (currentPosition || '')) {
+      setPendingMemberPosition((prev) => {
+        const next = { ...prev }
+        delete next[memberId]
+        return next
+      })
+    } else {
+      setPendingMemberPosition((prev) => ({ ...prev, [memberId]: value }))
+    }
+  }
+
+  const handleConfirmMemberPosition = async (memberId) => {
+    const newPosition = pendingMemberPosition[memberId]
+    if (newPosition == null || !selectedDirectoryClub) return
+    try {
+      await patchStudentServicesClubMember(selectedDirectoryClub.id, String(memberId), { position: newPosition })
+    } catch (e) {
+      alert(e?.message || 'Could not update member position.')
+      return
+    }
+    setClubMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, position: newPosition } : m)))
+    setPendingMemberPosition((prev) => {
+      const next = { ...prev }
+      delete next[memberId]
+      return next
+    })
+  }
+
   const renderCommandClubDetail = (backLabel = 'Back to Master Directory') => {
     if (!selectedDirectoryClub) return null
     const MEMBER_POSITIONS = Array.isArray(MEMBER_POSITIONS_LIST) ? MEMBER_POSITIONS_LIST : ['Member']
-    const EMPLOYEE_POSITIONS = Array.isArray(EMPLOYEE_POSITIONS_LIST) ? EMPLOYEE_POSITIONS_LIST : ['President', 'Vice President', 'Secretary', 'Treasurer']
-    const posKey = (p) => (typeof p === 'object' && p != null ? p.id : p)
-    const posLabel = (p) => (typeof p === 'object' && p != null ? p.title : p)
-    const posId = (p) => (typeof p === 'object' && p != null ? String(p.id) : String(p))
+    const staticEmp = Array.isArray(EMPLOYEE_POSITIONS_LIST)
+      ? EMPLOYEE_POSITIONS_LIST
+      : [
+          { id: 1, title: 'President' },
+          { id: 2, title: 'Vice President' },
+          { id: 3, title: 'Secretary' },
+          { id: 4, title: 'Treasurer' },
+        ]
+    const employeePositionListForSelect =
+      ssClubEmployeePositionOptions.length > 0
+        ? ssClubEmployeePositionOptions
+        : staticEmp.map((p) =>
+            typeof p === 'object' && p != null
+              ? { id: String(p.id), name: p.title }
+              : { id: String(p), name: String(p) }
+          )
     const positionTitleById = (pid) => {
       const v = pid != null ? String(pid) : ''
       if (!v) return ''
-      const match = EMPLOYEE_POSITIONS.find((p) => posId(p) === v)
-      return match ? posLabel(match) : ''
+      const hit = employeePositionListForSelect.find((p) => p.id === v)
+      return hit ? hit.name : ''
     }
 
     return (
@@ -1532,37 +1654,50 @@ const StudentServices = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredClubMembers.map((m) => (
-                        <tr key={m.id}>
-                          <td>
-                            <div className="club-admin-table-user">
-                              <div className="club-admin-table-avatar" />
-                              <div>
-                                <div className="club-admin-table-name">{m.name} {m.surname}</div>
-                                <a href={`mailto:${m.email}`} className="club-admin-table-email">{m.email}</a>
+                      {filteredClubMembers.map((m) => {
+                        const currentPos = m.position ?? ''
+                        const draftPos = pendingMemberPosition[m.id] != null ? pendingMemberPosition[m.id] : currentPos
+                        const hasPendingMemberPos =
+                          pendingMemberPosition[m.id] != null && String(pendingMemberPosition[m.id]) !== String(currentPos)
+                        return (
+                          <tr key={m.id}>
+                            <td>
+                              <div className="club-admin-table-user">
+                                <div className="club-admin-table-avatar" />
+                                <div>
+                                  <div className="club-admin-table-name">{m.name} {m.surname}</div>
+                                  <a href={`mailto:${m.email}`} className="club-admin-table-email">{m.email}</a>
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td>{m.studentId ?? '—'}</td>
-                          <td>{m.age != null ? m.age : '—'}</td>
-                          <td>
-                            <select
-                              className="club-admin-select-inline"
-                              value={m.position ?? ''}
-                              onChange={(e) => setClubMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, position: e.target.value } : x)))}
-                              aria-label={`Position for ${m.name} ${m.surname}`}
-                            >
-                              {MEMBER_POSITIONS.map((pos) => (
-                                <option key={pos} value={pos}>{pos}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>{m.joinedDate ?? '—'}</td>
-                          <td>
-                            <button type="button" className="club-admin-btn-icon club-admin-btn-icon--reject" aria-label="Remove member" onClick={() => setRemoveMemberId(m.id)}><IconTrash /></button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td>{m.studentId ?? '—'}</td>
+                            <td>{m.age != null ? m.age : '—'}</td>
+                            <td>
+                              <select
+                                className="club-admin-select-inline"
+                                value={draftPos}
+                                onChange={(e) => handleMemberPositionChange(m.id, e.target.value, currentPos)}
+                                aria-label={`Position for ${m.name} ${m.surname}`}
+                              >
+                                {MEMBER_POSITIONS.map((pos) => (
+                                  <option key={pos} value={pos}>{pos}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>{m.joinedDate ?? '—'}</td>
+                            <td>
+                              <div className="club-admin-table-actions-wrap">
+                                {hasPendingMemberPos && (
+                                  <button type="button" className="club-admin-btn-confirm-position" onClick={() => handleConfirmMemberPosition(m.id)}>
+                                    Confirm
+                                  </button>
+                                )}
+                                <button type="button" className="club-admin-btn-icon club-admin-btn-icon--reject" aria-label="Remove member" onClick={() => setRemoveMemberId(m.id)}><IconTrash /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                   {filteredClubMembers.length === 0 && <p className="club-admin-table-empty">No members found.</p>}
@@ -1632,6 +1767,7 @@ const StudentServices = () => {
                         const draftPositionId = pendingEmployeePosition[e.id] != null ? String(pendingEmployeePosition[e.id]) : currentPositionId
                         const hasPendingChange = pendingEmployeePosition[e.id] != null && String(pendingEmployeePosition[e.id]) !== currentPositionId
                         const displayFallback = e.position && e.position !== '—' ? e.position : positionTitleById(currentPositionId)
+                        const idInList = !currentPositionId || employeePositionListForSelect.some((p) => p.id === currentPositionId)
                         return (
                           <tr key={e.id}>
                             <td>
@@ -1651,9 +1787,12 @@ const StudentServices = () => {
                                 onChange={(ev) => handleEmployeePositionChange(e.id, ev.target.value || null, currentPositionId)}
                                 aria-label={`Position for ${e.name} ${e.surname}`}
                               >
-                                <option value="">{displayFallback ? `— (currently: ${displayFallback})` : '—'}</option>
-                                {EMPLOYEE_POSITIONS.map((pos) => (
-                                  <option key={posKey(pos)} value={posId(pos)}>{posLabel(pos)}</option>
+                                <option value="">—</option>
+                                {!idInList && currentPositionId && displayFallback ? (
+                                  <option value={currentPositionId}>{displayFallback}</option>
+                                ) : null}
+                                {employeePositionListForSelect.map((pos) => (
+                                  <option key={pos.id} value={pos.id}>{pos.name}</option>
                                 ))}
                               </select>
                             </td>
@@ -1716,15 +1855,15 @@ const StudentServices = () => {
                     </div>
                     <div className="club-admin-popup-body">
                       <div className="club-admin-field">
-                        <label>User ID (GUID)</label>
-                        <input type="text" placeholder="e.g. b3c2d1e0-1111-2222-3333-444455556666" value={addEmployeeId} onChange={(e) => setAddEmployeeId(e.target.value)} />
+                        <label>User GUID or 9-digit student ID</label>
+                        <input type="text" placeholder="GUID or 9-digit organizational / student ID" value={addEmployeeId} onChange={(e) => setAddEmployeeId(e.target.value)} />
                       </div>
                       <div className="club-admin-field">
                         <label>Position</label>
                         <select value={addEmployeePosition} onChange={(e) => setAddEmployeePosition(e.target.value)}>
                           <option value="">Select position</option>
-                          {EMPLOYEE_POSITIONS.map((pos) => (
-                            <option key={posKey(pos)} value={posId(pos)}>{posLabel(pos)}</option>
+                          {employeePositionListForSelect.map((pos) => (
+                            <option key={pos.id} value={pos.id}>{pos.name}</option>
                           ))}
                         </select>
                       </div>
@@ -1766,7 +1905,7 @@ const StudentServices = () => {
                 <div className="club-admin-field">
                   <label>Club logo</label>
                   <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748b' }}>
-                    Choose an image file, then click <strong>Save changes</strong> to upload and publish it (same as the club API).
+                    Choose an image file, then click <strong>Save changes</strong>. The logo is saved the same way as Club Admin (direct profile update, no separate approval).
                   </p>
                   <input
                     ref={clubSettingsLogoInputRef}
@@ -2232,72 +2371,118 @@ const StudentServices = () => {
   }, [directorySelectedClubId, directoryClubs])
 
   useEffect(() => {
-    if (!directorySelectedClubId) return
+    if (!directorySelectedClubId) {
+      setClubMembers([])
+      setClubEmployees([])
+      setSsClubEmployeePositionOptions([])
+      setPendingEmployeePosition({})
+      setPendingMemberPosition({})
+      setClubMemberSearch('')
+      setClubEmployeeSearch('')
+      setClubRosterLoadState({ loading: false, error: '' })
+      return
+    }
     let cancelled = false
     const clubId = directorySelectedClubId
+    setClubMemberSearch('')
+    setClubEmployeeSearch('')
     ;(async () => {
       setClubRosterLoadState({ loading: true, error: '' })
+      setPendingEmployeePosition({})
+      setPendingMemberPosition({})
+      setClubMembers([])
+      setClubEmployees([])
       try {
-        // Fetch ALL members (paged API). Employees endpoint is typically unpaged.
         const fetchAllMembers = async () => {
           const all = []
           const limit = 200
           for (let page = 1; page <= 20; page += 1) {
             const raw = await fetchStudentServicesClubMembers(clubId, { page, limit })
-            const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : []
+            const items = clubRosterItemsFromResponse(raw)
             all.push(...items)
             if (items.length < limit) break
           }
           return all
         }
 
-        const [allMembersRaw, rawE] = await Promise.all([
+        const [allMembersRaw, rawE, posRes] = await Promise.all([
           fetchAllMembers(),
           fetchStudentServicesClubEmployees(clubId, { page: 1, limit: 200 }),
+          fetchClubAdminPositions(clubId).catch(() => ({ items: [] })),
         ])
         if (cancelled) return
-        const eItems = Array.isArray(rawE?.items) ? rawE.items : Array.isArray(rawE) ? rawE : []
+        const posItems = clubAdminListItems(posRes)
+        const positionOptions = clubEmployeePositionDropdownFromApi(posItems)
+        if (!cancelled) setSsClubEmployeePositionOptions(positionOptions)
+        const eItems = clubRosterItemsFromResponse(rawE)
         const baseMembers = (Array.isArray(allMembersRaw) ? allMembersRaw : []).map(mapSsMemberRow).filter(Boolean)
+        const baseEmployees = eItems
+          .map(mapSsEmployeeRow)
+          .filter(Boolean)
+          .map((e) => applySsEmployeeResolvedPosition(e, positionOptions))
         setClubMembers(baseMembers)
-        setClubEmployees(eItems.map(mapSsEmployeeRow).filter(Boolean))
+        setClubEmployees(baseEmployees)
         setClubRosterLoadState({ loading: false, error: '' })
 
-        // Enrich members via auth microservice (name/email).
-        const uniqueUserIds = Array.from(new Set(baseMembers.map((m) => m.userId).filter(Boolean)))
-        if (uniqueUserIds.length) {
-          const profiles = await Promise.all(
-            uniqueUserIds.map((uid) => fetchAuthUserForClubRoster(uid).catch(() => null))
-          )
-          const byId = new Map()
-          uniqueUserIds.forEach((uid, i) => {
-            const p = profiles[i]
-            if (p && typeof p === 'object') byId.set(uid, p)
-          })
-          if (!cancelled) {
-            setClubMembers((prev) =>
-              prev.map((m) => {
-                const p = m.userId ? byId.get(m.userId) : null
-                if (!p) return m
+        const enrichPersonRows = (rows, setter) => {
+          const uniqueKeys = Array.from(new Set(rows.map((r) => r.userId).filter(Boolean)))
+          return Promise.all(uniqueKeys.map((uid) => fetchAuthUserForClubRoster(uid).catch(() => null))).then((profiles) => {
+            const byId = new Map()
+            uniqueKeys.forEach((uid, i) => {
+              const p = profiles[i]
+              if (p && typeof p === 'object') byId.set(uid, p)
+            })
+            if (cancelled) return
+            setter((prev) => {
+              if (!Array.isArray(prev)) return prev
+              return prev.map((row) => {
+                const p = row.userId ? byId.get(row.userId) : null
+                const rawRow = row.raw
+                if (!p) {
+                  const member = rawRow?.member ?? rawRow?.Member
+                  const fromNested =
+                    (member && typeof member === 'object' && displayNameFromAuthUserDto(member)) || ''
+                  const fromRaw =
+                    fromNested ||
+                    displayNameFromAuthUserDto(rawRow) ||
+                    String(rawRow?.name ?? rawRow?.Name ?? rawRow?.firstName ?? rawRow?.FirstName ?? '').trim() ||
+                    `${row.name} ${row.surname}`.trim()
+                  if (!fromRaw || fromRaw === '—') return row
+                  const parts = fromRaw.split(/\s+/).filter(Boolean)
+                  return {
+                    ...row,
+                    name: parts[0] || row.name,
+                    surname: parts.slice(1).join(' ') || row.surname,
+                    email: String(rawRow?.email ?? member?.email ?? member?.Email ?? rawRow?.Email ?? '').trim() || row.email,
+                  }
+                }
                 const first = String(p.firstName ?? p.FirstName ?? '').trim()
                 const last = String(p.lastName ?? p.LastName ?? '').trim()
                 const full = displayNameFromAuthUserDto(p)
                 if (first || last) {
                   return {
-                    ...m,
-                    name: first || m.name,
+                    ...row,
+                    name: first || row.name,
                     surname: last,
-                    email: String(p.email ?? p.Email ?? '').trim() || m.email,
+                    email: String(p.email ?? p.Email ?? '').trim() || row.email,
                   }
                 }
                 return {
-                  ...m,
-                  name: full || m.name,
+                  ...row,
+                  name: full || row.name,
                   surname: '',
-                  email: String(p.email ?? p.Email ?? '').trim() || m.email,
+                  email: String(p.email ?? p.Email ?? '').trim() || row.email,
                 }
               })
-            )
-          }
+            })
+          })
+        }
+
+        try {
+          await enrichPersonRows(baseMembers, setClubMembers)
+          await enrichPersonRows(baseEmployees, setClubEmployees)
+        } catch {
+          /* Auth enrichment is best-effort; keep roster from club API. */
         }
       } catch {
         if (!cancelled) {
@@ -4043,4 +4228,3 @@ const StudentServices = () => {
 }
 
 export default StudentServices
-

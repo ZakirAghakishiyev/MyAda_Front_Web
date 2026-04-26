@@ -53,6 +53,22 @@ function unwrapApiResponse(data) {
   return data
 }
 
+/** Items from club-admin list payloads (bare array, `{ items|Items }`, or nested `result|Result` / `data|Data`). */
+export function clubAdminListItems(data) {
+  if (data == null) return []
+  let cur = data
+  for (let i = 0; i < 4; i += 1) {
+    if (Array.isArray(cur)) return cur
+    if (cur == null || typeof cur !== 'object') return []
+    const items = cur.items ?? cur.Items
+    if (Array.isArray(items)) return items
+    const inner = cur.result ?? cur.Result ?? cur.data ?? cur.Data
+    if (inner === undefined) return []
+    cur = inner
+  }
+  return []
+}
+
 function usersScopedPath(suffix) {
   const userId = getJwtUserId()
   if (!userId) {
@@ -783,6 +799,58 @@ export function patchClubAdminProfile(clubId, formData) {
   return clubAuthJson(clubAdminPath(clubId, 'profile'), { method: 'PATCH', body: formData })
 }
 
+/**
+ * @see CLUB_API_DOC: GET /api/v1/club-admin/{clubId}/files — list club resource files (`items` in body).
+ */
+export function fetchClubAdminFiles(clubId) {
+  return clubAuthJson(clubAdminPath(clubId, 'files'), { method: 'GET' })
+}
+
+/**
+ * @see CLUB_API_DOC: POST multipart with `file` (required) and `title` (optional).
+ * @param {string|number} clubId
+ * @param {File} file
+ * @param {string} [title]
+ */
+export function postClubAdminFile(clubId, file, title) {
+  const fd = new FormData()
+  fd.append('file', file, file.name)
+  const t = title != null ? String(title).trim() : ''
+  if (t) fd.append('title', t)
+  return clubAuthJson(clubAdminPath(clubId, 'files'), { method: 'POST', body: fd })
+}
+
+/**
+ * @see CLUB_API_DOC: PATCH — `title` and/or `file` optional; at least one should be set.
+ * @param {FormData} formData
+ */
+export function patchClubAdminFile(clubId, fileId, formData) {
+  return clubAuthJson(
+    clubAdminPath(clubId, `files/${encodeURIComponent(String(fileId))}`),
+    { method: 'PATCH', body: formData }
+  )
+}
+
+export function deleteClubAdminFile(clubId, fileId) {
+  return clubAuthDeleteExpectOk(
+    clubAdminPath(clubId, `files/${encodeURIComponent(String(fileId))}`)
+  )
+}
+
+/** Logo only — always PATCH alone so the gateway never applies the same file to hero + profile. */
+export function patchClubAdminProfileLogoOnly(clubId, file) {
+  const fd = new FormData()
+  fd.append('logoFile', file)
+  return patchClubAdminProfile(clubId, fd)
+}
+
+/** Background / hero only — separate multipart from {@link patchClubAdminProfileLogoOnly}. */
+export function patchClubAdminProfileBackgroundOnly(clubId, file) {
+  const fd = new FormData()
+  fd.append('backgroundFile', file)
+  return patchClubAdminProfile(clubId, fd)
+}
+
 export function postClubAdminAnnouncement(clubId, body) {
   return clubAuthJson(clubAdminPath(clubId, 'announcements'), {
     method: 'POST',
@@ -1096,12 +1164,16 @@ export function fetchStudentServicesClubMembers(clubId, params = {}) {
   q.set('limit', String(params.limit ?? 50))
   const enc = encodeURIComponent(clubId)
   const qs = `?${q}`
-  // Preferred: student-services directory endpoint. Fallback: club-admin members (commonly implemented first).
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/${enc}/members${qs}`,
-    `club-admin/${enc}/members${qs}`,
-    { method: 'GET' }
-  )
+  // Student-services roster endpoints may be deployed as empty stubs; use club-admin data in that case.
+  return (async () => {
+    try {
+      const primary = await clubAuthJson(`student-services/clubs/${enc}/members${qs}`, { method: 'GET' })
+      if (clubAdminListItems(primary).length > 0) return primary
+    } catch (e) {
+      if (e?.status !== 404) throw e
+    }
+    return clubAuthJson(`club-admin/${enc}/members${qs}`, { method: 'GET' })
+  })()
 }
 
 export function patchStudentServicesClubMember(clubId, memberId, body) {
@@ -1124,12 +1196,16 @@ export function fetchStudentServicesClubEmployees(clubId, params = {}) {
   q.set('limit', String(params.limit ?? 50))
   const enc = encodeURIComponent(clubId)
   const qs = `?${q}`
-  // Preferred: student-services directory endpoint. Fallback: club-admin employees (commonly implemented first).
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/${enc}/employees${qs}`,
-    `club-admin/${enc}/employees${qs}`,
-    { method: 'GET' }
-  )
+  // Student-services roster endpoints may be deployed as empty stubs; use club-admin data in that case.
+  return (async () => {
+    try {
+      const primary = await clubAuthJson(`student-services/clubs/${enc}/employees${qs}`, { method: 'GET' })
+      if (clubAdminListItems(primary).length > 0) return primary
+    } catch (e) {
+      if (e?.status !== 404) throw e
+    }
+    return clubAuthJson(`club-admin/${enc}/employees${qs}`, { method: 'GET' })
+  })()
 }
 
 export function createStudentServicesClubEmployee(clubId, body) {

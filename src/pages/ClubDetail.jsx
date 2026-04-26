@@ -410,8 +410,13 @@ const ClubDetail = () => {
   }, [club])
 
   const clubResources = useMemo(() => {
-    const r = club?.resources
-    return Array.isArray(r) ? r : []
+    if (!club) return []
+    const r = club.resources
+    if (Array.isArray(r) && r.length) return r
+    // Fallback when the public club DTO exposes `documents` / alternate casing but mapper was built from a slimmer object.
+    const fromRaw = mapClubFromApi(club.raw)
+    if (Array.isArray(fromRaw?.resources) && fromRaw.resources.length) return fromRaw.resources
+    return []
   }, [club])
 
   if (loadState.loading) {
@@ -450,7 +455,9 @@ const ClubDetail = () => {
       <section className="club-detail-hero">
         <div
           className="club-detail-hero-banner"
-          style={{ backgroundImage: club.image ? `url(${club.image})` : undefined }}
+          style={{
+            backgroundImage: (club.bannerImage || club.image) ? `url(${club.bannerImage || club.image})` : undefined,
+          }}
         />
         <div className="club-detail-hero-card">
           <div className="club-detail-hero-card-logo" style={{ backgroundImage: club.image ? `url(${club.image})` : undefined }} />
@@ -522,13 +529,23 @@ const ClubDetail = () => {
                 <div className="club-detail-activities-grid">
                   {upcomingEvents.slice(0, 2).map((ev) => (
                     <Link key={ev.id} to={`/clubs/events/${ev.id}`} className="club-detail-activity-card">
-                      <div className="club-detail-activity-img" style={{ backgroundImage: club.image ? `url(${club.image})` : undefined }} />
+                      <div
+                        className="club-detail-activity-img"
+                        style={{
+                          backgroundImage: (ev.image || club.image) ? `url(${ev.image || club.image})` : undefined,
+                        }}
+                      />
                       <span className="club-detail-activity-title">{ev.title}</span>
                     </Link>
                   ))}
                   {upcomingEvents.length < 2 && (
                     <div className="club-detail-activity-card club-detail-activity-card--placeholder">
-                      <div className="club-detail-activity-img" style={{ backgroundImage: club.image ? `url(${club.image})` : undefined }} />
+                      <div
+                        className="club-detail-activity-img"
+                        style={{
+                          backgroundImage: club.bannerImage || club.image ? `url(${club.bannerImage || club.image})` : undefined,
+                        }}
+                      />
                       <span className="club-detail-activity-title">More activities coming soon</span>
                     </div>
                   )}
@@ -595,18 +612,31 @@ const ClubDetail = () => {
                 <h2 className="club-detail-section-title">Resources and documents</h2>
                 {clubResources.length > 0 ? (
                   <ul className="club-detail-announcements-list">
-                    {clubResources.map((doc) => (
-                      <li key={doc.id} className="club-detail-announcement-item">
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="club-detail-resource-link"
+                    {clubResources.map((doc, i) => {
+                      const href = (doc && typeof doc === 'object' ? doc.url ?? doc.href : null) || ''
+                      const label =
+                        (doc && typeof doc === 'object' ? doc.title ?? doc.name : null) ||
+                        (typeof doc === 'string' ? 'Resource' : 'Resource')
+                      return (
+                        <li
+                          key={doc && typeof doc === 'object' && doc.id != null ? `res-${doc.id}` : `res-${i}`}
+                          className="club-detail-announcement-item"
                         >
-                          {doc.title}
-                        </a>
-                      </li>
-                    ))}
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="club-detail-resource-link"
+                            >
+                              {label}
+                            </a>
+                          ) : (
+                            <span className="club-detail-resource-link">{label}</span>
+                          )}
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : (
                   <p className="club-detail-placeholder">No documents shared yet.</p>

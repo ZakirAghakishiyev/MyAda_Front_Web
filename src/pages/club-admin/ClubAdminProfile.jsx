@@ -1,11 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  clubAdminListItems,
+  deleteClubAdminFile,
   fetchClub,
+  fetchClubAdminFiles,
+  patchClubAdminFile,
   patchClubAdminProfile,
-  uploadStudentServicesClubProfileImage,
-  uploadStudentServicesClubBackgroundImage,
+  patchClubAdminProfileLogoOnly,
+  patchClubAdminProfileBackgroundOnly,
+  postClubAdminFile,
 } from '../../api/clubApi'
-import { mapClubFromApi } from '../../api/clubMappers'
+import { mapClubFileItemFromApi, mapClubFromApi } from '../../api/clubMappers'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import { FOCUS_ICON_OPTIONS, ClubFocusAreaIcon } from '../../components/club/ClubFocusAreaIcon'
 import './ClubAdmin.css'
@@ -102,7 +107,8 @@ export default function ClubAdminProfile() {
   const [bgPreview, setBgPreview] = useState('')
   const [focusAreas, setFocusAreas] = useState([])
   const [iconPickerFor, setIconPickerFor] = useState(null)
-  const [savingProfile, setSavingProfile] = useState(false)
+  const [savingLogo, setSavingLogo] = useState(false)
+  const [savingBackground, setSavingBackground] = useState(false)
   const [savingFocusAreas, setSavingFocusAreas] = useState(false)
   const [savingContact, setSavingContact] = useState(false)
   const [savingResources, setSavingResources] = useState(false)
@@ -112,29 +118,79 @@ export default function ClubAdminProfile() {
   const bgInputRef = useRef(null)
   /** JSON string of normalized focus list last synced from server (omit `focusAreasJson` on PATCH when unchanged). */
   const lastServerComparableFocusRef = useRef('')
+  /** File item ids from last successful load of {@link fetchClubAdminFiles} (or from mapped club `resources` fallback). */
+  const fileIdsOnLoadRef = useRef(new Set())
+  /** @type {React.MutableRefObject<Map<string, { title: string, url: string }>>} */
+  const rowMetaByIdRef = useRef(new Map())
+
+  const loadClubAndFiles = useCallback(async () => {
+    if (!clubId) return null
+    const [rawClub, filesRes] = await Promise.all([
+      fetchClub(clubId),
+      fetchClubAdminFiles(clubId).catch(() => null),
+    ])
+    const mapped = mapClubFromApi(rawClub)
+    if (mapped) setActiveClub(mapped)
+    const fromFiles = filesRes
+      ? clubAdminListItems(filesRes).map(mapClubFileItemFromApi).filter(Boolean)
+      : []
+    if (fromFiles.length) {
+      setResourceRows(
+        fromFiles.map((r, i) => ({
+          rowId: `srv-f-${r.id || i}`,
+          id: r.id,
+          title: r.title,
+          url: r.url,
+          file: null,
+          voidFileId: null,
+        }))
+      )
+      const ids = new Set(fromFiles.map((x) => x.id).filter(Boolean))
+      fileIdsOnLoadRef.current = ids
+      const m = new Map()
+      for (const r of fromFiles) {
+        if (r.id) m.set(String(r.id), { title: r.title, url: r.url })
+      }
+      rowMetaByIdRef.current = m
+      return mapped
+    }
+    if (mapped) {
+      const list = Array.isArray(mapped.resources) ? mapped.resources : []
+      setResourceRows(
+        list.map((r, i) => ({
+          rowId: `srv-c-${String(r.id ?? i)}`,
+          id: r.id != null ? String(r.id) : '',
+          title: r.title ? String(r.title) : '',
+          url: r.url ? String(r.url) : '',
+          file: null,
+          voidFileId: null,
+        }))
+      )
+      fileIdsOnLoadRef.current = new Set(list.map((r) => r.id).filter(Boolean))
+      const m = new Map()
+      for (const r of list) {
+        if (r.id) m.set(String(r.id), { title: r.title, url: r.url })
+      }
+      rowMetaByIdRef.current = m
+      return mapped
+    }
+    setResourceRows([])
+    fileIdsOnLoadRef.current = new Set()
+    rowMetaByIdRef.current = new Map()
+    return null
+  }, [clubId])
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const raw = await fetchClub(clubId)
-        if (cancelled) return
-        const mapped = mapClubFromApi(raw)
-        if (mapped) setActiveClub(mapped)
+        await loadClubAndFiles()
       } catch {
         if (!cancelled) setActiveClub(null)
       }
     })()
     return () => { cancelled = true }
-  }, [clubId])
-
-  const resourcesSig = useMemo(() => {
-    if (!activeClub || String(activeClub.id) !== String(clubId)) return `${clubId}:`
-    const body = JSON.stringify(
-      (activeClub.resources || []).map((r) => [String(r.id ?? ''), r.url || '', r.title || ''])
-    )
-    return `${clubId}:${body}`
-  }, [activeClub, clubId])
+  }, [loadClubAndFiles])
 
   useEffect(() => {
     setProfile(initialProfile)
@@ -151,20 +207,6 @@ export default function ClubAdminProfile() {
     setBgPreview('')
     setIconPickerFor(null)
   }, [initialProfile])
-
-  useEffect(() => {
-    if (!activeClub || String(activeClub.id) !== String(clubId)) return
-    setResourceRows(
-      (activeClub.resources || []).map((r, i) => ({
-        rowId: `srv-${String(r.id ?? i)}-${r.url || ''}`,
-        id: r.id != null ? String(r.id) : '',
-        title: r.title ? String(r.title) : '',
-        url: r.url ? String(r.url) : '',
-        file: null,
-      }))
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `resourcesSig` already tracks server resources; avoid re-running when unrelated `activeClub` fields change
-  }, [resourcesSig, clubId])
 
   useEffect(() => {
     if (!clubId || !activeClub || String(activeClub.id) !== String(clubId)) return
@@ -193,9 +235,7 @@ export default function ClubAdminProfile() {
   const reloadClub = async () => {
     if (!clubId) return
     try {
-      const raw = await fetchClub(clubId)
-      const mapped = mapClubFromApi(raw)
-      if (mapped) setActiveClub(mapped)
+      await loadClubAndFiles()
     } catch {
       /* ignore */
     }
@@ -234,7 +274,7 @@ export default function ClubAdminProfile() {
     if (resourceRows.length >= 50) return
     setResourceRows((prev) => [
       ...prev,
-      { rowId: `tmp-${Date.now()}`, id: '', title: '', url: '', file: null },
+      { rowId: `tmp-${Date.now()}`, id: '', title: '', url: '', file: null, voidFileId: null },
     ])
   }
 
@@ -250,34 +290,58 @@ export default function ClubAdminProfile() {
     if (!clubId) return
     const rows = resourceRows.slice(0, 50)
     const keepPayload = rows
-      .filter((r) => !r.file && (r.url || '').trim())
+      .filter((r) => !r.file && (r.url || '').trim() && !r.voidFileId)
+      .filter((r) => !r.id)
       .map((r) => {
         const url = String(r.url || '').trim()
         const title = String(r.title || '').trim()
         const out = { url }
         if (title) out.title = title
-        const id = String(r.id || '').trim()
-        if (id && !String(r.rowId).startsWith('tmp-')) out.id = id
         return out
       })
-    const newFileRows = rows
-      .filter((r) => r.file instanceof File)
-      .map((r) => ({ title: String(r.title || '').trim(), file: r.file }))
+    const presentFileIds = new Set(rows.map((r) => String(r.id || '').trim()).filter(Boolean))
+    const toDelete = new Set(
+      [...fileIdsOnLoadRef.current].filter((id) => id && !presentFileIds.has(String(id)))
+    )
+    for (const r of rows) {
+      if (r.voidFileId) toDelete.add(String(r.voidFileId))
+    }
+
     setSavingResources(true)
     try {
-      const formData = new FormData()
-      // Existing resources are kept via JSON; new ones are uploaded as files.
-      // Backend is expected to attach URLs for uploaded files and return them on next GET.
-      formData.append('resourcesJson', JSON.stringify(keepPayload))
-      if (newFileRows.length) {
-        const meta = []
-        for (const r of newFileRows) {
-          formData.append('resourceFiles', r.file)
-          meta.push({ title: r.title })
-        }
-        formData.append('resourceFilesMetaJson', JSON.stringify(meta))
+      for (const fileId of toDelete) {
+        if (!fileId) continue
+        await deleteClubAdminFile(clubId, fileId)
       }
-      await patchClubAdminProfile(clubId, formData)
+      for (const r of rows) {
+        if (r.voidFileId) continue
+        if (r.file instanceof File) {
+          if (r.id) {
+            const fd = new FormData()
+            fd.append('file', r.file, r.file.name)
+            const t = String(r.title || '').trim()
+            if (t) fd.append('title', t)
+            await patchClubAdminFile(clubId, r.id, fd)
+          } else {
+            await postClubAdminFile(clubId, r.file, String(r.title || '').trim())
+          }
+        }
+      }
+      for (const r of rows) {
+        if (r.voidFileId || (r.file instanceof File) || !r.id) continue
+        const prev = rowMetaByIdRef.current.get(String(r.id))
+        const title = String(r.title || '').trim()
+        if (prev && title !== (prev.title || '').trim()) {
+          const fd = new FormData()
+          fd.append('title', title)
+          await patchClubAdminFile(clubId, r.id, fd)
+        }
+      }
+      if (keepPayload.length) {
+        const fd = new FormData()
+        fd.append('resourcesJson', JSON.stringify(keepPayload))
+        await patchClubAdminProfile(clubId, fd)
+      }
       await reloadClub()
       alert('Resources saved.')
     } catch (e) {
@@ -360,73 +424,45 @@ export default function ClubAdminProfile() {
     }
   }
 
-  const askForChange = async () => {
-    if (!activeClub) return
-    const socialPatch = buildSocialLinksMergePatch(contactBaseline, profile)
-    const emailNext = (profile.email || '').trim()
-    const emailBase = (contactBaseline.email || '').trim()
-    const emailChanged = emailNext !== emailBase
-    const focusPayload = normalizedFocusAreasPayload()
-    const focusSerialized = JSON.stringify(focusPayload)
-    const sentFocus = focusSerialized !== lastServerComparableFocusRef.current
-    const hasPart =
-      Boolean(logoFile) ||
-      Boolean(bgFile) ||
-      Object.keys(socialPatch).length > 0 ||
-      emailChanged ||
-      sentFocus
-    if (!hasPart) {
-      alert('Nothing to submit. Add a logo, background image, update contact/links, or change key focus areas.')
+  const saveClubLogo = async () => {
+    if (!activeClub || !clubId) return
+    if (!logoFile) {
+      alert('Choose a logo file first.')
       return
     }
-    setSavingProfile(true)
+    setSavingLogo(true)
     try {
-      if (logoFile) {
-        try {
-          await uploadStudentServicesClubProfileImage(clubId, logoFile)
-        } catch (e) {
-          // Student Services route is admin-only on some gateways; fall back to direct club-admin persist.
-          if (e?.status === 403 || e?.status === 404) {
-            const logoFd = new FormData()
-            logoFd.append('logoFile', logoFile)
-            await patchClubAdminProfile(clubId, logoFd)
-          } else {
-            throw e
-          }
-        }
-      }
-      if (bgFile) {
-        await uploadStudentServicesClubBackgroundImage(clubId, bgFile)
-      }
-      const patchFd = new FormData()
-      if (Object.keys(socialPatch).length > 0) {
-        patchFd.append('socialLinks', JSON.stringify(socialPatch))
-      }
-      if (emailChanged) {
-        patchFd.append('email', emailNext)
-      }
-      if (sentFocus) {
-        patchFd.append('focusAreasJson', focusSerialized)
-      }
-      const hasTextPatch =
-        Object.keys(socialPatch).length > 0 || emailChanged || sentFocus
-      if (hasTextPatch) {
-        await patchClubAdminProfile(clubId, patchFd)
-      }
-      const parts = []
-      if (logoFile) parts.push('logo sent to Student Services for review')
-      if (bgFile) parts.push('background submitted')
-      if (hasTextPatch) parts.push('profile text saved')
-      alert(parts.length ? `${parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('. ')}.` : 'Done.')
+      await patchClubAdminProfileLogoOnly(clubId, logoFile)
       setLogoFile(null)
       setLogoPreview('')
+      if (logoInputRef.current) logoInputRef.current.value = ''
+      await reloadClub()
+      alert('Logo saved.')
+    } catch (e) {
+      alert(e?.message || 'Could not save logo.')
+    } finally {
+      setSavingLogo(false)
+    }
+  }
+
+  const saveClubBackground = async () => {
+    if (!activeClub || !clubId) return
+    if (!bgFile) {
+      alert('Choose a background image first.')
+      return
+    }
+    setSavingBackground(true)
+    try {
+      await patchClubAdminProfileBackgroundOnly(clubId, bgFile)
       setBgFile(null)
       setBgPreview('')
+      if (bgInputRef.current) bgInputRef.current.value = ''
       await reloadClub()
+      alert('Background image saved.')
     } catch (e) {
-      alert(e?.message || 'Could not submit profile changes.')
+      alert(e?.message || 'Could not save background image.')
     } finally {
-      setSavingProfile(false)
+      setSavingBackground(false)
     }
   }
 
@@ -508,7 +544,8 @@ export default function ClubAdminProfile() {
             <h2 className="club-admin-card-title">Resources &amp; documents</h2>
           </div>
           <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: 14 }}>
-            Upload up to 50 documents. Saving replaces the whole list (remove all rows and save to clear).
+            Add up to 50 documents. New uploads and replacements go through file upload; use Save to apply. Remove
+            a row to delete that file, or &quot;Remove file&quot; then save to clear an attachment.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {resourceRows.map((row) => (
@@ -532,8 +569,13 @@ export default function ClubAdminProfile() {
                       <button
                         type="button"
                         className="club-admin-btn-secondary"
-                        onClick={() => updateResourceRow(row.rowId, { url: '', id: '' })}
-                        title="Remove this existing document"
+                        onClick={() => updateResourceRow(row.rowId, {
+                          url: '',
+                          file: null,
+                          id: '',
+                          voidFileId: row.id || null,
+                        })}
+                        title="Remove this document from the club; save to apply"
                       >
                         Remove file
                       </button>
@@ -664,8 +706,8 @@ export default function ClubAdminProfile() {
             <h2 className="club-admin-card-title">Branding</h2>
           </div>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
-            Club logo is uploaded to Student Services as a pending change until an administrator approves it.
-            Background images use the same Student Services flow when available; otherwise they are saved via club admin.
+            Save the logo and the wide background separately (each upload uses its own request so they are not mixed up).
+            The public club page uses the logo in the card and the background across the hero banner.
           </p>
 
           <div className="club-admin-profile-branding-grid">
@@ -692,6 +734,16 @@ export default function ClubAdminProfile() {
                     <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>PNG/JPG/SVG • recommended square</div>
                     {logoFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{logoFile.name}</div>}
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="club-admin-btn-primary"
+                      onClick={() => void saveClubLogo()}
+                      disabled={!logoFile || savingLogo}
+                    >
+                      {savingLogo ? 'Saving…' : 'Save logo'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -700,14 +752,20 @@ export default function ClubAdminProfile() {
               <label>Background image</label>
               <div
                 className="club-admin-profile-bg-preview"
-                style={{ backgroundImage: bgPreview ? `url(${bgPreview})` : undefined }}
+                style={{
+                  backgroundImage: (bgPreview || activeClub.bannerImage)
+                    ? `url(${bgPreview || activeClub.bannerImage})`
+                    : undefined,
+                }}
                 aria-label="Background preview"
                 onClick={pickBackground}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') pickBackground() }}
               >
-                {!bgPreview && <div className="club-admin-profile-bg-placeholder">Click to upload background</div>}
+                {!bgPreview && !activeClub.bannerImage && (
+                  <div className="club-admin-profile-bg-placeholder">Click to upload background</div>
+                )}
               </div>
               <input
                 ref={bgInputRef}
@@ -717,13 +775,17 @@ export default function ClubAdminProfile() {
                 style={{ display: 'none' }}
               />
               {bgFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{bgFile.name}</div>}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="club-admin-btn-primary"
+                  onClick={() => void saveClubBackground()}
+                  disabled={!bgFile || savingBackground}
+                >
+                  {savingBackground ? 'Saving…' : 'Save background'}
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-            <button type="button" className="club-admin-btn-primary" onClick={askForChange} disabled={savingProfile}>
-              {savingProfile ? 'Submitting…' : 'Ask for Change'}
-            </button>
           </div>
         </div>
       </div>

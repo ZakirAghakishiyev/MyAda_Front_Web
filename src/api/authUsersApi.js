@@ -93,7 +93,19 @@ export function displayNameFromAuthUserDto(user) {
   const un = t(user.userName) || t(user.UserName)
   if (un && !un.includes('@')) return un
   if (un) return un
-  const nested = user.user ?? user.User ?? user.student ?? user.Student ?? user.member ?? user.Member
+  const nested =
+    user.user ??
+    user.User ??
+    user.student ??
+    user.Student ??
+    user.member ??
+    user.Member ??
+    user.applicationUser ??
+    user.ApplicationUser ??
+    user.appUser ??
+    user.AppUser ??
+    user.person ??
+    user.Person
   if (nested && typeof nested === 'object' && nested !== user) {
     const inner = displayNameFromAuthUserDto(nested)
     if (inner) return inner
@@ -106,24 +118,167 @@ export function displayNameFromAuthUserDto(user) {
  * @param {Record<string, unknown> | null | undefined} row
  * @returns {{ name: string, surname: string, email: string }}
  */
+/** Single-string name fields often present on club roster DTOs (club service + EF projections). */
+const ROSTER_SINGLE_NAME_KEYS = [
+  'fullName',
+  'FullName',
+  'displayName',
+  'DisplayName',
+  'studentName',
+  'StudentName',
+  'memberName',
+  'MemberName',
+  'applicantName',
+  'ApplicantName',
+  'legalName',
+  'LegalName',
+  'preferredName',
+  'PreferredName',
+  'personName',
+  'PersonName',
+  'studentFullName',
+  'StudentFullName',
+  'employeeName',
+  'EmployeeName',
+  'userFullName',
+  'UserFullName',
+]
+
+const ROSTER_NESTED_PERSON_KEYS = [
+  'user',
+  'User',
+  'student',
+  'Student',
+  'applicant',
+  'Applicant',
+  'account',
+  'Account',
+  'applicationUser',
+  'ApplicationUser',
+  'appUser',
+  'AppUser',
+  'person',
+  'Person',
+  'profile',
+  'Profile',
+  'member',
+  'Member',
+  'membership',
+  'Membership',
+  'clubMember',
+  'ClubMember',
+  'clubMembership',
+  'ClubMembership',
+  'employee',
+  'Employee',
+  'clubEmployee',
+  'ClubEmployee',
+]
+
+function emailFromRosterObject(obj) {
+  if (!obj || typeof obj !== 'object') return ''
+  const direct = String(obj.email ?? obj.Email ?? '').trim()
+  if (direct) return direct
+  const userName = String(obj.userName ?? obj.UserName ?? obj.username ?? obj.Username ?? '').trim()
+  return userName.includes('@') ? userName : ''
+}
+
+function personNamePartsFromNestedRosterObject(obj, fallbackEmail = '', depth = 0, seen = new Set()) {
+  if (!obj || typeof obj !== 'object' || seen.has(obj) || depth > 4) return null
+  seen.add(obj)
+  const email = emailFromRosterObject(obj) || fallbackEmail
+  const first = String(obj.firstName ?? obj.FirstName ?? obj.givenName ?? obj.GivenName ?? '').trim()
+  const last = String(
+    obj.lastName ?? obj.LastName ?? obj.surname ?? obj.Surname ?? obj.familyName ?? obj.FamilyName ?? ''
+  ).trim()
+  if (first || last) return { name: first || '—', surname: last, email }
+  for (const k of ROSTER_SINGLE_NAME_KEYS) {
+    const split = splitDisplayIntoParts(obj[k])
+    if (split) return { ...split, email }
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (!value || typeof value !== 'object') continue
+    const lower = key.toLowerCase()
+    if (lower.includes('position') || lower.includes('role') || lower.includes('department') || lower.includes('category')) continue
+    const hit = personNamePartsFromNestedRosterObject(value, email, depth + 1, seen)
+    if (hit) return hit
+  }
+  return null
+}
+
+function splitDisplayIntoParts(display) {
+  const s = String(display ?? '').trim()
+  if (!s || s === '—') return null
+  const parts = s.split(/\s+/).filter(Boolean)
+  if (!parts.length) return null
+  return { name: parts[0] || '—', surname: parts.slice(1).join(' ') }
+}
+
+/**
+ * First-line name parts from a club roster / employee list DTO.
+ * Per AUTH_API_DOC, non-admin callers cannot load other users via `/api/auth/users/{id}` — do not rely on auth for names.
+ * Parse club-service / student-services payloads (flat + nested + common .NET shapes).
+ * @param {Record<string, unknown> | null | undefined} row
+ * @returns {{ name: string, surname: string, email: string }}
+ */
 export function personNamePartsFromClubRosterDto(row) {
   if (!row || typeof row !== 'object') return { name: '—', surname: '', email: '' }
-  const first = String(row.firstName ?? row.FirstName ?? '').trim()
-  const last = String(row.lastName ?? row.LastName ?? row.surname ?? row.Surname ?? '').trim()
-  const email = String(row.email ?? row.Email ?? '').trim()
+  const email = emailFromRosterObject(row)
+  // Match .NET and gateway DTOs: FirstName/LastName and GivenName/FamilyName often used together
+  const first = String(
+    row.firstName ?? row.FirstName ?? row.givenName ?? row.GivenName ?? row.forename ?? row.Forename ?? ''
+  ).trim()
+  const last = String(
+    row.lastName ??
+      row.LastName ??
+      row.surname ??
+      row.Surname ??
+      row.familyName ??
+      row.FamilyName ??
+      row.secondName ??
+      row.SecondName ??
+      ''
+  ).trim()
   if (first || last) return { name: first || '—', surname: last, email }
-  const member = row.member ?? row.Member
-  if (member && typeof member === 'object') {
-    const mf = String(member.firstName ?? member.FirstName ?? '').trim()
-    const ml = String(member.lastName ?? member.LastName ?? member.surname ?? member.Surname ?? '').trim()
-    const me = String(member.email ?? member.Email ?? '').trim()
-    if (mf || ml) return { name: mf || '—', surname: ml, email: me }
+  for (const k of ROSTER_SINGLE_NAME_KEYS) {
+    const split = splitDisplayIntoParts(row[k])
+    if (split) return { ...split, email }
   }
+  const unRow = String(row.userName ?? row.UserName ?? '').trim()
+  if (unRow && !unRow.includes('@')) return { name: unRow, surname: '', email }
+  // Employee/member APIs often nest the person under `user`, `membership`, or `employee`.
+  for (const nestedKey of ROSTER_NESTED_PERSON_KEYS) {
+    const nestedPerson = row[nestedKey]
+    if (!nestedPerson || typeof nestedPerson !== 'object' || nestedPerson === row) continue
+    const nestedHit = personNamePartsFromNestedRosterObject(nestedPerson, email)
+    if (nestedHit) return nestedHit
+    const pf = String(nestedPerson.firstName ?? nestedPerson.FirstName ?? '').trim()
+    const pl = String(nestedPerson.lastName ?? nestedPerson.LastName ?? nestedPerson.surname ?? nestedPerson.Surname ?? '').trim()
+    const pe = emailFromRosterObject(nestedPerson)
+    if (pf || pl) return { name: pf || '—', surname: pl, email: pe || email }
+    for (const k of ROSTER_SINGLE_NAME_KEYS) {
+      const split = splitDisplayIntoParts(nestedPerson[k])
+      if (split) return { ...split, email: pe || email }
+    }
+    const innerFull = displayNameFromAuthUserDto(nestedPerson)
+    if (innerFull) {
+      const parts = innerFull.split(/\s+/).filter(Boolean)
+      return { name: parts[0] || '—', surname: parts.slice(1).join(' '), email: pe || email }
+    }
+  }
+  const deepHit = personNamePartsFromNestedRosterObject(row, email)
+  if (deepHit) return deepHit
   const full = displayNameFromAuthUserDto(row)
   if (full) {
     const parts = full.split(/\s+/).filter(Boolean)
     return { name: parts[0] || '—', surname: parts.slice(1).join(' '), email }
   }
+  const org = String(
+    row.studentId ?? row.StudentId ?? row.organizationalId ?? row.OrganizationalId ?? row.directoryId ?? row.DirectoryId ?? ''
+  ).trim()
+  if (org && /^\d+$/.test(org)) return { name: org, surname: '', email }
+  const uid = String(row.userId ?? row.userID ?? row.UserId ?? '').trim()
+  if (uid && GUID_KEY.test(uid)) return { name: `User ${uid.slice(0, 8)}…`, surname: '', email }
   return { name: '—', surname: '', email }
 }
 
@@ -311,11 +466,11 @@ export async function fetchAuthUserByOrganizationalId(organizationalId) {
 }
 
 /**
- * Load auth profile for club roster enrichment.
+ * Load auth profile for club roster enrichment (MyAda admins / self lookups only).
+ * AUTH_API_DOC: non-admin `GET /api/auth/users/{id}` and `.../by-organizational-id/{id}` only succeed for the signed-in user.
+ * Club officers therefore cannot rely on this to resolve other members’ names — use {@link personNamePartsFromClubRosterDto} on club DTOs first.
  * - 9-digit key → `users/by-organizational-id/{id}` (with `users/{id}` only as a last resort).
- * - GUID key → `users/{id}` ONLY. We do not fall back to `by-organizational-id/{guid}`: that endpoint
- *   expects a 9-digit organizational id, so calling it with a GUID is guaranteed to fail (and was the
- *   source of the visible 403/401 spam in the network panel).
+ * - GUID key → `users/{id}` ONLY (no by-org fallback for GUID-shaped strings).
  * @param {string} lookupKey
  * @returns {Promise<Record<string, unknown> | null>}
  */

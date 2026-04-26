@@ -267,3 +267,61 @@ export const mockClubEmployees = [
   { id: 8, name: 'Lisa', surname: 'Park', email: 'lisa.p@university.edu', position: 'Event Coordinator', department: 'Events', joinedDate: 'Oct 25, 2023', age: 23 },
   { id: 9, name: 'Chris', surname: 'Lee', email: 'chris.l@university.edu', position: 'Lead Designer', department: 'Technology', joinedDate: 'Sep 10, 2023', age: 25 }
 ]
+
+const DEFAULT_OFFICER_POSITION_TITLES = ['President', 'Vice President']
+
+/**
+ * Normalize position title for duplicate checks (case / spacing insensitive).
+ * @param {string} s
+ */
+export function normPositionTitle(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * @param {{ id: string, name: string }[]} positions
+ * @param {string} name
+ * @returns {{ id: string, name: string } | null}
+ */
+export function findClubPositionByName(positions, name) {
+  if (!name || !Array.isArray(positions)) return null
+  const t = normPositionTitle(name)
+  return positions.find((p) => normPositionTitle(p.name) === t) ?? null
+}
+
+/**
+ * Build `{ id, name }[]` for club-admin employee position dropdowns:
+ * uses all positions returned for the club, and prepends **President** and **Vice President**
+ * when no returned row already uses that title (so officers always appear).
+ *
+ * Synthetic rows use ids `virtual-officer-1` / `virtual-officer-2`. Saving those ids only works
+ * if your API accepts them or you create matching positions under Club Admin → Positions first.
+ *
+ * @param {unknown} posResOrItems API envelope `{ items }` / `{ Items }` or a raw array
+ * @returns {{ id: string, name: string }[]}
+ */
+export function clubEmployeePositionDropdownFromApi(posResOrItems) {
+  const raw =
+    posResOrItems?.items ??
+    posResOrItems?.Items ??
+    (Array.isArray(posResOrItems) ? posResOrItems : [])
+  const list = (Array.isArray(raw) ? raw : []).map((p, index) => ({
+    id: String(p.id ?? p.positionId ?? `pos-${index}`),
+    name: String(p.name ?? p.title ?? 'Position'),
+  }))
+  const seen = new Set(list.map((p) => normPositionTitle(p.name)))
+  const prefix = 'virtual-officer-'
+  let n = 0
+  const inject = []
+  for (const title of DEFAULT_OFFICER_POSITION_TITLES) {
+    if (!seen.has(normPositionTitle(title))) {
+      n += 1
+      inject.push({ id: `${prefix}${n}`, name: title })
+      seen.add(normPositionTitle(title))
+    }
+  }
+  return [...inject, ...list]
+}

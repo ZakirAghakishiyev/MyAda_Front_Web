@@ -9,6 +9,27 @@ import {
 
 export { resolveClubMediaUrl } from './clubConfig'
 
+/** One club file row from `GET/POST` `/club-admin/{clubId}/files` item or public `resources[]` entry. */
+export function mapClubFileItemFromApi(item) {
+  if (item == null) return null
+  if (typeof item === 'string') {
+    const u = String(item).trim()
+    if (!u) return null
+    return { id: '', title: 'Resource', url: resolveClubMediaUrl(u) || u }
+  }
+  if (typeof item !== 'object') return null
+  const idRaw = item.id ?? item.Id
+  const id = idRaw != null && String(idRaw).trim() ? String(idRaw) : ''
+  const url = String(
+    item.url ?? item.URL ?? item.Url ?? item.fileUrl ?? item.FileUrl ?? item.href ?? item.path ?? item.Path ?? ''
+  ).trim()
+  if (!url) return null
+  const title = String(
+    item.title ?? item.Title ?? item.name ?? item.Name ?? item.fileName ?? item.FileName ?? 'Resource'
+  ).trim() || 'Resource'
+  return { id, title, url: resolveClubMediaUrl(url) || url }
+}
+
 function firstNonEmptyLink(...candidates) {
   for (const v of candidates) {
     if (v == null) continue
@@ -113,11 +134,28 @@ export function mapClubFromApi(dto) {
   const resolvedClubImage = rawClubImage
     ? resolveClubMediaUrl(rawClubImage) || rawClubImage
     : resolveClubMediaUrl('/clubs/default.png') || '/clubs/default.png'
+  const rawBanner = firstNonEmptyLink(
+    dto.bannerImageUrl,
+    dto.BannerImageUrl,
+    dto.backgroundImageUrl,
+    dto.BackgroundImageUrl,
+    dto.coverImageUrl,
+    dto.CoverImageUrl,
+    dto.heroImageUrl,
+    dto.HeroImageUrl,
+    dto.bannerImage,
+    dto.BannerImage,
+    dto.backgroundImage,
+    dto.BackgroundImage,
+  )
+  const bannerImage = rawBanner ? resolveClubMediaUrl(rawBanner) || rawBanner : undefined
   return {
     id: String(id),
     name: String(dto.name ?? ''),
     category: String(dto.category ?? ''),
     image: resolvedClubImage,
+    /** Wide hero / cover image (separate from round profile `image`). */
+    bannerImage,
     tags,
     members: Number(dto.members) || 0,
     about: aboutText,
@@ -153,7 +191,11 @@ export function mapClubFromApi(dto) {
         ? dto.resources
         : Array.isArray(dto.documents)
           ? dto.documents
-          : null
+          : Array.isArray(dto.Resources)
+            ? dto.Resources
+            : Array.isArray(dto.Documents)
+              ? dto.Documents
+              : null
       if (raw == null || !Array.isArray(raw)) return []
       return raw
         .map((r, i) => {
@@ -162,10 +204,14 @@ export function mapClubFromApi(dto) {
             return url ? { id: String(i), title: 'Link', url: resolveClubMediaUrl(url) || url } : null
           }
           if (!r || typeof r !== 'object') return null
-          const url = String(r.url ?? r.href ?? r.fileUrl ?? r.link ?? '').trim()
+          const url = String(
+            r.url ?? r.URL ?? r.Url ?? r.fileUrl ?? r.FileUrl ?? r.href ?? r.link ?? r.path ?? r.Path
+          ).trim()
           if (!url) return null
-          const title = String(r.title ?? r.name ?? r.fileName ?? 'Resource').trim() || 'Resource'
-          return { id: String(r.id ?? i), title, url: resolveClubMediaUrl(url) || url }
+          const title = String(
+            r.title ?? r.Title ?? r.name ?? r.Name ?? r.fileName ?? r.FileName ?? 'Resource'
+          ).trim() || 'Resource'
+          return { id: String(r.id ?? r.Id ?? i), title, url: resolveClubMediaUrl(url) || url }
         })
         .filter(Boolean)
     })(),

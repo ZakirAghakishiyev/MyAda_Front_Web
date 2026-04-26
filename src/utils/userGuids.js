@@ -25,19 +25,51 @@ export function parseUserGuidString(value) {
  */
 export function pickUserGuidForAuthLookup(row) {
   if (!row || typeof row !== 'object') return null
-  return (
+  // Prefer explicit user ids over `row.id` / `row.Id`: club-admin employee rows use `id` for the employment row, not the account (AUTH users/{id} is account id).
+  const fromExplicit =
     parseUserGuidString(row.userId) ||
     parseUserGuidString(row.userID) ||
     parseUserGuidString(row.UserId) ||
     parseUserGuidString(row.employeeUserId) ||
     parseUserGuidString(row.EmployeeUserId) ||
+    parseUserGuidString(row.applicationUserId) ||
+    parseUserGuidString(row.ApplicationUserId) ||
     parseUserGuidString(row.applicantUserId) ||
+    parseUserGuidString(row.ApplicantUserId) ||
+    parseUserGuidString(row.studentUserId) ||
+    parseUserGuidString(row.StudentUserId) ||
     parseUserGuidString(row.user?.id) ||
     parseUserGuidString(row.user?.userId) ||
-    parseUserGuidString(row.id) ||
-    parseUserGuidString(row.Id) ||
+    parseUserGuidString(row.User?.id) ||
+    parseUserGuidString(row.User?.userId) ||
+    parseUserGuidString(row.User?.UserId) ||
+    parseUserGuidString(row.student?.id) ||
+    parseUserGuidString(row.Student?.id) ||
+    parseUserGuidString(row.member?.id) ||
+    parseUserGuidString(row.Member?.id) ||
+    parseUserGuidString(row.Member?.Id) ||
+    parseUserGuidString(row.membership?.userId) ||
+    parseUserGuidString(row.Membership?.UserId) ||
+    parseUserGuidString(row.membership?.memberId) ||
+    parseUserGuidString(row.Membership?.MemberId) ||
+    parseUserGuidString(row.clubMember?.userId) ||
+    parseUserGuidString(row.ClubMember?.UserId) ||
+    parseUserGuidString(row.clubMembership?.userId) ||
+    parseUserGuidString(row.ClubMembership?.UserId) ||
+    parseUserGuidString(row.employee?.userId) ||
+    parseUserGuidString(row.Employee?.UserId) ||
+    parseUserGuidString(row.clubEmployee?.userId) ||
+    parseUserGuidString(row.ClubEmployee?.UserId) ||
+    parseUserGuidString(row.applicationUser?.id) ||
+    parseUserGuidString(row.ApplicationUser?.id) ||
     null
-  )
+  if (fromExplicit) return fromExplicit
+  const isEmployeeRow = row.employeeId != null || row.EmployeeId != null
+  if (!isEmployeeRow) {
+    const fromRowId = parseUserGuidString(row.id) || parseUserGuidString(row.Id)
+    if (fromRowId) return fromRowId
+  }
+  return null
 }
 
 const NINE_DIGIT_ORG = /^\d{9}$/
@@ -55,9 +87,13 @@ function pickNineDigitOrgId(obj) {
     'StudentId',
     'organizationalId',
     'OrganizationalId',
+    'organizationalID',
     'memberOrganizationalId',
+    'MemberOrganizationalId',
     'directoryId',
     'DirectoryId',
+    'studentNumber',
+    'StudentNumber',
   ]) {
     const v = String(obj[key] ?? '').trim()
     if (NINE_DIGIT_ORG.test(v)) return v
@@ -81,14 +117,53 @@ export function pickClubRosterLookupKey(row) {
   if (guid) return guid
   const org = pickNineDigitOrgId(row)
   if (org) return org
-  const member = row.member ?? row.Member
-  if (member && typeof member === 'object') {
-    const mg = pickUserGuidForAuthLookup(member)
+  const nestedKeys = [
+    'member',
+    'Member',
+    'membership',
+    'Membership',
+    'clubMember',
+    'ClubMember',
+    'clubMembership',
+    'ClubMembership',
+    'employee',
+    'Employee',
+    'clubEmployee',
+    'ClubEmployee',
+    'user',
+    'User',
+    'student',
+    'Student',
+  ]
+  for (const key of nestedKeys) {
+    const nestedUser = row[key]
+    if (!nestedUser || typeof nestedUser !== 'object') continue
+    const mg = pickUserGuidForAuthLookup(nestedUser)
     if (mg) return mg
-    const mo = pickNineDigitOrgId(member)
+    const mo = pickNineDigitOrgId(nestedUser)
     if (mo) return mo
   }
   return null
+}
+
+/**
+ * Employee roster rows can expose the person id as `employeeId` even when `id` is the
+ * assignment row id. Use this only for display/profile enrichment, not DELETE paths.
+ * @param {Record<string, unknown>} row
+ * @returns {string | null}
+ */
+export function pickClubEmployeePersonLookupKey(row) {
+  if (!row || typeof row !== 'object') return null
+  return (
+    pickClubRosterLookupKey(row) ||
+    parseUserGuidString(row.employeeId) ||
+    parseUserGuidString(row.EmployeeId) ||
+    parseUserGuidString(row.employeeID) ||
+    parseUserGuidString(row.EmployeeID) ||
+    parseUserGuidString(row.id) ||
+    parseUserGuidString(row.Id) ||
+    null
+  )
 }
 
 /**

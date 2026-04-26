@@ -6,10 +6,12 @@ import {
   patchClubAdminEmployeesPositions,
   deleteClubAdminMember,
   deleteClubAdminEmployee,
+  clubAdminListItems,
 } from '../../api/clubApi'
 import { displayNameFromAuthUserDto, fetchAuthUserForClubRoster, personNamePartsFromClubRosterDto } from '../../api/authUsersApi'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
-import { parseUserGuidString, pickClubRosterLookupKey, pickMemberUserGuidFromApiDto } from '../../utils/userGuids'
+import { clubEmployeePositionDropdownFromApi, findClubPositionByName } from '../../data/clubAdminData'
+import { parseUserGuidString, pickClubEmployeePersonLookupKey, pickClubRosterLookupKey, pickMemberUserGuidFromApiDto } from '../../utils/userGuids'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -41,13 +43,10 @@ const ClubAdminMembers = () => {
         fetchClubAdminEmployees(clubId),
         fetchClubAdminPositions(clubId).catch(() => ({ items: [] })),
       ])
-      const memItems = memRes?.items ?? memRes?.Items ?? (Array.isArray(memRes) ? memRes : [])
-      const empItems = empRes?.items ?? empRes?.Items ?? (Array.isArray(empRes) ? empRes : [])
-      const posItems = posRes?.items ?? posRes ?? []
-      const positions = (Array.isArray(posItems) ? posItems : []).map((p, index) => ({
-        id: String(p.id ?? p.positionId ?? `pos-${index}`),
-        name: String(p.name ?? p.title ?? 'Position'),
-      }))
+      const memItems = clubAdminListItems(memRes)
+      const empItems = clubAdminListItems(empRes)
+      const posItems = clubAdminListItems(posRes)
+      const positions = clubEmployeePositionDropdownFromApi(posItems)
       setPositionOptions(positions)
 
       const baseMembers = (Array.isArray(memItems) ? memItems : []).map((m, index) => {
@@ -114,15 +113,22 @@ const ClubAdminMembers = () => {
         })
       )
       const baseEmployees = (Array.isArray(empItems) ? empItems : []).map((e, index) => {
-        const positionId = String(
-          e.positionId ?? e.position?.id ?? positions[0]?.id ?? ''
-        )
+        let positionId = String(e.positionId ?? e.position?.id ?? '').trim()
+        const titleFromDto =
+          (typeof e.position === 'string' ? e.position : null) ??
+          e.position?.name ??
+          ''
+        if (!positionId && titleFromDto) {
+          const hit = findClubPositionByName(positions, titleFromDto)
+          if (hit) positionId = hit.id
+        }
+        if (!positionId) positionId = String(positions[0]?.id ?? '')
         const positionName =
           (typeof e.position === 'string' ? e.position : null) ??
           e.position?.name ??
           positions.find((p) => p.id === positionId)?.name ??
           '—'
-        const lookupKey = pickClubRosterLookupKey(e) ?? ''
+        const lookupKey = pickClubEmployeePersonLookupKey(e) ?? ''
         const pre = personNamePartsFromClubRosterDto(e)
         return {
           id: String(e.id ?? e.employeeId ?? `e-${index}`),
