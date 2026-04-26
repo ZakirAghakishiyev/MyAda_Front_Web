@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getAccessToken } from './tokenStorage'
 import { userHasJwtAdminRole, userHasStudentServicesRole } from './jwtRoles'
+import { userMayAccessSupportStaffPortal } from './homeRoles'
 import { fetchMyClubMemberships } from '../api/clubApi'
 import { roleMayManageClub } from './clubStaffRoles'
 
@@ -16,6 +17,18 @@ export function RequireAuth() {
   const location = useLocation()
   if (!getAccessToken()) {
     return <Navigate to={loginRedirectPath(location.pathname + location.search)} replace />
+  }
+  return <Outlet />
+}
+
+/** Support staff portal: signed-in + (Admin or IT/FM support staff, including `it_staff` / `tech_staff` roles). */
+export function RequireSupportStaffPortal() {
+  const location = useLocation()
+  if (!getAccessToken()) {
+    return <Navigate to={loginRedirectPath(location.pathname + location.search)} replace />
+  }
+  if (!userMayAccessSupportStaffPortal()) {
+    return <Navigate to="/" replace />
   }
   return <Outlet />
 }

@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Outlet } from 'react-router-dom'
-import { RequireAuth, RequireStudentServices, RequireClubAdminPortal } from './auth/RouteGuards'
+import { RequireAuth, RequireStudentServices, RequireClubAdminPortal, RequireSupportStaffPortal } from './auth/RouteGuards'
 import { SessionRestoreGate } from './auth/SessionRestoreGate'
 import { FilterProvider } from './contexts/FilterContext'
 import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
@@ -373,10 +373,12 @@ const AppContent = () => {
           <Route path="/calls/caller" element={<CallerCallPage />} />
           <Route path="/calls/dispatcher" element={<DispatcherCallPage />} />
           <Route path="/calls/history" element={<CallHistoryPage />} />
-          <Route path="/staff-portal" element={<StaffPortalLayout />}>
-            <Route index element={<StaffPortal />} />
-            <Route path="history" element={<StaffPortalHistory />} />
-            <Route path="ticket/:id" element={<StaffTicketDetail />} />
+          <Route path="/staff-portal" element={<RequireSupportStaffPortal />}>
+            <Route element={<StaffPortalLayout />}>
+              <Route index element={<StaffPortal />} />
+              <Route path="history" element={<StaffPortalHistory />} />
+              <Route path="ticket/:id" element={<StaffTicketDetail />} />
+            </Route>
           </Route>
           <Route path="/attendance" element={<AttendanceEntryGate />} />
           <Route path="/attendance/student/scan" element={<AttendanceStudentScanner />} />

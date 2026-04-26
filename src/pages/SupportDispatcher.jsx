@@ -8,6 +8,7 @@ import {
   getAllRequests,
   getCurrentUserIds,
   mapListItemToCard,
+  resolveStaffPickerModule,
 } from '../api/supportApi'
 
 const IconArrowRight = () => (
@@ -115,8 +116,8 @@ const SupportDispatcher = () => {
   const filtered = useMemo(() => {
     let items = enhancedRequests.filter((r) => isOpenStatus(r.status))
     if (statusFilter !== 'all') items = items.filter((r) => r.status === statusFilter)
-    if (tab === 'it') items = items.filter((r) => String(r.service || '').toUpperCase() === 'IT')
-    if (tab === 'fm') items = items.filter((r) => String(r.service || '').toUpperCase() === 'FM')
+    if (tab === 'it') items = items.filter((r) => resolveStaffPickerModule(r.service, r.category) === 'IT')
+    if (tab === 'fm') items = items.filter((r) => resolveStaffPickerModule(r.service, r.category) === 'FM')
     if (tab === 'high') items = items.filter((r) => (r.priority || '').toLowerCase() === 'high')
 
     if (sortBy === 'newest') {
@@ -320,7 +321,7 @@ const SupportDispatcher = () => {
 
             const isUnseen = !!unseenTickets[r.id]
 
-            const area = String(r.service || '').toUpperCase() === 'FM' ? 'FM' : 'IT'
+            const area = resolveStaffPickerModule(r.service, r.category)
             const actionPlaceholder = area === 'IT' ? 'Select Technician' : 'Select Maintenance Staff'
             const assignedStaff = assignments[r.id] || r.assignedTo
             const pendingStaff = pendingAssignments[r.id] || ''

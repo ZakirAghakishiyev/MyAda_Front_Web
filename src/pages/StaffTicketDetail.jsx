@@ -1,7 +1,14 @@
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import './RequestDetail.css'
-import { getRequestDetail, getCurrentUserIds, getRequestTimeline, markRequestInProgress, markRequestCompleted } from '../api/supportApi'
+import {
+  getRequestDetail,
+  getCurrentUserIds,
+  getRequestTimeline,
+  markRequestInProgress,
+  markRequestCompleted,
+  staffMayViewSupportRequest,
+} from '../api/supportApi'
 
 const IconBack = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -64,8 +71,13 @@ const StaffTicketDetail = () => {
     if (showLoader) setLoading(true)
     Promise.all([getRequestDetail(id), getRequestTimeline(id)])
       .then(([detail, timelineItems]) => {
-        setRequest(detail)
-        setTimeline(timelineItems)
+        if (detail && !staffMayViewSupportRequest(detail, staffId)) {
+          setRequest(null)
+          setTimeline([])
+        } else {
+          setRequest(detail)
+          setTimeline(timelineItems)
+        }
       })
       .catch(() => {
         setRequest(null)
@@ -74,7 +86,7 @@ const StaffTicketDetail = () => {
       .finally(() => {
         if (showLoader) setLoading(false)
       })
-  }, [id])
+  }, [id, staffId])
 
   React.useEffect(() => {
     let isMounted = true
@@ -105,7 +117,7 @@ const StaffTicketDetail = () => {
     return (
       <div className="rd-overlay" onClick={goBack} role="dialog">
         <div className="rd-popup" onClick={(e) => e.stopPropagation()}>
-          <p>Request not found.</p>
+          <p>{staffId ? 'This ticket is not assigned to you, or it could not be loaded.' : 'Request not found.'}</p>
           <button type="button" className="rd-btn" onClick={goBack}>Back</button>
         </div>
       </div>

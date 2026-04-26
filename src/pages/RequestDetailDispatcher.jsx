@@ -75,8 +75,9 @@ const RequestDetailDispatcher = () => {
   const [staffOptions, setStaffOptions] = useState([])
   useEffect(() => {
     const area = request?.service || 'IT'
+    const category = request?.category || ''
     let cancelled = false
-    fetchStaffOptionsByArea(area)
+    fetchStaffOptionsByArea(area, category)
       .then((opts) => {
         if (!cancelled) setStaffOptions(opts)
       })
@@ -86,7 +87,7 @@ const RequestDetailDispatcher = () => {
     return () => {
       cancelled = true
     }
-  }, [request?.service])
+  }, [request?.service, request?.category])
   const loadData = useCallback((showLoader = false) => {
     if (showLoader) setLoading(true)
     Promise.all([getRequestDetail(id), getRequestTimeline(id)])

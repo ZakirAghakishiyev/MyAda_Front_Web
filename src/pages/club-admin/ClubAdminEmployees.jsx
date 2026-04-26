@@ -5,7 +5,9 @@ import {
   patchClubAdminEmployeesPositions,
   deleteClubAdminEmployee,
 } from '../../api/clubApi'
+import { displayNameFromAuthUserDto, fetchAuthUserForClubRoster, personNamePartsFromClubRosterDto } from '../../api/authUsersApi'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
+import { pickClubRosterLookupKey } from '../../utils/userGuids'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -34,36 +36,86 @@ const ClubAdminEmployees = () => {
         fetchClubAdminEmployees(clubId),
         fetchClubAdminPositions(clubId).catch(() => ({ items: [] })),
       ])
-      const items = res?.items ?? res ?? []
+      const items = res?.items ?? res?.Items ?? (Array.isArray(res) ? res : [])
       const posItems = posRes?.items ?? posRes ?? []
       const positions = (Array.isArray(posItems) ? posItems : []).map((p, index) => ({
         id: String(p.id ?? p.positionId ?? `pos-${index}`),
         name: String(p.name ?? p.title ?? 'Position'),
       }))
       setPositionOptions(positions)
-      setEmployees(
-        (Array.isArray(items) ? items : []).map((e, index) => {
-          const positionId = String(
-            e.positionId ?? e.position?.id ?? positions[0]?.id ?? ''
-          )
-          const positionName =
-            (typeof e.position === 'string' ? e.position : null) ??
-            e.position?.name ??
-            positions.find((p) => p.id === positionId)?.name ??
-            '—'
-          return {
-            id: String(e.id ?? e.employeeId ?? `e-${index}`),
-            name: e.name ?? e.firstName ?? 'Employee',
-            surname: e.surname ?? e.lastName ?? '',
-            email: e.email ?? '',
-            positionId,
-            positionName,
-            department: e.department ?? '',
-            age: e.age,
-            joinedDate: e.joinedDate ?? e.joinedAt ?? '—',
-          }
+      const base = (Array.isArray(items) ? items : []).map((e, index) => {
+        const positionId = String(
+          e.positionId ?? e.position?.id ?? positions[0]?.id ?? ''
+        )
+        const positionName =
+          (typeof e.position === 'string' ? e.position : null) ??
+          e.position?.name ??
+          positions.find((p) => p.id === positionId)?.name ??
+          '—'
+        const pre = personNamePartsFromClubRosterDto(e)
+        const lookupKey = pickClubRosterLookupKey(e) ?? ''
+        return {
+          id: String(e.id ?? e.employeeId ?? `e-${index}`),
+          userId: lookupKey,
+          name: pre.name,
+          surname: pre.surname,
+          email: pre.email,
+          positionId,
+          positionName,
+          department: e.department ?? '',
+          age: e.age,
+          joinedDate: e.joinedDate ?? e.joinedAt ?? '—',
+          raw: e,
+        }
+      })
+      setEmployees(base)
+
+      const uniqueKeys = Array.from(new Set(base.map((row) => row.userId).filter(Boolean)))
+      if (uniqueKeys.length) {
+        const profiles = await Promise.all(
+          uniqueKeys.map((uid) => fetchAuthUserForClubRoster(uid).catch(() => null))
+        )
+        const byId = new Map()
+        uniqueKeys.forEach((uid, i) => {
+          const p = profiles[i]
+          if (p && typeof p === 'object') byId.set(uid, p)
         })
-      )
+        setEmployees((prev) =>
+          prev.map((row) => {
+            const p = row.userId ? byId.get(row.userId) : null
+            const raw = row.raw
+            if (!p) {
+              const fromRaw =
+                displayNameFromAuthUserDto(raw) ||
+                String(raw?.name ?? raw?.firstName ?? '').trim() ||
+                `${row.name} ${row.surname}`.trim()
+              if (!fromRaw || fromRaw === '—') return { ...row, raw: undefined }
+              const parts = fromRaw.split(/\s+/).filter(Boolean)
+              return {
+                ...row,
+                name: parts[0] || row.name,
+                surname: parts.slice(1).join(' ') || row.surname,
+                email: String(raw?.email ?? '').trim() || row.email,
+                raw: undefined,
+              }
+            }
+            const first = String(p.firstName ?? p.FirstName ?? '').trim()
+            const last = String(p.lastName ?? p.LastName ?? '').trim()
+            const full = displayNameFromAuthUserDto(p)
+            const next =
+              first || last
+                ? { name: first || row.name, surname: last, email: String(p.email ?? p.Email ?? '').trim() || row.email }
+                : {
+                    name: full || row.name,
+                    surname: '',
+                    email: String(p.email ?? p.Email ?? '').trim() || row.email,
+                  }
+            return { ...row, ...next, raw: undefined }
+          })
+        )
+      } else {
+        setEmployees((prev) => prev.map(({ raw, ...rest }) => rest))
+      }
     } catch (e) {
       setEmployees([])
       setLoadError(e?.message || 'Could not load employees.')

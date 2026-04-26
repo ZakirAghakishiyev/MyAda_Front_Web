@@ -169,6 +169,56 @@ function resolveAssignedStaffName(item) {
   return `Staff ${assignedId}`
 }
 
+/** Auth user id (JWT `sub`) of the staff member assigned to the request, when the API exposes it. */
+function pickAssignedStaffUserId(item) {
+  if (!item || typeof item !== 'object') return null
+  const v =
+    item.assignedStaffUserId ??
+    item.assignedStaffId ??
+    item.assignedStaffID ??
+    item.assignedToStaffId ??
+    item.assignedToStaffUserId ??
+    item.assignedUserId ??
+    item.assigneeUserId ??
+    item.staffUserId ??
+    item.StaffUserId
+  if (v == null || String(v).trim() === '') return null
+  return String(v).trim()
+}
+
+function normStaffIdKey(s) {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * Staff portal lists: only tickets assigned to `staffUserId`. If no item includes an assignee id,
+ * returns `items` unchanged (backend `GET …/staff/{id}` already scoped).
+ */
+function filterStaffRequestsForSignedInUser(items, staffUserId) {
+  const target = normStaffIdKey(staffUserId)
+  if (!target) return []
+  const arr = Array.isArray(items) ? items : []
+  const anyAssignee = arr.some((row) => pickAssignedStaffUserId(row))
+  if (!anyAssignee) return arr
+  return arr.filter((row) => {
+    const a = pickAssignedStaffUserId(row)
+    return Boolean(a) && normStaffIdKey(a) === target
+  })
+}
+
+/**
+ * Whether the signed-in staff user may open this ticket (assignee matches JWT `sub`, or API omits assignee id).
+ */
+export function staffMayViewSupportRequest(request, staffUserId) {
+  const target = normStaffIdKey(staffUserId)
+  if (!request || !target) return false
+  const a = pickAssignedStaffUserId(request)
+  if (!a) return true
+  return normStaffIdKey(a) === target
+}
+
 function collectAttachmentUrls(item) {
   const raw =
     item?.attachmentUrls ??
@@ -256,6 +306,7 @@ function normalizeSupportRequest(item) {
   }
   return {
     ...item,
+    assignedStaffUserId: pickAssignedStaffUserId(item),
     service,
     location: buildRequestLocation(item),
     assignedTo: resolveAssignedStaffName(item),
@@ -371,6 +422,28 @@ export function getMockLocations() {
   return LOCATION_DATA
 }
 
+/**
+ * Map API `service` / `serviceArea` / category labels to IT vs FM for staff assignment.
+ * Backend sometimes sends a category name (e.g. "Electricity") in `service`; treat known FM domains as FM.
+ * @returns {'IT' | 'FM'}
+ */
+export function resolveStaffPickerModule(area, category = '') {
+  const s = String(area || '').trim().toLowerCase()
+  const c = String(category || '').trim().toLowerCase()
+  const combined = `${s} ${c}`
+  if (s === 'fm' || s === 'facilities' || /\bfacilit(y|ies)?\b/.test(combined)) return 'FM'
+  if (s === 'it') return 'IT'
+  if (
+    /electric|plumb|hvac|mainten|clean|building|grounds|carpent|paint|lock|furniture|elevator|sanitation|water|heat|pest|landscap|janitor|custodial|facility|restroom|toilet|leak|lighting|generator/i.test(
+      combined
+    )
+  )
+    return 'FM'
+  if (/software|network|email|account|printer|computer|wifi|vpn|hardware|login|portal|password|laptop|server|database|ldap|active\s*directory|outlook|teams|zoom/i.test(combined))
+    return 'IT'
+  return 'IT'
+}
+
 function mockStaffOptionsByArea(area) {
   const raw = String(area || '').toUpperCase()
   const normalized = raw === 'FACILITIES' ? 'FM' : raw
@@ -379,23 +452,89 @@ function mockStaffOptionsByArea(area) {
     .map(([id, item]) => ({ id: String(id), name: item.fullName, area: item.area }))
 }
 
+function displayNameFromAuthUser(item) {
+  const fn = String(item?.firstName || '').trim()
+  const ln = String(item?.lastName || '').trim()
+  const combined = [fn, ln].filter(Boolean).join(' ')
+  if (combined) return combined
+  return (
+    item?.userName ||
+    item?.username ||
+    item?.email ||
+    (item?.id ? `User ${String(item.id).slice(0, 8)}` : 'User')
+  )
+}
+
 /**
- * Staff pickers: loads real support staff from `SupportStaffStatuses` (Online + OnBreak),
- * filtered by IT vs FM when the row carries area metadata; otherwise shows all and falls back to mock.
+ * Auth gateway: `GET /api/auth/users-by-role/{role}` (see AUTH_API_DOC.md).
+ * Uses `VITE_DISPATCHER_ROLE_TOKEN` when set (admin bearer), otherwise the logged-in session via `authFetch`.
+ * @param {string} role e.g. `it_staff`, `tech_staff` (gateway: `/api/auth/users-by-role/{role}`)
+ * @param {'IT' | 'FM'} areaLabel
  * @returns {Promise<{ id: string, name: string, area: string }[]>}
  */
-export async function fetchStaffOptionsByArea(area) {
-  const want =
-    String(area || '').toUpperCase() === 'FM' || String(area || '').toUpperCase() === 'FACILITIES'
-      ? 'FM'
-      : 'IT'
+async function fetchAuthUsersByRoleForStaffPicker(role, areaLabel) {
+  const roleSeg = encodeURIComponent(String(role || '').trim().toLowerCase())
+  if (!roleSeg) return []
+
+  const adminToken = String(import.meta.env.VITE_DISPATCHER_ROLE_TOKEN || '').trim()
+  for (const baseUrl of DISPATCHER_ROLE_USER_URLS) {
+    const root = String(baseUrl || '').replace(/\/+$/, '')
+    if (!root) continue
+    try {
+      const url = `${root}/${roleSeg}`
+      const res = adminToken
+        ? await fetch(url, {
+            headers: {
+              accept: 'application/json',
+              Authorization: `Bearer ${adminToken}`,
+            },
+          })
+        : await authFetch(url, { headers: { accept: 'application/json' } })
+      const text = await res.text()
+      if (!res.ok) continue
+      const data = text ? JSON.parse(text) : null
+      const users = Array.isArray(data?.users)
+        ? data.users
+        : Array.isArray(data)
+          ? data
+          : []
+      const mapped = users
+        .map((u) => {
+          const id = u?.id != null ? String(u.id).trim() : ''
+          if (!id) return null
+          const statusOk = !u?.status || String(u.status).toLowerCase() === 'active'
+          if (!statusOk) return null
+          return { id, name: displayNameFromAuthUser(u), area: areaLabel }
+        })
+        .filter(Boolean)
+      if (mapped.length > 0) return mapped
+    } catch {
+      /* try next base */
+    }
+  }
+  return []
+}
+
+/**
+ * Staff pickers: prefers Auth users-by-role (`it_staff` for IT / `tech_staff` for FM per request module),
+ * then `SupportStaffStatuses` (Online + OnBreak), then mock data.
+ * @param {string} [area] Request `service` / area from API (may be a category name).
+ * @param {string} [category] Request category when `service` is not IT/FM.
+ * @returns {Promise<{ id: string, name: string, area: string }[]>}
+ */
+export async function fetchStaffOptionsByArea(area, category = '') {
+  const want = resolveStaffPickerModule(area, category)
+  const authRole = want === 'FM' ? 'tech_staff' : 'it_staff'
+  const fromAuth = await fetchAuthUsersByRoleForStaffPicker(authRole, want)
+  if (fromAuth.length > 0) return fromAuth
+
   const rows = []
   for (const st of ['Online', 'OnBreak']) {
     try {
       const batch = await getStaffStatusesByStatus(st)
       if (Array.isArray(batch)) rows.push(...batch)
     } catch {
-      /* use mock below */
+      /* fall through to mock */
     }
   }
   const byId = new Map()
@@ -419,7 +558,7 @@ export async function fetchStaffOptionsByArea(area) {
   const filtered = all.filter((o) => o.area === want)
   const use = filtered.length > 0 ? filtered : all
   if (use.length > 0) return use
-  return mockStaffOptionsByArea(area)
+  return mockStaffOptionsByArea(want)
 }
 
 const MOCK_UPLOAD_FOLDER = 'support-ticket-uploads'
@@ -542,7 +681,8 @@ export async function getMemberRequests(memberId) {
 export async function getStaffRequests(staffId) {
   if (staffId == null || String(staffId).trim() === '') return []
   const result = await request(`/SupportRequests/staff/${sp(staffId)}`)
-  return Array.isArray(result) ? result.map(normalizeSupportRequest) : []
+  const list = Array.isArray(result) ? result.map(normalizeSupportRequest) : []
+  return filterStaffRequestsForSignedInUser(list, staffId)
 }
 
 export async function getAllRequests(filters = {}) {
@@ -680,6 +820,7 @@ export function mapListItemToCard(item) {
     category: item.category || 'General',
     location: item.location || 'N/A',
     assignedTo: item.assignedTo || null,
+    assignedStaffUserId: item.assignedStaffUserId ?? null,
     timeAgo: toShortAge(item.createdAt),
     status: item.status || 'New',
     urgency: item.urgency || 'Standard',

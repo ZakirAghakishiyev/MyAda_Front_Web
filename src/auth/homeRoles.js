@@ -79,6 +79,7 @@ export function userIsSupportDispatcherRole() {
 export function userIsItSupportStaff() {
   return hasAnyRole(
     (r) =>
+      r === 'it-staff' ||
       r === 'it-support' ||
       r === 'it_support' ||
       r === 'it-support-staff' ||
@@ -89,11 +90,17 @@ export function userIsItSupportStaff() {
 export function userIsFmSupportStaff() {
   return hasAnyRole(
     (r) =>
+      r === 'tech-staff' ||
       r === 'fm-support' ||
       r === 'fm_support' ||
       r === 'fm-support-staff' ||
       (r.startsWith('fm-') && r.includes('support'))
   )
+}
+
+/** IT/FM support ticket staff portal (JWT roles `it_staff` / `tech_staff` normalize to `it-staff` / `tech-staff`). */
+export function userMayAccessSupportStaffPortal() {
+  return userHasJwtAdminRole() || userIsItSupportStaff() || userIsFmSupportStaff()
 }
 
 /**

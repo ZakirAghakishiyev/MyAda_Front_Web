@@ -40,11 +40,62 @@ export function pickUserGuidForAuthLookup(row) {
   )
 }
 
+const NINE_DIGIT_ORG = /^\d{9}$/
+
 /**
- * Member list DTO (club-admin): `userId` / `id` as user GUID (see backend ClubAdminMemberDto).
+ * Key for {@link fetchAuthUserForClubRoster}: JWT-style user id **or** 9-digit organizational / student id.
+ * Club employee/member APIs often expose `studentId` / `organizationalId` instead of a GUID.
+ * @param {Record<string, unknown>} row
+ * @returns {string | null}
+ */
+function pickNineDigitOrgId(obj) {
+  if (!obj || typeof obj !== 'object') return null
+  for (const key of [
+    'studentId',
+    'StudentId',
+    'organizationalId',
+    'OrganizationalId',
+    'memberOrganizationalId',
+    'directoryId',
+    'DirectoryId',
+  ]) {
+    const v = String(obj[key] ?? '').trim()
+    if (NINE_DIGIT_ORG.test(v)) return v
+  }
+  return null
+}
+
+export function pickClubRosterLookupKey(row) {
+  if (!row || typeof row !== 'object') return null
+  const guid =
+    pickUserGuidForAuthLookup(row) ||
+    parseUserGuidString(row.memberId) ||
+    parseUserGuidString(row.MemberId) ||
+    parseUserGuidString(row.memberUserId) ||
+    parseUserGuidString(row.MemberUserId) ||
+    parseUserGuidString(row.member?.userId) ||
+    parseUserGuidString(row.Member?.UserId) ||
+    parseUserGuidString(row.member?.id) ||
+    parseUserGuidString(row.Member?.Id) ||
+    null
+  if (guid) return guid
+  const org = pickNineDigitOrgId(row)
+  if (org) return org
+  const member = row.member ?? row.Member
+  if (member && typeof member === 'object') {
+    const mg = pickUserGuidForAuthLookup(member)
+    if (mg) return mg
+    const mo = pickNineDigitOrgId(member)
+    if (mo) return mo
+  }
+  return null
+}
+
+/**
+ * Member list DTO (club-admin): user GUID or 9-digit directory id (see {@link pickClubRosterLookupKey}).
  * @param {Record<string, unknown>} m
  * @returns {string | null}
  */
 export function pickMemberUserGuidFromApiDto(m) {
-  return pickUserGuidForAuthLookup(m)
+  return pickClubRosterLookupKey(m)
 }

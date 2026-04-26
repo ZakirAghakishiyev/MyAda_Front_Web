@@ -93,12 +93,38 @@ export function displayNameFromAuthUserDto(user) {
   const un = t(user.userName) || t(user.UserName)
   if (un && !un.includes('@')) return un
   if (un) return un
-  const nested = user.user ?? user.User ?? user.student ?? user.member
+  const nested = user.user ?? user.User ?? user.student ?? user.Student ?? user.member ?? user.Member
   if (nested && typeof nested === 'object' && nested !== user) {
     const inner = displayNameFromAuthUserDto(nested)
     if (inner) return inner
   }
   return ''
+}
+
+/**
+ * First-line name parts from a club roster / employee list DTO (before auth enrichment).
+ * @param {Record<string, unknown> | null | undefined} row
+ * @returns {{ name: string, surname: string, email: string }}
+ */
+export function personNamePartsFromClubRosterDto(row) {
+  if (!row || typeof row !== 'object') return { name: '—', surname: '', email: '' }
+  const first = String(row.firstName ?? row.FirstName ?? '').trim()
+  const last = String(row.lastName ?? row.LastName ?? row.surname ?? row.Surname ?? '').trim()
+  const email = String(row.email ?? row.Email ?? '').trim()
+  if (first || last) return { name: first || '—', surname: last, email }
+  const member = row.member ?? row.Member
+  if (member && typeof member === 'object') {
+    const mf = String(member.firstName ?? member.FirstName ?? '').trim()
+    const ml = String(member.lastName ?? member.LastName ?? member.surname ?? member.Surname ?? '').trim()
+    const me = String(member.email ?? member.Email ?? '').trim()
+    if (mf || ml) return { name: mf || '—', surname: ml, email: me }
+  }
+  const full = displayNameFromAuthUserDto(row)
+  if (full) {
+    const parts = full.split(/\s+/).filter(Boolean)
+    return { name: parts[0] || '—', surname: parts.slice(1).join(' '), email }
+  }
+  return { name: '—', surname: '', email }
 }
 
 function formatAuthUserDisplayName(user) {

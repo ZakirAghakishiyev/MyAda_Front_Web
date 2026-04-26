@@ -2,6 +2,8 @@
  * Support service base (see SUPPORT_API_DOC.md).
  * Gateway: {origin}/support/api/... — in dev, Vite proxies /support to the API gateway.
  */
+import { AUTH_API_BASE } from '../auth/config'
+
 const trim = (s) => String(s || '').replace(/\/+$/, '')
 
 export const SUPPORT_API_BASE_FALLBACKS = [
@@ -21,11 +23,14 @@ export function getSupportApiBases() {
   return [...sameOrigin, ...SUPPORT_API_BASE_FALLBACKS]
 }
 
-const authRoot = () => trim(import.meta.env.VITE_AUTH_API_BASE || 'http://localhost:5000')
-
+/**
+ * Same gateway root as login / `authFetch` ({@link AUTH_API_BASE}), so dispatcher
+ * `users-by-role` calls hit e.g. `http://13.60.31.141:5000/api/auth/users-by-role/...`.
+ * Override list only with `VITE_AUTH_API_BASES` (comma/semicolon-separated full `.../users-by-role` bases).
+ */
 export const DISPATCHER_ROLE_USER_URLS = import.meta.env.VITE_AUTH_API_BASES
   ? String(import.meta.env.VITE_AUTH_API_BASES)
       .split(/[,;]/)
       .map((s) => trim(s))
       .filter(Boolean)
-  : [`${authRoot()}/api/auth/users-by-role`, 'http://127.0.0.1:5001/api/auth/users-by-role']
+  : [`${AUTH_API_BASE}/api/auth/users-by-role`, 'http://127.0.0.1:5001/api/auth/users-by-role']
