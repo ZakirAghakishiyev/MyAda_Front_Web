@@ -405,10 +405,12 @@ export async function fetchProposalMemberProfile(lookupId) {
  */
 const authUserByIdCache = new Map()
 const authUserByOrgIdCache = new Map()
+const authAdminUserByIdCache = new Map()
 
 export function clearAuthUserCache() {
   authUserByIdCache.clear()
   authUserByOrgIdCache.clear()
+  authAdminUserByIdCache.clear()
 }
 
 /**
@@ -463,6 +465,61 @@ export async function fetchAuthUserByOrganizationalId(organizationalId) {
   }
   authUserByOrgIdCache.set(id, result)
   return result
+}
+
+/**
+ * Fetch auth user profile through the admin-only endpoint.
+ * The club-admin employees page uses this after resolving a student / organizational id.
+ */
+export async function fetchAuthAdminUserById(userId) {
+  const id = String(userId ?? '').trim()
+  if (!id) return null
+  if (authAdminUserByIdCache.has(id)) return authAdminUserByIdCache.get(id)
+
+  const url = `${AUTH_API_BASE}/api/auth/admin/users/${encodeURIComponent(id)}`
+  let result = null
+  try {
+    const res = await authFetch(url, { method: 'GET' })
+    if (res.ok) {
+      const data = unwrapAutoWrapper(await readJsonSafe(res))
+      result = data && typeof data === 'object' ? data : null
+    }
+  } catch {
+    result = null
+  }
+  authAdminUserByIdCache.set(id, result)
+  return result
+}
+
+/**
+ * Resolve a student / organizational id to the admin auth profile.
+ * This first resolves the auth user by organizational id, then loads the admin profile by account id.
+ */
+export async function fetchAuthAdminUserForClubRoster(lookupKey) {
+  const key = String(lookupKey ?? '').trim()
+  if (!key) return null
+  if (NINE_DIGIT_ORG_KEY.test(key)) {
+    const byOrg = await fetchAuthUserByOrganizationalId(key)
+    if (!byOrg || typeof byOrg !== 'object') return null
+    const adminId = String(byOrg.id ?? byOrg.Id ?? '').trim()
+    if (adminId) {
+      const adminUser = await fetchAuthAdminUserById(adminId)
+      if (adminUser) return adminUser
+    }
+    return byOrg
+  }
+  if (GUID_KEY.test(key)) {
+    const byAdminId = await fetchAuthAdminUserById(key)
+    if (byAdminId) return byAdminId
+    const fallback = await fetchAuthUserById(key)
+    return fallback && typeof fallback === 'object' ? fallback : null
+  }
+  let user = await fetchAuthAdminUserById(key)
+  if (user) return user
+  user = await fetchAuthUserByOrganizationalId(key)
+  if (user && typeof user === 'object') return user
+  user = await fetchAuthUserById(key)
+  return user && typeof user === 'object' ? user : null
 }
 
 /**

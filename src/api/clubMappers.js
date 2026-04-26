@@ -1,6 +1,4 @@
 import {
-  CLUB_MEDIA_BASE,
-  clubGatewayOrigin,
   resolveClubMediaUrl,
   resolveClubMediaViaGateway,
   resolveProposedClubImageDisplayUrls,
@@ -37,6 +35,27 @@ function firstNonEmptyLink(...candidates) {
     if (t) return t
   }
   return undefined
+}
+
+function isDefaultClubImage(value) {
+  if (value == null) return false
+  const s = String(value).trim()
+  return (
+    /^\/?clubs\/default\.(png|svg)(\?.*)?$/i.test(s) ||
+    /^https?:\/\/[^?#]+\/clubs\/default\.(png|svg)(\?.*)?$/i.test(s)
+  )
+}
+
+function pickPreferredClubImage(...candidates) {
+  let fallback
+  for (const v of candidates) {
+    if (v == null) continue
+    const t = String(v).trim()
+    if (!t) continue
+    if (!fallback) fallback = t
+    if (!isDefaultClubImage(t)) return t
+  }
+  return fallback
 }
 
 /**
@@ -125,16 +144,17 @@ export function mapClubFromApi(dto) {
       : {}
   const sl = /** @type {Record<string, unknown>} */ (socialLinks)
   // API: `image` is display-safe; some payloads only set `profileImageUrl` / PascalCase variants.
-  const rawClubImage = firstNonEmptyLink(
-    dto.image,
-    dto.Image,
+  const rawClubImage = pickPreferredClubImage(
     dto.profileImageUrl,
     dto.ProfileImageUrl,
+    dto.image,
+    dto.Image,
   )
-  const resolvedClubImage = rawClubImage
-    ? resolveClubMediaUrl(rawClubImage) || rawClubImage
-    : resolveClubMediaUrl('/clubs/default.png') || '/clubs/default.png'
-  const rawBanner = firstNonEmptyLink(
+  const clubImageDisplay = rawClubImage
+    ? resolvePublishedClubImageDisplayUrls(rawClubImage)
+    : { primary: resolveClubMediaUrl('/clubs/default.png') || '/clubs/default.svg', alt: null }
+  const resolvedClubImage = clubImageDisplay.primary || resolveClubMediaUrl('/clubs/default.png') || '/clubs/default.svg'
+  const rawBanner = pickPreferredClubImage(
     dto.bannerImageUrl,
     dto.BannerImageUrl,
     dto.backgroundImageUrl,
@@ -148,7 +168,8 @@ export function mapClubFromApi(dto) {
     dto.backgroundImage,
     dto.BackgroundImage,
   )
-  const bannerImage = rawBanner ? resolveClubMediaUrl(rawBanner) || rawBanner : undefined
+  const bannerImageDisplay = rawBanner ? resolvePublishedClubImageDisplayUrls(rawBanner) : { primary: null, alt: null }
+  const bannerImage = bannerImageDisplay.primary ?? undefined
   return {
     id: String(id),
     name: String(dto.name ?? ''),
@@ -156,6 +177,8 @@ export function mapClubFromApi(dto) {
     image: resolvedClubImage,
     /** Wide hero / cover image (separate from round profile `image`). */
     bannerImage,
+    backgroundImageUrl: bannerImageDisplay.primary ?? undefined,
+    backgroundImageUrlAlt: bannerImageDisplay.alt ?? undefined,
     tags,
     members: Number(dto.members) || 0,
     about: aboutText,
@@ -216,7 +239,8 @@ export function mapClubFromApi(dto) {
         .filter(Boolean)
     })(),
     categoryId: dto.categoryId,
-    profileImageUrl: rawClubImage ? resolveClubMediaUrl(rawClubImage) || rawClubImage : undefined,
+    profileImageUrl: clubImageDisplay.primary ?? undefined,
+    profileImageUrlAlt: clubImageDisplay.alt ?? undefined,
     raw: dto,
   }
 }

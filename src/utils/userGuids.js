@@ -148,12 +148,15 @@ export function pickClubRosterLookupKey(row) {
 
 /**
  * Employee roster rows can expose the person id as `employeeId` even when `id` is the
- * assignment row id. Use this only for display/profile enrichment, not DELETE paths.
+ * assignment row id. Prefer student / organizational ids first so auth lookups resolve
+ * the person record, then fall back to user GUIDs for legacy payloads.
  * @param {Record<string, unknown>} row
  * @returns {string | null}
  */
 export function pickClubEmployeePersonLookupKey(row) {
   if (!row || typeof row !== 'object') return null
+  const studentId = pickNineDigitOrgId(row)
+  if (studentId) return studentId
   return (
     pickClubRosterLookupKey(row) ||
     parseUserGuidString(row.employeeId) ||

@@ -6,10 +6,14 @@ import {
   deleteClubAdminEmployee,
   clubAdminListItems,
 } from '../../api/clubApi'
-import { displayNameFromAuthUserDto, fetchAuthUserForClubRoster, personNamePartsFromClubRosterDto } from '../../api/authUsersApi'
+import {
+  displayNameFromAuthUserDto,
+  fetchAuthUserForClubRoster,
+  personNamePartsFromClubRosterDto,
+} from '../../api/authUsersApi'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import { clubEmployeePositionDropdownFromApi, findClubPositionByName } from '../../data/clubAdminData'
-import { pickClubEmployeePersonLookupKey } from '../../utils/userGuids'
+import { pickUserGuidForAuthLookup } from '../../utils/userGuids'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -18,6 +22,15 @@ const IconSearch = () => (
 const IconTrash = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
 )
+
+const trimStr = (v) => (v != null ? String(v).trim() : '')
+
+const firstLastNameFromAuthUserDto = (user) => {
+  if (!user || typeof user !== 'object') return ''
+  const first = trimStr(user.firstName ?? user.FirstName)
+  const last = trimStr(user.lastName ?? user.LastName)
+  return [first, last].filter(Boolean).join(' ').trim()
+}
 
 const ClubAdminEmployees = () => {
   const clubId = useClubAdminClubId()
@@ -59,7 +72,7 @@ const ClubAdminEmployees = () => {
           positions.find((p) => p.id === positionId)?.name ??
           '—'
         const pre = personNamePartsFromClubRosterDto(e)
-        const lookupKey = pickClubEmployeePersonLookupKey(e) ?? ''
+        const lookupKey = pickUserGuidForAuthLookup(e) || ''
         return {
           id: String(e.id ?? e.employeeId ?? `e-${index}`),
           userId: lookupKey,
@@ -109,7 +122,7 @@ const ClubAdminEmployees = () => {
           }
           const first = String(p.firstName ?? p.FirstName ?? '').trim()
           const last = String(p.lastName ?? p.LastName ?? '').trim()
-          const full = displayNameFromAuthUserDto(p)
+          const full = firstLastNameFromAuthUserDto(p) || displayNameFromAuthUserDto(p)
           const next =
             first || last
               ? { name: first || row.name, surname: last, email: String(p.email ?? p.Email ?? '').trim() || row.email }

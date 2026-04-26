@@ -25,12 +25,14 @@ export const CLUB_MEDIA_BASE = String(
     'https://myada-app.s3.eu-north-1.amazonaws.com'
 ).replace(/\/+$/, '')
 
+const DEFAULT_CLUB_IMAGE_PATH = '/clubs/default.svg'
+
 export function resolveClubMediaUrl(path) {
   if (path == null || path === '') return null
   const s = String(path).trim()
   if (/^https?:\/\//i.test(s)) return s
-  const isDefaultPlaceholder = /^\/clubs\/default\.png$/i.test(s) || /^clubs\/default\.png$/i.test(s)
-  const base = (isDefaultPlaceholder ? clubGatewayOrigin() : CLUB_MEDIA_BASE).replace(/\/+$/, '')
+  if (/^\/?clubs\/default\.(png|svg)(\?.*)?$/i.test(s)) return DEFAULT_CLUB_IMAGE_PATH
+  const base = CLUB_MEDIA_BASE.replace(/\/+$/, '')
   return `${base}${s.startsWith('/') ? s : `/${s}`}`
 }
 

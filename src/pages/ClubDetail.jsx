@@ -151,6 +151,9 @@ const ClubDetail = () => {
             name: 'Club',
             category: '',
             image: null,
+            profileImageUrl: null,
+            bannerImage: null,
+            backgroundImageUrl: null,
             tags: [],
             members: 0,
             about: '',
@@ -419,6 +422,16 @@ const ClubDetail = () => {
     return []
   }, [club])
 
+  const clubLogoImage = useMemo(
+    () => club?.profileImageUrl || club?.image || '',
+    [club]
+  )
+
+  const clubHeroImage = useMemo(
+    () => club?.backgroundImageUrl || club?.bannerImage || '',
+    [club]
+  )
+
   if (loadState.loading) {
     return (
       <div className="club-detail-page club-detail-page--not-found">
@@ -456,11 +469,11 @@ const ClubDetail = () => {
         <div
           className="club-detail-hero-banner"
           style={{
-            backgroundImage: (club.bannerImage || club.image) ? `url(${club.bannerImage || club.image})` : undefined,
+            backgroundImage: clubHeroImage ? `url(${clubHeroImage})` : undefined,
           }}
         />
         <div className="club-detail-hero-card">
-          <div className="club-detail-hero-card-logo" style={{ backgroundImage: club.image ? `url(${club.image})` : undefined }} />
+          <div className="club-detail-hero-card-logo" style={{ backgroundImage: clubLogoImage ? `url(${clubLogoImage})` : undefined }} />
           <div className="club-detail-hero-card-info">
             <h1 className="club-detail-hero-title">{club.name}</h1>
             <span className="club-detail-hero-tag">{club.category}</span>
@@ -532,7 +545,7 @@ const ClubDetail = () => {
                       <div
                         className="club-detail-activity-img"
                         style={{
-                          backgroundImage: (ev.image || club.image) ? `url(${ev.image || club.image})` : undefined,
+                          backgroundImage: (ev.image || clubHeroImage || clubLogoImage) ? `url(${ev.image || clubHeroImage || clubLogoImage})` : undefined,
                         }}
                       />
                       <span className="club-detail-activity-title">{ev.title}</span>
@@ -543,7 +556,7 @@ const ClubDetail = () => {
                       <div
                         className="club-detail-activity-img"
                         style={{
-                          backgroundImage: club.bannerImage || club.image ? `url(${club.bannerImage || club.image})` : undefined,
+                          backgroundImage: (clubHeroImage || clubLogoImage) ? `url(${clubHeroImage || clubLogoImage})` : undefined,
                         }}
                       />
                       <span className="club-detail-activity-title">More activities coming soon</span>
