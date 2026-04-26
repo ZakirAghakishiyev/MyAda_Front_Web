@@ -9,6 +9,7 @@ import {
   markRequestCompleted,
   staffMayViewSupportRequest,
 } from '../api/supportApi'
+import { useCallHub } from '../call/useCallHub'
 
 const IconBack = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -41,6 +42,11 @@ const IconPerson = () => (
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
   </svg>
 )
+const IconPhone = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+)
 const IconTimeline = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
@@ -65,7 +71,10 @@ const StaffTicketDetail = () => {
   const [request, setRequest] = React.useState(null)
   const [timeline, setTimeline] = React.useState([])
   const [loading, setLoading] = React.useState(true)
+  const [callingCreatorId, setCallingCreatorId] = React.useState('')
+  const [requestingCreatorId, setRequestingCreatorId] = React.useState('')
   const { staffId } = getCurrentUserIds()
+  const { phase, ringing, requestCall } = useCallHub()
 
   const loadData = React.useCallback((showLoader = false) => {
     if (showLoader) setLoading(true)
@@ -107,7 +116,26 @@ const StaffTicketDetail = () => {
     }
   }, [loadData])
 
+  React.useEffect(() => {
+    if (['idle', 'ended', 'rejected', 'cancelled', 'timeout', 'error', 'auth-expired'].includes(phase)) {
+      setCallingCreatorId('')
+      setRequestingCreatorId('')
+    }
+  }, [phase])
+
   const goBack = () => navigate('/staff-portal')
+
+  const handleCallCreator = React.useCallback(async () => {
+    const targetUserId = String(request?.createdById || '').trim()
+    if (!targetUserId) return
+    setCallingCreatorId(targetUserId)
+    setRequestingCreatorId(targetUserId)
+    try {
+      await requestCall(targetUserId)
+    } finally {
+      setRequestingCreatorId('')
+    }
+  }, [request?.createdById, requestCall])
 
   if (loading) {
     return <div className="rd-overlay"><div className="rd-popup">Loading ticket...</div></div>
@@ -128,6 +156,14 @@ const StaffTicketDetail = () => {
   const isCompleted = request.status === 'Completed'
   const isCancelledStatus = request.status === 'Cancelled'
   const priorityLabel = request.priority || request.urgency || 'Standard'
+  const creatorRoleText = request.creatorRoleLabel === 'teacher' ? 'Teacher' : 'Creator'
+  const isCallLocked = ['connecting', 'ringing', 'incoming', 'accepted', 'in-call'].includes(phase)
+  const ringingTargetId = String(ringing?.dispatcherUserId || '').trim()
+  let callButtonLabel = `Call ${creatorRoleText}`
+  if (requestingCreatorId && requestingCreatorId === String(request.createdById || '')) callButtonLabel = 'Calling...'
+  else if (ringingTargetId && ringingTargetId === String(request.createdById || '')) callButtonLabel = 'Calling...'
+  else if (callingCreatorId && callingCreatorId === String(request.createdById || '') && phase === 'accepted') callButtonLabel = 'Joining...'
+  else if (callingCreatorId && callingCreatorId === String(request.createdById || '') && phase === 'in-call') callButtonLabel = 'In Call'
 
   return (
     <div className="rd-overlay" onClick={(e) => e.target === e.currentTarget && goBack()} role="dialog" aria-modal="true">
@@ -199,10 +235,29 @@ const StaffTicketDetail = () => {
             </section>
           )}
 
-          {request.assignedTo && (
+          {(request.assignedTo || request.createdById) && (
             <section className="rd-card rd-card--assigned">
               <h2 className="rd-card-title"><IconPerson /> Assigned To</h2>
-              <p className="rd-assigned-name">{request.assignedTo}</p>
+              {request.assignedTo && <p className="rd-assigned-name">{request.assignedTo}</p>}
+              {request.createdById && (
+                <div className="rd-assigned-row">
+                  <div>
+                    <p className="rd-assigned-meta">
+                      Created by {request.creatorName || `ticket ${creatorRoleText.toLowerCase()}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rd-btn rd-btn--contact rd-btn--inline"
+                    onClick={handleCallCreator}
+                    disabled={isCallLocked || requestingCreatorId === String(request.createdById || '')}
+                    title={request.creatorName ? `Call ${request.creatorName}` : `Call ${creatorRoleText.toLowerCase()}`}
+                  >
+                    <IconPhone />
+                    {callButtonLabel}
+                  </button>
+                </div>
+              )}
             </section>
           )}
 

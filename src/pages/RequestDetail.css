@@ -411,6 +411,20 @@
 .rd-card--assigned .rd-card-title { color: #0e7490; }
 .rd-card--assigned .rd-card-title svg { color: #0e7490; }
 .rd-assigned-name { font-size: 16px; font-weight: 600; color: #0e7490; margin: 0; }
+.rd-assigned-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rd-assigned-meta {
+  margin: 0;
+  font-size: 13px;
+  color: #155e75;
+}
 
 .rd-card--completed {
   background: #dcfce7;
@@ -525,6 +539,12 @@
 }
 
 .rd-btn--contact:hover { background: #f9fafb; }
+.rd-btn--inline {
+  flex: none;
+  width: auto;
+  min-width: 160px;
+}
+
 .rd-btn--cancel {
   background: #dc2626;
   color: #fff;

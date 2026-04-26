@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import './StaffPortal.css'
 import {
   getCurrentUserIds,
+  getRequestDetail,
   getStaffRequests,
   mapListItemToCard,
   markRequestCompleted,
   markRequestInProgress,
 } from '../api/supportApi'
+import { useCallHub } from '../call/useCallHub'
 
 const IconLocation = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -20,6 +22,12 @@ const IconPerson = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
+  </svg>
+)
+
+const IconPhone = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
   </svg>
 )
 
@@ -43,7 +51,11 @@ const StaffPortal = () => {
   const navigate = useNavigate()
   const [jobs, setJobs] = useState([])
   const [updatedId, setUpdatedId] = useState(null)
+  const [resolvingCallJobId, setResolvingCallJobId] = useState(null)
+  const [callingCreatorId, setCallingCreatorId] = useState('')
+  const [requestingCreatorId, setRequestingCreatorId] = useState('')
   const { staffId } = getCurrentUserIds()
+  const { phase, ringing, requestCall } = useCallHub()
 
   const loadJobs = useCallback(() => {
     getStaffRequests(staffId)
@@ -58,6 +70,7 @@ const StaffPortal = () => {
               tag: j.urgency === 'Critical' ? 'EMERGENCY' : `${j.service || 'IT'} SUPPORT`,
               tagClass: j.urgency === 'Critical' ? 'emergency' : String(j.service || '').toLowerCase(),
               sub: j.assignedTo || 'Assigned by dispatcher',
+              subIcon: j.assignedTo ? 'person' : null,
               status: j.status === 'InProgress' ? 'in_progress' : 'pending',
               service: String(j.service || '').toLowerCase(),
             }))
@@ -78,6 +91,14 @@ const StaffPortal = () => {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [loadJobs])
+
+  useEffect(() => {
+    if (['idle', 'ended', 'rejected', 'cancelled', 'timeout', 'error', 'auth-expired'].includes(phase)) {
+      setCallingCreatorId('')
+      setRequestingCreatorId('')
+      setResolvingCallJobId(null)
+    }
+  }, [phase])
 
   const openTicket = (id) => {
     setJobs((prev) =>
@@ -102,6 +123,78 @@ const StaffPortal = () => {
       loadJobs()
     })
   }, [loadJobs, staffId])
+
+  const resolveCreatorForJob = useCallback(async (job) => {
+    const directUserId = String(job?.createdById || '').trim()
+    if (directUserId) {
+      return {
+        userId: directUserId,
+        creatorName: job?.creatorName || null,
+      }
+    }
+
+    setResolvingCallJobId(job?.id || null)
+    try {
+      const detail = await getRequestDetail(job.id)
+      const resolvedUserId = String(detail?.createdById || detail?.reporter?.memberId || '').trim()
+      const resolvedName =
+        detail?.creatorName ||
+        detail?.reporter?.fullName ||
+        job?.creatorName ||
+        null
+
+      if (!resolvedUserId) {
+        throw new Error('Ticket creator id is not available for this request.')
+      }
+
+      setJobs((prev) =>
+        prev.map((item) =>
+          item.id === job.id
+            ? {
+                ...item,
+                createdById: resolvedUserId,
+                creatorName: resolvedName,
+              }
+            : item
+        )
+      )
+
+      return {
+        userId: resolvedUserId,
+        creatorName: resolvedName,
+      }
+    } finally {
+      setResolvingCallJobId(null)
+    }
+  }, [])
+
+  const handleCallCreator = useCallback(async (job) => {
+    try {
+      const { userId } = await resolveCreatorForJob(job)
+      if (!userId) return
+      setCallingCreatorId(userId)
+      setRequestingCreatorId(userId)
+      await requestCall(userId)
+    } catch (err) {
+      window.alert(err?.message || 'Could not start a call to the ticket creator.')
+    } finally {
+      setRequestingCreatorId('')
+    }
+  }, [requestCall, resolveCreatorForJob])
+
+  const isCallLocked = ['connecting', 'ringing', 'incoming', 'accepted', 'in-call'].includes(phase)
+
+  const getCallButtonLabel = useCallback((job) => {
+    const targetUserId = String(job?.createdById || '').trim()
+    const roleLabel = job?.creatorRoleLabel === 'teacher' ? 'Teacher' : 'Creator'
+    if (resolvingCallJobId === job?.id) return 'Preparing...'
+    if (!targetUserId) return `Call ${roleLabel}`
+    if (requestingCreatorId === targetUserId) return 'Calling...'
+    if (String(ringing?.dispatcherUserId || '').trim() === targetUserId) return 'Calling...'
+    if (callingCreatorId === targetUserId && phase === 'accepted') return 'Joining...'
+    if (callingCreatorId === targetUserId && phase === 'in-call') return 'In Call'
+    return `Call ${roleLabel}`
+  }, [callingCreatorId, phase, requestingCreatorId, resolvingCallJobId, ringing?.dispatcherUserId])
 
   return (
     <>
@@ -132,11 +225,26 @@ const StaffPortal = () => {
               <IconLocation />
               <span>{job.location}</span>
             </div>
-            <div className="sp-job-sub">
-              {job.subIcon === 'person' ? <IconPerson /> : null}
-              <span>{job.sub}</span>
+            <div className="sp-job-assignee-row">
+              <div className="sp-job-sub">
+                {job.subIcon === 'person' ? <IconPerson /> : null}
+                <span>{job.sub}</span>
+              </div>
             </div>
             <div className="sp-job-actions" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="sp-btn sp-btn--call sp-btn--transition"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleCallCreator(job)
+                }}
+                disabled={isCallLocked || resolvingCallJobId === job.id || requestingCreatorId === String(job.createdById)}
+                title={job.creatorName ? `Call ${job.creatorName}` : 'Call ticket creator'}
+              >
+                <IconPhone />
+                {getCallButtonLabel(job)}
+              </button>
               {job.status === 'pending' && (
                 <button
                   type="button"
