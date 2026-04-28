@@ -3,7 +3,7 @@
  * Override via `VITE_API_BASE` (e.g. http://localhost:5000 or https://myada.duckdns.org).
  */
 const browserOrigin =
-  import.meta.env.DEV && typeof window !== 'undefined' && window.location?.origin
+  typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin.replace(/\/+$/, '')
     : ''
 

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://myada.duckdns.org/api/:path*"
+    },
+    {
+      "source": "/attendance/:path*",
+      "destination": "https://myada.duckdns.org/attendance/:path*"
+    },
+    {
+      "source": "/location/:path*",
+      "destination": "https://myada.duckdns.org/location/:path*"
+    },
+    {
+      "source": "/lostfound/:path*",
+      "destination": "https://myada.duckdns.org/lostfound/:path*"
+    },
+    {
+      "source": "/club/:path*",
+      "destination": "https://myada.duckdns.org/club/:path*"
+    },
+    {
+      "source": "/support/:path*",
+      "destination": "https://myada.duckdns.org/support/:path*"
+    }
+  ]
+}

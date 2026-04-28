@@ -1,5 +1,5 @@
 const browserOrigin =
-  import.meta.env.DEV && typeof window !== 'undefined' && window.location?.origin
+  typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin.replace(/\/$/, '')
     : ''
 
