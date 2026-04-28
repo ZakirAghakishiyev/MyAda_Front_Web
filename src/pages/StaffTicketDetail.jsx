@@ -7,6 +7,7 @@ import {
   getRequestTimeline,
   markRequestInProgress,
   markRequestCompleted,
+  resolveSupportRequestTeacherCallTarget,
   staffMayViewSupportRequest,
 } from '../api/supportApi'
 import { useCallHub } from '../call/useCallHub'
@@ -71,6 +72,7 @@ const StaffTicketDetail = () => {
   const [request, setRequest] = React.useState(null)
   const [timeline, setTimeline] = React.useState([])
   const [loading, setLoading] = React.useState(true)
+  const [resolvingCreatorCall, setResolvingCreatorCall] = React.useState(false)
   const [callingCreatorId, setCallingCreatorId] = React.useState('')
   const [requestingCreatorId, setRequestingCreatorId] = React.useState('')
   const { staffId } = getCurrentUserIds()
@@ -126,16 +128,30 @@ const StaffTicketDetail = () => {
   const goBack = () => navigate('/staff-portal')
 
   const handleCallCreator = React.useCallback(async () => {
-    const targetUserId = String(request?.createdById || '').trim()
-    if (!targetUserId) return
-    setCallingCreatorId(targetUserId)
-    setRequestingCreatorId(targetUserId)
+    setResolvingCreatorCall(true)
     try {
-      await requestCall(targetUserId)
+      const resolved = await resolveSupportRequestTeacherCallTarget(request)
+      setRequest((prev) =>
+        prev
+          ? {
+              ...prev,
+              creatorName: resolved.creatorName || prev.creatorName,
+              creatorEmail: resolved.creatorEmail || prev.creatorEmail,
+              creatorRoleLabel: 'teacher',
+              teacherCallTargetId: resolved.userId,
+            }
+          : prev
+      )
+      setCallingCreatorId(resolved.userId)
+      setRequestingCreatorId(resolved.userId)
+      await requestCall(resolved.userId)
+    } catch (err) {
+      window.alert(err?.message || 'Could not start a call to the ticket creator.')
     } finally {
+      setResolvingCreatorCall(false)
       setRequestingCreatorId('')
     }
-  }, [request?.createdById, requestCall])
+  }, [request, requestCall])
 
   if (loading) {
     return <div className="rd-overlay"><div className="rd-popup">Loading ticket...</div></div>
@@ -156,14 +172,19 @@ const StaffTicketDetail = () => {
   const isCompleted = request.status === 'Completed'
   const isCancelledStatus = request.status === 'Cancelled'
   const priorityLabel = request.priority || request.urgency || 'Standard'
-  const creatorRoleText = request.creatorRoleLabel === 'teacher' ? 'Teacher' : 'Creator'
+  const creatorRoleText =
+    request.teacherCallTargetId || request.creatorRoleLabel === 'teacher'
+      ? 'Teacher'
+      : 'Creator'
   const isCallLocked = ['connecting', 'ringing', 'incoming', 'accepted', 'in-call'].includes(phase)
-  const ringingTargetId = String(ringing?.dispatcherUserId || '').trim()
+  const callTargetUserId = String(request.teacherCallTargetId || '').trim()
+  const ringingTargetId = String(ringing?.targetUserId || ringing?.dispatcherUserId || '').trim()
   let callButtonLabel = `Call ${creatorRoleText}`
-  if (requestingCreatorId && requestingCreatorId === String(request.createdById || '')) callButtonLabel = 'Calling...'
-  else if (ringingTargetId && ringingTargetId === String(request.createdById || '')) callButtonLabel = 'Calling...'
-  else if (callingCreatorId && callingCreatorId === String(request.createdById || '') && phase === 'accepted') callButtonLabel = 'Joining...'
-  else if (callingCreatorId && callingCreatorId === String(request.createdById || '') && phase === 'in-call') callButtonLabel = 'In Call'
+  if (resolvingCreatorCall) callButtonLabel = 'Preparing...'
+  else if (requestingCreatorId && requestingCreatorId === callTargetUserId) callButtonLabel = 'Calling...'
+  else if (ringingTargetId && ringingTargetId === callTargetUserId) callButtonLabel = 'Calling...'
+  else if (callingCreatorId && callingCreatorId === callTargetUserId && phase === 'accepted') callButtonLabel = 'Joining...'
+  else if (callingCreatorId && callingCreatorId === callTargetUserId && phase === 'in-call') callButtonLabel = 'In Call'
 
   return (
     <div className="rd-overlay" onClick={(e) => e.target === e.currentTarget && goBack()} role="dialog" aria-modal="true">
@@ -250,8 +271,8 @@ const StaffTicketDetail = () => {
                     type="button"
                     className="rd-btn rd-btn--contact rd-btn--inline"
                     onClick={handleCallCreator}
-                    disabled={isCallLocked || requestingCreatorId === String(request.createdById || '')}
-                    title={request.creatorName ? `Call ${request.creatorName}` : `Call ${creatorRoleText.toLowerCase()}`}
+                    disabled={isCallLocked || resolvingCreatorCall || requestingCreatorId === callTargetUserId}
+                    title={request.creatorName ? `Call ${request.creatorName}` : 'Call ticket teacher'}
                   >
                     <IconPhone />
                     {callButtonLabel}

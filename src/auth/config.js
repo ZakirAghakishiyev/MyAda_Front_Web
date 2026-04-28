@@ -1,3 +1,9 @@
+const browserOrigin =
+  import.meta.env.DEV && typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin.replace(/\/$/, '')
+    : ''
+
 export const AUTH_API_BASE =
   import.meta.env.VITE_AUTH_API_BASE?.replace(/\/$/, '') ||
-  'http://13.60.31.141:5000'
+  browserOrigin ||
+  'https://myada.duckdns.org'

@@ -25,7 +25,7 @@ export function getSupportApiBases() {
 
 /**
  * Same gateway root as login / `authFetch` ({@link AUTH_API_BASE}), so dispatcher
- * `users-by-role` calls hit e.g. `http://13.60.31.141:5000/api/auth/users-by-role/...`.
+ * `users-by-role` calls hit e.g. `https://myada.duckdns.org/api/auth/users-by-role/...`.
  * Override list only with `VITE_AUTH_API_BASES` (comma/semicolon-separated full `.../users-by-role` bases).
  */
 export const DISPATCHER_ROLE_USER_URLS = import.meta.env.VITE_AUTH_API_BASES

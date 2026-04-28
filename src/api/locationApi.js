@@ -1,11 +1,12 @@
 import { authFetch } from '../auth'
+import { API_BASE } from './apiBase'
 
 // Base should point to the Location service or gateway prefix (no trailing slash).
 // Examples:
 // - Local:    http://localhost:5010
-// - Gateway:  http://<host>:5000/location
+// - Gateway:  https://myada.duckdns.org/location
 const LOCATION_API_BASE = (
-  import.meta.env.VITE_LOCATION_API_BASE ?? 'http://13.60.31.141:5000/location'
+  import.meta.env.VITE_LOCATION_API_BASE ?? `${API_BASE}/location`
 ).replace(/\/+$/, '')
 
 function joinUrl(base, path) {

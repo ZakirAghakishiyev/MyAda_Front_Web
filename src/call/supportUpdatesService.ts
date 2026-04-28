@@ -18,7 +18,7 @@ function buildSupportUpdatesHubCandidates(): string[] {
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
   const bases = envBase
     ? [envBase]
-    : ['http://13.60.31.141:5000', 'http://13.60.31.141']
+    : ['https://myada.duckdns.org']
 
   return uniqueUrls(bases.map((b) => `${b}/support/hubs/support-updates`))
 }

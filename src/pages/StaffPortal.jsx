@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import './StaffPortal.css'
 import {
   getCurrentUserIds,
-  getRequestDetail,
   getStaffRequests,
   mapListItemToCard,
   markRequestCompleted,
   markRequestInProgress,
+  resolveSupportRequestTeacherCallTarget,
 } from '../api/supportApi'
 import { useCallHub } from '../call/useCallHub'
 
@@ -125,7 +125,7 @@ const StaffPortal = () => {
   }, [loadJobs, staffId])
 
   const resolveCreatorForJob = useCallback(async (job) => {
-    const directUserId = String(job?.createdById || '').trim()
+    const directUserId = String(job?.teacherCallTargetId || '').trim()
     if (directUserId) {
       return {
         userId: directUserId,
@@ -135,33 +135,25 @@ const StaffPortal = () => {
 
     setResolvingCallJobId(job?.id || null)
     try {
-      const detail = await getRequestDetail(job.id)
-      const resolvedUserId = String(detail?.createdById || detail?.reporter?.memberId || '').trim()
-      const resolvedName =
-        detail?.creatorName ||
-        detail?.reporter?.fullName ||
-        job?.creatorName ||
-        null
-
-      if (!resolvedUserId) {
-        throw new Error('Ticket creator id is not available for this request.')
-      }
+      const resolved = await resolveSupportRequestTeacherCallTarget(job)
 
       setJobs((prev) =>
         prev.map((item) =>
           item.id === job.id
             ? {
                 ...item,
-                createdById: resolvedUserId,
-                creatorName: resolvedName,
+                creatorName: resolved.creatorName || item.creatorName,
+                creatorEmail: resolved.creatorEmail || item.creatorEmail,
+                creatorRoleLabel: 'teacher',
+                teacherCallTargetId: resolved.userId,
               }
             : item
         )
       )
 
       return {
-        userId: resolvedUserId,
-        creatorName: resolvedName,
+        userId: resolved.userId,
+        creatorName: resolved.creatorName,
       }
     } finally {
       setResolvingCallJobId(null)
@@ -185,16 +177,15 @@ const StaffPortal = () => {
   const isCallLocked = ['connecting', 'ringing', 'incoming', 'accepted', 'in-call'].includes(phase)
 
   const getCallButtonLabel = useCallback((job) => {
-    const targetUserId = String(job?.createdById || '').trim()
-    const roleLabel = job?.creatorRoleLabel === 'teacher' ? 'Teacher' : 'Creator'
+    const targetUserId = String(job?.teacherCallTargetId || '').trim()
     if (resolvingCallJobId === job?.id) return 'Preparing...'
-    if (!targetUserId) return `Call ${roleLabel}`
+    if (!targetUserId) return 'Call Teacher'
     if (requestingCreatorId === targetUserId) return 'Calling...'
-    if (String(ringing?.dispatcherUserId || '').trim() === targetUserId) return 'Calling...'
+    if (String(ringing?.targetUserId || ringing?.dispatcherUserId || '').trim() === targetUserId) return 'Calling...'
     if (callingCreatorId === targetUserId && phase === 'accepted') return 'Joining...'
     if (callingCreatorId === targetUserId && phase === 'in-call') return 'In Call'
-    return `Call ${roleLabel}`
-  }, [callingCreatorId, phase, requestingCreatorId, resolvingCallJobId, ringing?.dispatcherUserId])
+    return 'Call Teacher'
+  }, [callingCreatorId, phase, requestingCreatorId, resolvingCallJobId, ringing?.dispatcherUserId, ringing?.targetUserId])
 
   return (
     <>
@@ -239,8 +230,8 @@ const StaffPortal = () => {
                   e.stopPropagation()
                   handleCallCreator(job)
                 }}
-                disabled={isCallLocked || resolvingCallJobId === job.id || requestingCreatorId === String(job.createdById)}
-                title={job.creatorName ? `Call ${job.creatorName}` : 'Call ticket creator'}
+                disabled={isCallLocked || resolvingCallJobId === job.id || requestingCreatorId === String(job.teacherCallTargetId || '')}
+                title={job.creatorName ? `Call ${job.creatorName}` : 'Call ticket teacher'}
               >
                 <IconPhone />
                 {getCallButtonLabel(job)}

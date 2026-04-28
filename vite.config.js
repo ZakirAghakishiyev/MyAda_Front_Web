@@ -1,18 +1,30 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const GATEWAY_TARGET = process.env.VITE_DEV_GATEWAY_TARGET || 'http://13.60.31.141:5000'
+const GATEWAY_TARGET = process.env.VITE_DEV_GATEWAY_TARGET || 'https://myada.duckdns.org'
+
+const proxyToGateway = (extra = {}) => ({
+  target: GATEWAY_TARGET,
+  changeOrigin: true,
+  secure: false,
+  ...extra,
+})
+
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
     host: true,
     open: true,
-    // Match `/club/...` only, not `/clubs/...` (Vite’s string prefix would wrongly proxy the SPA).
+    // Match `/club/...` only, not `/clubs/...` so the SPA route stays local.
     proxy: {
-      '/call': { target: GATEWAY_TARGET, changeOrigin: true, ws: true },
-      '^/club(?=/|$)': { target: GATEWAY_TARGET, changeOrigin: true },
-      '/support': { target: GATEWAY_TARGET, changeOrigin: true, ws: true },
+      '/api': proxyToGateway(),
+      '/attendance': proxyToGateway(),
+      '/location': proxyToGateway(),
+      '/lostfound': proxyToGateway(),
+      '/call': proxyToGateway({ ws: true }),
+      '^/club(?=/|$)': proxyToGateway(),
+      '/support': proxyToGateway({ ws: true }),
     },
   },
 })

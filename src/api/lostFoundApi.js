@@ -1,7 +1,8 @@
 import { authFetch } from '../auth'
+import { API_BASE } from './apiBase'
 
-// Gateway base (override with VITE_LOST_FOUND_HOST). Default port matches this deployment: 5000
-const LOST_FOUND_HOST = (import.meta.env.VITE_LOST_FOUND_HOST ?? 'http://13.60.31.141:5000').replace(
+// Gateway base (override with VITE_LOST_FOUND_HOST).
+const LOST_FOUND_HOST = (import.meta.env.VITE_LOST_FOUND_HOST ?? API_BASE).replace(
   /\/+$/,
   '',
 )

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { getAccessToken } from '../auth'
+import { getAccessToken, getAccessTokenExpirationMs } from '../auth'
 import { isDispatcherAccessToken } from '../auth/jwtPayload'
 import IncomingCallModal from './IncomingCallModal'
 import { useCallHub } from './useCallHub'
@@ -72,20 +72,29 @@ const GlobalCallUi: React.FC = () => {
   const hasCallMedia = Boolean(localStream || remoteStream)
 
   useEffect(() => {
+    const isTokenValid = (token: string | null) => {
+      if (!token) return false
+      const expiresAtMs = getAccessTokenExpirationMs(token)
+      return expiresAtMs == null || Date.now() < expiresAtMs - 5000
+    }
+
     const reconcile = () => {
       const token = getAccessToken()
-      if (!token) {
+      const tokenIsValid = isTokenValid(token)
+
+      if (!tokenIsValid || isAuthRoute(location.pathname)) {
         void disconnect().catch(() => null)
         return
       }
-      if (isAuthRoute(location.pathname)) return
+
+      if (phase === 'connecting' || phase === 'connected') return
       void connect().catch(() => null)
     }
 
     reconcile()
     const interval = window.setInterval(reconcile, 1500)
     return () => window.clearInterval(interval)
-  }, [location.pathname, connect, disconnect])
+  }, [location.pathname, phase, connect, disconnect])
 
   useEffect(() => {
     const el = audioEl

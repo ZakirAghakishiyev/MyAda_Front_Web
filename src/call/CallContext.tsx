@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
-import { getAccessToken, forceLogoutAndRedirectLogin } from '../auth'
+import { getAccessToken, getAccessTokenExpirationMs, forceLogoutAndRedirectLogin } from '../auth'
 import { buildIceServersEndpoint, callHubClient } from './callHubClient'
 import { invalidateCallHistory } from './callHistoryInvalidate'
 import type {
@@ -90,6 +90,9 @@ function formatCallHubError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err || 'Unknown call error.')
   if (/dispatcher is offline/i.test(raw)) {
     return "Target user is offline or unavailable for call routing. Ensure the target user id equals their JWT 'sub' and that their session is connected."
+  }
+  if (/only dispatchers can call non-dispatcher users/i.test(raw)) {
+    return 'This call is allowed only when support/staff is calling a connected instructor account. Verify the ticket creator was matched to the instructor user and that both sessions expose their role claims to CallService.'
   }
   const hubMatch = raw.match(/HubException:\s*(.+)/i)
   if (hubMatch?.[1]) {
@@ -722,6 +725,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ])
 
   const connect = useCallback(async () => {
+    const accessToken = getAccessToken()?.trim() || null
+    const expiresAtMs = getAccessTokenExpirationMs(accessToken)
+    const tokenIsValid = Boolean(accessToken) && (expiresAtMs == null || Date.now() < expiresAtMs - 5000)
+
+    if (!tokenIsValid) {
+      const message = accessToken ? 'expired or invalid' : 'missing'
+      console.warn('[CALL-DBG] connect skipped because access token is', message)
+      throw new Error(`Call hub connection skipped: access token ${message}.`)
+    }
+
     if (hubRef.current.state === signalR.HubConnectionState.Connected) {
       const id = hubRef.current.connectionId
       localConnectionIdRef.current = id || localConnectionIdRef.current

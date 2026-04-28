@@ -92,6 +92,15 @@ async function request(path, options = {}) {
   throw lastErr || new Error('Support API request failed.')
 }
 
+const SUPPORT_STAFF_STATUS_UNAVAILABLE_STATUSES = new Set([404, 501, 502, 503, 504])
+
+function isSupportStaffStatusEndpointUnavailable(err) {
+  const status = Number(err?.status)
+  if (SUPPORT_STAFF_STATUS_UNAVAILABLE_STATUSES.has(status)) return true
+  const msg = String(err?.message || '')
+  return /\((404|501|502|503|504)\)/.test(msg) || /not found|bad gateway|service unavailable/i.test(msg)
+}
+
 function toShortAge(iso) {
   if (!iso) return ''
   const ms = Date.now() - new Date(iso).getTime()
@@ -204,6 +213,21 @@ function resolveCreatorName(item) {
   if (!creatorId) return null
   if (creatorId.length > 12) return `User ${creatorId.slice(0, 8)}...`
   return `User ${creatorId}`
+}
+
+function resolveCreatorEmail(item) {
+  const label =
+    item?.createdByEmail ||
+    item?.creatorEmail ||
+    item?.requesterEmail ||
+    item?.requestedByEmail ||
+    item?.memberEmail ||
+    item?.teacherEmail ||
+    item?.instructorEmail ||
+    item?.reporter?.email ||
+    item?.reporter?.Email
+  const value = String(label || '').trim()
+  return value || null
 }
 
 function resolveCreatorRoleLabel(item) {
@@ -346,6 +370,19 @@ function resolveAttachmentDisplayUrl(url) {
   return String(url || '')
 }
 
+function normLookupKey(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+}
+
+function normPersonNameKey(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
 function normalizeSupportRequest(item) {
   if (!item || typeof item !== 'object') return item
   const createdAt = item.createdAt || item.created || null
@@ -363,7 +400,9 @@ function normalizeSupportRequest(item) {
     assignedStaffUserId: pickAssignedStaffUserId(item),
     createdById: pickCreatedByUserId(item),
     creatorName: resolveCreatorName(item),
+    creatorEmail: resolveCreatorEmail(item),
     creatorRoleLabel: resolveCreatorRoleLabel(item),
+    teacherCallTargetId: String(item?.teacherCallTargetId || '').trim() || null,
     service,
     location: buildRequestLocation(item),
     assignedTo: resolveAssignedStaffName(item),
@@ -525,6 +564,82 @@ function displayNameFromAuthUser(item) {
   )
 }
 
+function emailFromAuthDirectoryUser(item) {
+  return String(item?.email || item?.Email || item?.userName || item?.UserName || '').trim() || null
+}
+
+function mapAuthDirectoryUser(item, fallbackRole = '') {
+  const id = item?.id != null ? String(item.id).trim() : ''
+  if (!id) return null
+  const status = String(item?.status || '').trim().toLowerCase()
+  if (status && status !== 'active') return null
+  return {
+    id,
+    name: displayNameFromAuthUser(item),
+    email: emailFromAuthDirectoryUser(item),
+    role: String(item?.role || fallbackRole || '').trim().toLowerCase(),
+  }
+}
+
+const authUsersByRoleCache = new Map()
+
+async function fetchAuthUsersByRole(role) {
+  const roleKey = String(role || '').trim().toLowerCase()
+  if (!roleKey) return []
+  if (authUsersByRoleCache.has(roleKey)) return authUsersByRoleCache.get(roleKey)
+
+  const pending = (async () => {
+    const roleSeg = encodeURIComponent(roleKey)
+    const adminToken = String(import.meta.env.VITE_DISPATCHER_ROLE_TOKEN || '').trim()
+    for (const baseUrl of DISPATCHER_ROLE_USER_URLS) {
+      const root = String(baseUrl || '').replace(/\/+$/, '')
+      if (!root) continue
+      try {
+        const url = `${root}/${roleSeg}`
+        const res = adminToken
+          ? await fetch(url, {
+              headers: {
+                accept: 'application/json',
+                Authorization: `Bearer ${adminToken}`,
+              },
+            })
+          : await authFetch(url, { headers: { accept: 'application/json' } })
+        const text = await res.text()
+        if (!res.ok) continue
+        const data = text ? JSON.parse(text) : null
+        const users = Array.isArray(data?.users)
+          ? data.users
+          : Array.isArray(data)
+            ? data
+            : []
+        const mapped = users
+          .map((u) => mapAuthDirectoryUser(u, roleKey))
+          .filter(Boolean)
+        if (mapped.length > 0) return mapped
+      } catch {
+        /* try next base */
+      }
+    }
+    return []
+  })()
+
+  authUsersByRoleCache.set(roleKey, pending)
+  return pending
+}
+
+async function fetchTeacherDirectoryUsers() {
+  const rolesToTry = ['instructor', 'teacher']
+  const byId = new Map()
+  for (const role of rolesToTry) {
+    const users = await fetchAuthUsersByRole(role)
+    for (const user of users) {
+      if (!user?.id || byId.has(user.id)) continue
+      byId.set(user.id, user)
+    }
+  }
+  return [...byId.values()]
+}
+
 /**
  * Auth gateway: `GET /api/auth/users-by-role/{role}` (see AUTH_API_DOC.md).
  * Uses `VITE_DISPATCHER_ROLE_TOKEN` when set (admin bearer), otherwise the logged-in session via `authFetch`.
@@ -533,46 +648,111 @@ function displayNameFromAuthUser(item) {
  * @returns {Promise<{ id: string, name: string, area: string }[]>}
  */
 async function fetchAuthUsersByRoleForStaffPicker(role, areaLabel) {
-  const roleSeg = encodeURIComponent(String(role || '').trim().toLowerCase())
-  if (!roleSeg) return []
+  const users = await fetchAuthUsersByRole(role)
+  return users.map((user) => ({ id: user.id, name: user.name, area: areaLabel }))
+}
 
-  const adminToken = String(import.meta.env.VITE_DISPATCHER_ROLE_TOKEN || '').trim()
-  for (const baseUrl of DISPATCHER_ROLE_USER_URLS) {
-    const root = String(baseUrl || '').replace(/\/+$/, '')
-    if (!root) continue
-    try {
-      const url = `${root}/${roleSeg}`
-      const res = adminToken
-        ? await fetch(url, {
-            headers: {
-              accept: 'application/json',
-              Authorization: `Bearer ${adminToken}`,
-            },
-          })
-        : await authFetch(url, { headers: { accept: 'application/json' } })
-      const text = await res.text()
-      if (!res.ok) continue
-      const data = text ? JSON.parse(text) : null
-      const users = Array.isArray(data?.users)
-        ? data.users
-        : Array.isArray(data)
-          ? data
-          : []
-      const mapped = users
-        .map((u) => {
-          const id = u?.id != null ? String(u.id).trim() : ''
-          if (!id) return null
-          const statusOk = !u?.status || String(u.status).toLowerCase() === 'active'
-          if (!statusOk) return null
-          return { id, name: displayNameFromAuthUser(u), area: areaLabel }
-        })
-        .filter(Boolean)
-      if (mapped.length > 0) return mapped
-    } catch {
-      /* try next base */
+/**
+ * Resolve a support request creator to a teacher/instructor call target accepted by CallService `RequestCall(targetUserId)`.
+ * This uses Support detail data first, then verifies against Auth `users-by-role/instructor` so support staff do not
+ * attempt calls to non-teacher creators.
+ * @param {string | number | Record<string, unknown>} requestOrDetail
+ * @returns {Promise<{ userId: string, creatorName: string | null, creatorEmail: string | null, creatorRoleLabel: 'teacher' }>}
+ */
+export async function resolveSupportRequestTeacherCallTarget(requestOrDetail) {
+  let detail =
+    requestOrDetail && typeof requestOrDetail === 'object'
+      ? normalizeSupportRequest(requestOrDetail)
+      : await getRequestDetail(requestOrDetail)
+
+  if (
+    requestOrDetail &&
+    typeof requestOrDetail === 'object' &&
+    detail?.id != null &&
+    !String(detail?.teacherCallTargetId || '').trim() &&
+    detail?.creatorRoleLabel !== 'teacher' &&
+    !String(detail?.creatorEmail || '').trim()
+  ) {
+    detail = await getRequestDetail(detail.id)
+  }
+
+  const directTeacherTargetId = String(detail?.teacherCallTargetId || '').trim()
+  if (directTeacherTargetId) {
+    return {
+      userId: directTeacherTargetId,
+      creatorName: detail?.creatorName || null,
+      creatorEmail: detail?.creatorEmail || null,
+      creatorRoleLabel: 'teacher',
     }
   }
-  return []
+
+  const creatorId = String(detail?.createdById || '').trim()
+  const creatorName = String(detail?.creatorName || '').trim() || null
+  const creatorEmail = resolveCreatorEmail(detail)
+
+  if (detail?.creatorRoleLabel === 'teacher' && creatorId) {
+    return {
+      userId: creatorId,
+      creatorName,
+      creatorEmail,
+      creatorRoleLabel: 'teacher',
+    }
+  }
+
+  if (!creatorId && !creatorEmail && !creatorName) {
+    const err = new Error('Ticket creator information is missing for this request.')
+    err.code = 'SUPPORT_TEACHER_TARGET_MISSING'
+    throw err
+  }
+
+  const teachers = await fetchTeacherDirectoryUsers()
+  if (!teachers.length) {
+    const err = new Error('Could not verify the ticket creator as a teacher right now. Please try again after the instructor directory is available.')
+    err.code = 'SUPPORT_TEACHER_DIRECTORY_UNAVAILABLE'
+    throw err
+  }
+
+  const targetById = creatorId
+    ? teachers.find((teacher) => normLookupKey(teacher.id) === normLookupKey(creatorId))
+    : null
+  if (targetById) {
+    return {
+      userId: targetById.id,
+      creatorName: targetById.name || creatorName,
+      creatorEmail: targetById.email || creatorEmail,
+      creatorRoleLabel: 'teacher',
+    }
+  }
+
+  const creatorEmailKey = normLookupKey(creatorEmail)
+  const emailMatches = creatorEmailKey
+    ? teachers.filter((teacher) => normLookupKey(teacher.email) === creatorEmailKey)
+    : []
+  if (emailMatches.length === 1) {
+    return {
+      userId: emailMatches[0].id,
+      creatorName: emailMatches[0].name || creatorName,
+      creatorEmail: emailMatches[0].email || creatorEmail,
+      creatorRoleLabel: 'teacher',
+    }
+  }
+
+  const creatorNameKey = normPersonNameKey(creatorName)
+  const nameMatches = creatorNameKey
+    ? teachers.filter((teacher) => normPersonNameKey(teacher.name) === creatorNameKey)
+    : []
+  if (nameMatches.length === 1) {
+    return {
+      userId: nameMatches[0].id,
+      creatorName: nameMatches[0].name || creatorName,
+      creatorEmail: nameMatches[0].email || creatorEmail,
+      creatorRoleLabel: 'teacher',
+    }
+  }
+
+  const err = new Error('Only teacher-created tickets can be called from support. This ticket creator could not be verified as an instructor.')
+  err.code = 'SUPPORT_TEACHER_NOT_FOUND'
+  throw err
 }
 
 /**
@@ -827,8 +1007,20 @@ export async function markRequestCompleted(requestId, staffId) {
 }
 
 export async function getStaffStatusesByStatus(status) {
-  const result = await request(`/SupportStaffStatuses/status/${sp(status)}`)
-  return Array.isArray(result) ? result : []
+  if (getStaffStatusesByStatus.supportStatusEndpointUnavailable === true) {
+    return []
+  }
+  try {
+    const result = await request(`/SupportStaffStatuses/status/${sp(status)}`)
+    return Array.isArray(result) ? result : []
+  } catch (err) {
+    if (isSupportStaffStatusEndpointUnavailable(err)) {
+      getStaffStatusesByStatus.supportStatusEndpointUnavailable = true
+      isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = true
+      return []
+    }
+    throw err
+  }
 }
 
 export async function isDispatcherActiveByMemberId(memberId) {
@@ -858,9 +1050,10 @@ export async function isDispatcherActiveByMemberId(memberId) {
     if (rows.some((row) => rowMatchesTarget(row) && isActiveRow(row))) return true
     return rows.some((row) => isActiveRow(row))
   } catch (err) {
-    const msg = String(err?.message || '')
-    if (msg.includes('(404)') || /not found/i.test(msg)) {
-      // Disable this check after first 404 to avoid repeated console noise.
+    if (isSupportStaffStatusEndpointUnavailable(err)) {
+      // Backend does not expose SupportStaffStatuses routes consistently, or the gateway
+      // cannot reach them right now. Do not block call setup on this optional preflight.
+      getStaffStatusesByStatus.supportStatusEndpointUnavailable = true
       isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = true
       return true
     }
@@ -868,6 +1061,7 @@ export async function isDispatcherActiveByMemberId(memberId) {
   }
 }
 
+getStaffStatusesByStatus.supportStatusEndpointUnavailable = false
 isDispatcherActiveByMemberId.supportStatusEndpointUnavailable = false
 export function mapListItemToCard(item) {
   const a = String(item?.area || '').toLowerCase()
@@ -894,6 +1088,8 @@ export function mapListItemToCard(item) {
     unseen: Boolean(item.unseen),
     createdById: item.createdById || null,
     creatorName: item.creatorName || null,
+    creatorEmail: item.creatorEmail || null,
     creatorRoleLabel: item.creatorRoleLabel || 'creator',
+    teacherCallTargetId: item.teacherCallTargetId || null,
   }
 }

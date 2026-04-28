@@ -1,6 +1,6 @@
 import * as signalR from '@microsoft/signalr'
 
-const DEFAULT_GATEWAY_BASE = 'http://13.60.31.141:5000'
+const DEFAULT_GATEWAY_BASE = 'https://myada.duckdns.org'
 const DEFAULT_CALL_HUB_URL = `${DEFAULT_GATEWAY_BASE}/call/hub`
 
 function trimTrailingSlash(value: string) {
@@ -80,23 +80,79 @@ class CallHubClient {
     return buildIceServersEndpoint(this.lastHubUrl || resolveHubUrl())
   }
 
+  private createConnection(hubUrl: string, getAccessToken: () => string | null) {
+    return new signalR.HubConnectionBuilder()
+      .withUrl(hubUrl, {
+        accessTokenFactory: () => getAccessToken() || '',
+      })
+      .withAutomaticReconnect([0, 2000, 5000, 10000])
+      .build()
+  }
+
   async connect(getAccessToken: () => string | null) {
-    if (this.connection?.state === signalR.HubConnectionState.Connected) return
-    if (this.connectInFlight) return this.connectInFlight
+    const hubUrl = resolveHubUrl()
+    const accessToken = getAccessToken()?.trim() || null
+    const hasToken = Boolean(accessToken)
+
+    console.info('[CALL-DBG] CallHubClient.connect', { hubUrl, hasToken })
+    if (!hasToken) {
+      console.warn('[CALL-DBG] CallHubClient.connect skipped: missing access token')
+      throw new Error('Call hub connection skipped: missing access token.')
+    }
+
+    const urlChanged = this.lastHubUrl !== hubUrl
+    if (urlChanged && this.connection) {
+      console.info('[CALL-DBG] CallHubClient.connect detected hub url change, recreating connection', {
+        previousHubUrl: this.lastHubUrl,
+        nextHubUrl: hubUrl,
+      })
+      await this.stop()
+    }
+
+    this.lastHubUrl = hubUrl
+    if (!this.connection) {
+      this.connection = this.createConnection(hubUrl, getAccessToken)
+    }
+
+    if (this.connection.state === signalR.HubConnectionState.Connected) {
+      console.info('[CALL-DBG] CallHubClient.connect already connected', { hubUrl })
+      return
+    }
+
+    if (this.connectInFlight) {
+      console.info('[CALL-DBG] CallHubClient.connect already in flight', { hubUrl })
+      return this.connectInFlight
+    }
 
     this.connectInFlight = (async () => {
-      const hubUrl = resolveHubUrl()
-      this.lastHubUrl = hubUrl
-      if (!this.connection) {
-        this.connection = new signalR.HubConnectionBuilder()
-          .withUrl(hubUrl, {
-            accessTokenFactory: () => getAccessToken() || '',
-          })
-          .withAutomaticReconnect()
-          .build()
+      if (
+        this.connection?.state === signalR.HubConnectionState.Connecting ||
+        this.connection?.state === signalR.HubConnectionState.Reconnecting
+      ) {
+        console.info('[CALL-DBG] CallHubClient.connect waiting for existing connection state', {
+          hubUrl,
+          state: this.connection.state,
+        })
+        return
       }
-      if (this.connection.state === signalR.HubConnectionState.Disconnected) {
-        await this.connection.start()
+
+      if (this.connection?.state === signalR.HubConnectionState.Disconnected) {
+        console.info('[CALL-DBG] CallHubClient.starting connection', { hubUrl })
+        try {
+          await this.connection.start()
+          console.info('[CALL-DBG] CallHubClient.start success', {
+            hubUrl,
+            connectionId: this.connection.connectionId,
+          })
+        } catch (err) {
+          const statusCode = (err as any).statusCode ?? (err as any).status ?? null
+          console.error('[CALL-DBG] CallHubClient.start failed', {
+            hubUrl,
+            statusCode,
+            message: String((err as Error)?.message || err),
+          })
+          throw err
+        }
       }
     })().finally(() => {
       this.connectInFlight = null
