@@ -18,6 +18,10 @@
       "destination": "https://myada.duckdns.org/lostfound/:path*"
     },
     {
+      "source": "/call/:path*",
+      "destination": "https://myada.duckdns.org/call/:path*"
+    },
+    {
       "source": "/club/:path*",
       "destination": "https://myada.duckdns.org/club/:path*"
     },

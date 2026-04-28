@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react'
-import { isDispatcherActiveByMemberId } from '../api/supportApi'
 
 type DispatcherLike = {
   sub: string
@@ -9,7 +8,7 @@ type DispatcherLike = {
 type Props = {
   dispatchers: DispatcherLike[]
   callPhase: string
-  onRequestCall: (dispatcherSub: string) => Promise<void> | void
+  onRequestCall: (targetUserId: string) => Promise<void> | void
 }
 
 const CallDispatcherButton: React.FC<Props> = ({ dispatchers, callPhase, onRequestCall }) => {
@@ -27,12 +26,7 @@ const CallDispatcherButton: React.FC<Props> = ({ dispatchers, callPhase, onReque
     setChecking(true)
     setStatusText('')
     try {
-      const active = await isDispatcherActiveByMemberId(selected.sub)
-      if (!active) {
-        setStatusText('Dispatcher is not active right now.')
-        return
-      }
-      setStatusText('Dispatcher is active. Sending call request...')
+      setStatusText('Sending call request...')
       await onRequestCall(selected.sub)
     } catch (err: any) {
       setStatusText(err?.message || 'Could not start dispatcher call.')
@@ -52,7 +46,7 @@ const CallDispatcherButton: React.FC<Props> = ({ dispatchers, callPhase, onReque
         ))}
       </select>
       <button type="button" disabled={!selected || checking || callPhase !== 'connected'} onClick={handleClick}>
-        {checking ? 'Checking dispatcher...' : 'Call Dispatcher'}
+        {checking ? 'Calling...' : 'Call Dispatcher'}
       </button>
       {statusText && <span style={{ color: '#0f766e', fontSize: 13 }}>{statusText}</span>}
     </div>

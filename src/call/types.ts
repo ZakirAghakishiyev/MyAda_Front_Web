@@ -48,7 +48,8 @@ export type IncomingCallPayload = {
 export type CallRingingPayload = {
   callId: string
   roomId: string
-  dispatcherUserId: string
+  dispatcherUserId?: string
+  targetUserId?: string
   requestedAtUtc?: string
   expiresAtUtc?: string
 }

@@ -34,7 +34,7 @@ type CallContextValue = {
   remoteStream: MediaStream | null
   connect: () => Promise<void>
   disconnect: () => Promise<void>
-  requestCall: (dispatcherUserId: string) => Promise<void>
+  requestCall: (targetUserId: string) => Promise<void>
   acceptCall: (callId: string) => Promise<void>
   rejectCall: (callId: string, reason?: string) => Promise<void>
   cancelCall: (callId: string, reason?: string) => Promise<void>
@@ -491,9 +491,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.on('CallRinging', (payload: CallRingingPayload) => {
       invalidateCallHistory()
-      setRinging(payload)
-      setCallId(payload.callId)
-      setActiveRoomId(payload.roomId)
+      const normalizedPayload: CallRingingPayload = {
+        ...payload,
+        targetUserId: payload.targetUserId || payload.dispatcherUserId,
+        dispatcherUserId: payload.dispatcherUserId || payload.targetUserId,
+      }
+      setRinging(normalizedPayload)
+      setCallId(normalizedPayload.callId)
+      setActiveRoomId(normalizedPayload.roomId)
       setPhase('ringing')
     })
     hub.on('CallAccepted', (payload: CallAcceptedPayload) => {
@@ -745,20 +750,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return
     }
 
+    if (!hubEventsWiredRef.current) {
+      wireEvents()
+      hubEventsWiredRef.current = true
+    }
+
     setPhase('connecting')
     setError(null)
     try {
       await hubRef.current.connect(getAccessToken)
       const id = hubRef.current.connectionId
       localConnectionIdRef.current = id || null
-      if (!hubEventsWiredRef.current) {
-        wireEvents()
-        hubEventsWiredRef.current = true
-      }
       setSessionEndReason(null)
       setPhase('connected')
     } catch (err) {
-      hubEventsWiredRef.current = false
       setErrorFrom(err)
       if (String((err as Error)?.message || '').toLowerCase().includes('401')) {
         forceLogoutAndRedirectLogin()
@@ -769,7 +774,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const disconnect = useCallback(async () => {
     cleanupPeer()
-    hubEventsWiredRef.current = false
     await hubRef.current.stop()
     iceConfigurationRef.current = null
     setSessionEndReason(null)
@@ -790,12 +794,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [connect])
 
   const requestCall = useCallback(
-    async (dispatcherUserId: string) => {
+    async (targetUserId: string) => {
       setError(null)
       setSessionEndReason(null)
       try {
         await ensureCallHubConnected()
-        await hubRef.current.invoke('RequestCall', dispatcherUserId)
+        await hubRef.current.invoke('RequestCall', targetUserId)
       } catch (err) {
         setErrorFrom(err)
       }

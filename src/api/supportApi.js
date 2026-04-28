@@ -63,13 +63,32 @@ function readEnvelope(data) {
 async function parseResponse(res) {
   if (res.status === 204) return null
   const text = await res.text()
-  if (!text) return null
-  const data = JSON.parse(text)
-  if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`)
-  if (data && typeof data === 'object' && data.isError) {
-    throw new Error(data?.message || data?.responseException || 'Support API error')
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = text
+    }
   }
-  return readEnvelope(data)
+  if (!res.ok) {
+    const message =
+      (data && typeof data === 'object' && (data.message || data.title || data.detail)) ||
+      (typeof data === 'string' && data.trim()) ||
+      `Request failed (${res.status})`
+    const err = new Error(String(message))
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  if (!text) return null
+  if (data && typeof data === 'object' && data.isError) {
+    const err = new Error(data?.message || data?.responseException || 'Support API error')
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  return data && typeof data === 'object' ? readEnvelope(data) : data
 }
 
 async function request(path, options = {}) {
@@ -85,8 +104,10 @@ async function request(path, options = {}) {
     } catch (err) {
       lastErr = err
       const msg = String(err?.message || '')
+      const status = Number(err?.status)
       const isNetwork = err instanceof TypeError || /failed to fetch|network|connection refused/i.test(msg)
-      if (isNetwork) continue
+      const isRetryableGateway = status === 502 || status === 503 || status === 504
+      if (isNetwork || isRetryableGateway) continue
     }
   }
   throw lastErr || new Error('Support API request failed.')

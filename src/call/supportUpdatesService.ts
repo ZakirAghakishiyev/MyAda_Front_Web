@@ -8,17 +8,14 @@ function buildSupportUpdatesHubCandidates(): string[] {
   const explicit = import.meta.env.VITE_SUPPORT_UPDATES_HUB_URL as string | undefined
   if (explicit) return uniqueUrls([explicit])
 
-  const devProxyOff =
-    String(import.meta.env.VITE_SUPPORT_HUB_USE_VITE_PROXY ?? 'true').toLowerCase() === 'false'
-
-  if (import.meta.env.DEV && !devProxyOff && typeof window !== 'undefined') {
-    return uniqueUrls([`${window.location.origin}/support/hubs/support-updates`])
-  }
-
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
+  const sameOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? [window.location.origin]
+      : []
   const bases = envBase
-    ? [envBase]
-    : ['https://myada.duckdns.org']
+    ? [envBase, ...sameOrigin]
+    : [...sameOrigin, 'https://myada.duckdns.org']
 
   return uniqueUrls(bases.map((b) => `${b}/support/hubs/support-updates`))
 }

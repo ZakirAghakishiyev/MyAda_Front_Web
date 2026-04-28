@@ -7,10 +7,14 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/$/, '')
 }
 
+function uniqueUrls(urls: string[]) {
+  return [...new Set(urls.map((u) => trimTrailingSlash(u)).filter(Boolean))]
+}
+
 function resolveGatewayBase() {
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim()
   if (envBase) return trimTrailingSlash(envBase)
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.location?.origin) {
     return trimTrailingSlash(window.location.origin)
   }
   return DEFAULT_GATEWAY_BASE
@@ -27,6 +31,20 @@ function resolveHubUrl() {
   const base = resolveGatewayBase()
   if (!base) return DEFAULT_CALL_HUB_URL
   return `${base}/call/hub`
+}
+
+function buildHubUrlCandidates() {
+  const explicit = (import.meta.env.VITE_CALL_HUB_URL as string | undefined)?.trim()
+  if (explicit) return uniqueUrls([explicit])
+
+  const sameOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? [`${trimTrailingSlash(window.location.origin)}/call/hub`]
+      : []
+  const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim()
+  const envHub = envBase ? [`${trimTrailingSlash(envBase)}/call/hub`] : []
+
+  return uniqueUrls([...sameOrigin, ...envHub, DEFAULT_CALL_HUB_URL])
 }
 
 /**
@@ -67,6 +85,9 @@ class CallHubClient {
   private connection: signalR.HubConnection | null = null
   private connectInFlight: Promise<void> | null = null
   private lastHubUrl: string | null = null
+  private eventHandlers = new Map<string, Set<(...args: any[]) => void>>()
+  private closeHandlers = new Set<(error?: Error) => void>()
+  private reconnectedHandlers = new Set<(connectionId?: string) => void>()
 
   get state() {
     return this.connection?.state ?? signalR.HubConnectionState.Disconnected
@@ -81,26 +102,43 @@ class CallHubClient {
   }
 
   private createConnection(hubUrl: string, getAccessToken: () => string | null) {
-    return new signalR.HubConnectionBuilder()
+    const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
         accessTokenFactory: () => getAccessToken() || '',
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
       .build()
+    this.bindStoredHandlers(connection)
+    return connection
+  }
+
+  private bindStoredHandlers(connection: signalR.HubConnection) {
+    for (const [eventName, handlers] of this.eventHandlers.entries()) {
+      for (const handler of handlers) {
+        connection.on(eventName, handler)
+      }
+    }
+    for (const handler of this.closeHandlers) {
+      connection.onclose(handler)
+    }
+    for (const handler of this.reconnectedHandlers) {
+      connection.onreconnected(handler)
+    }
   }
 
   async connect(getAccessToken: () => string | null) {
-    const hubUrl = resolveHubUrl()
+    const hubUrls = buildHubUrlCandidates()
+    const hubUrl = hubUrls[0] || resolveHubUrl()
     const accessToken = getAccessToken()?.trim() || null
     const hasToken = Boolean(accessToken)
 
-    console.info('[CALL-DBG] CallHubClient.connect', { hubUrl, hasToken })
+    console.info('[CALL-DBG] CallHubClient.connect', { hubUrl, hubUrls, hasToken })
     if (!hasToken) {
       console.warn('[CALL-DBG] CallHubClient.connect skipped: missing access token')
       throw new Error('Call hub connection skipped: missing access token.')
     }
 
-    const urlChanged = this.lastHubUrl !== hubUrl
+    const urlChanged = this.lastHubUrl !== null && !hubUrls.includes(this.lastHubUrl)
     if (urlChanged && this.connection) {
       console.info('[CALL-DBG] CallHubClient.connect detected hub url change, recreating connection', {
         previousHubUrl: this.lastHubUrl,
@@ -109,13 +147,8 @@ class CallHubClient {
       await this.stop()
     }
 
-    this.lastHubUrl = hubUrl
-    if (!this.connection) {
-      this.connection = this.createConnection(hubUrl, getAccessToken)
-    }
-
-    if (this.connection.state === signalR.HubConnectionState.Connected) {
-      console.info('[CALL-DBG] CallHubClient.connect already connected', { hubUrl })
+    if (this.connection?.state === signalR.HubConnectionState.Connected) {
+      console.info('[CALL-DBG] CallHubClient.connect already connected', { hubUrl: this.lastHubUrl })
       return
     }
 
@@ -130,30 +163,46 @@ class CallHubClient {
         this.connection?.state === signalR.HubConnectionState.Reconnecting
       ) {
         console.info('[CALL-DBG] CallHubClient.connect waiting for existing connection state', {
-          hubUrl,
+          hubUrl: this.lastHubUrl,
           state: this.connection.state,
         })
         return
       }
 
-      if (this.connection?.state === signalR.HubConnectionState.Disconnected) {
-        console.info('[CALL-DBG] CallHubClient.starting connection', { hubUrl })
+      let lastError: unknown = null
+
+      for (const candidate of hubUrls) {
+        if (this.lastHubUrl !== candidate || !this.connection) {
+          await this.stop()
+          this.connection = this.createConnection(candidate, getAccessToken)
+          this.lastHubUrl = candidate
+        }
+
+        if (this.connection?.state !== signalR.HubConnectionState.Disconnected) {
+          continue
+        }
+
+        console.info('[CALL-DBG] CallHubClient.starting connection', { hubUrl: candidate })
         try {
           await this.connection.start()
           console.info('[CALL-DBG] CallHubClient.start success', {
-            hubUrl,
+            hubUrl: candidate,
             connectionId: this.connection.connectionId,
           })
+          return
         } catch (err) {
+          lastError = err
           const statusCode = (err as any).statusCode ?? (err as any).status ?? null
           console.error('[CALL-DBG] CallHubClient.start failed', {
-            hubUrl,
+            hubUrl: candidate,
             statusCode,
             message: String((err as Error)?.message || err),
           })
-          throw err
+          await this.stop()
         }
       }
+
+      throw lastError instanceof Error ? lastError : new Error('Call hub connection failed.')
     })().finally(() => {
       this.connectInFlight = null
     })
@@ -175,16 +224,36 @@ class CallHubClient {
   }
 
   on(eventName: string, cb: (...args: any[]) => void) {
+    let handlers = this.eventHandlers.get(eventName)
+    if (!handlers) {
+      handlers = new Set()
+      this.eventHandlers.set(eventName, handlers)
+    }
+    handlers.add(cb)
     this.connection?.on(eventName, cb)
-    return () => this.connection?.off(eventName, cb)
+    return () => {
+      handlers?.delete(cb)
+      if (handlers?.size === 0) {
+        this.eventHandlers.delete(eventName)
+      }
+      this.connection?.off(eventName, cb)
+    }
   }
 
   onClose(cb: (error?: Error) => void) {
+    this.closeHandlers.add(cb)
     this.connection?.onclose(cb)
+    return () => {
+      this.closeHandlers.delete(cb)
+    }
   }
 
   onReconnected(cb: (connectionId?: string) => void) {
+    this.reconnectedHandlers.add(cb)
     this.connection?.onreconnected(cb)
+    return () => {
+      this.reconnectedHandlers.delete(cb)
+    }
   }
 
   get connectionId() {

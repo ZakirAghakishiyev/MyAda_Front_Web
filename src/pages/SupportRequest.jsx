@@ -8,7 +8,6 @@ import {
   getCategories,
   getCurrentUserIds,
   getMockLocations,
-  isDispatcherActiveByMemberId,
   saveAttachmentsToMockFolder,
 } from '../api/supportApi'
 import { useCallHub } from '../call/useCallHub'
@@ -299,17 +298,9 @@ const SupportRequest = ({ initialArea = 'it' }) => {
 
     setDispatchersError('')
     setCallingDispatcherId(dispatcher.sub)
-    setCallStatusText(`Checking ${dispatcher.displayName} availability...`)
+    setCallStatusText(`Calling ${dispatcher.displayName}...`)
 
     try {
-      const active = await isDispatcherActiveByMemberId(dispatcher.sub)
-      if (!active) {
-        setCallingDispatcherId('')
-        setCallStatusText(`${dispatcher.displayName} is not active right now.`)
-        return
-      }
-
-      setCallStatusText(`Calling ${dispatcher.displayName}...`)
       await requestCall(dispatcher.sub)
     } catch (err) {
       setCallingDispatcherId('')
