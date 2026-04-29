@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCallContactsByRole } from '../../api/supportApi'
 import { useCallHub } from '../../call/useCallHub'
+import { getJwtUserId } from '../../auth/jwtRoles'
 import './CallContactsPage.css'
 
 type CallRole =
@@ -13,6 +14,7 @@ type CallRole =
 
 type RoleContact = {
   id: string
+  targetUserId: string
   name: string
   email: string | null
   role: string
@@ -107,7 +109,7 @@ function ContactRow({
             <span className="ccp-contact-role">{contact.role.replace(/_/g, ' ')}</span>
           </div>
           <p>{contact.email || 'No email provided by the directory.'}</p>
-          <div className="ccp-contact-id">User ID: {contact.id}</div>
+          <div className="ccp-contact-id">User ID: {contact.targetUserId}</div>
         </div>
       </div>
       <div className="ccp-contact-actions">
@@ -120,6 +122,7 @@ function ContactRow({
 }
 
 const CallContactsPage: React.FC = () => {
+  const currentUserId = String(getJwtUserId() || '').trim().toLowerCase()
   const [activeRole, setActiveRole] = useState<CallRole>('instructor')
   const [items, setItems] = useState<RoleContact[]>([])
   const [loading, setLoading] = useState(true)
@@ -144,7 +147,9 @@ const CallContactsPage: React.FC = () => {
       try {
         const rows = await getCallContactsByRole(activeRole)
         if (!cancelled) {
-          setItems(rows)
+          setItems(
+            rows.filter((row) => String(row?.targetUserId || '').trim().toLowerCase() !== currentUserId)
+          )
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -161,14 +166,14 @@ const CallContactsPage: React.FC = () => {
     return () => {
       cancelled = true
     }
-  }, [activeRole])
+  }, [activeRole, currentUserId])
 
   const handleCall = async (contact: RoleContact) => {
-    setCallingUserId(contact.id)
+    setCallingUserId(contact.targetUserId)
     setActionMessage(null)
     try {
-      await requestCall(contact.id)
-      setActionMessage(`Call request sent to ${contact.name || contact.id}.`)
+      await requestCall(contact.targetUserId)
+      setActionMessage(`Call request sent to ${contact.name || contact.targetUserId}.`)
     } catch {
       setActionMessage(null)
     } finally {
@@ -245,9 +250,9 @@ const CallContactsPage: React.FC = () => {
         <section className="ccp-contact-list">
           {items.map((contact) => (
             <ContactRow
-              key={`${activeRole}-${contact.id}`}
+              key={`${activeRole}-${contact.targetUserId}`}
               contact={contact}
-              isCalling={callingUserId === contact.id}
+              isCalling={callingUserId === contact.targetUserId}
               onCall={handleCall}
             />
           ))}
