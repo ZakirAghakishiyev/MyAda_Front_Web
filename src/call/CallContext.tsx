@@ -129,6 +129,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearSessionEndReason = useCallback(() => setSessionEndReason(null), [])
 
+  const setPhaseSafely = useCallback((next: CallPhase) => {
+    setPhase((prev) => {
+      if (
+        next === 'connected' &&
+        (prev === 'incoming' || prev === 'ringing' || prev === 'accepted' || prev === 'in-call')
+      ) {
+        return prev
+      }
+      return next
+    })
+  }, [])
+
   const setErrorFrom = useCallback((err: unknown) => {
     const msg = formatCallHubError(err)
     setError(msg)
@@ -480,9 +492,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         iceConfigurationRef.current = payload.iceConfiguration
       }
       setConnected(payload)
-      setPhase('connected')
+      setPhaseSafely('connected')
     })
     hub.on('IncomingCall', (payload: IncomingCallPayload) => {
+      dbg('IncomingCall', payload)
       invalidateCallHistory()
       setIncomingCall(payload)
       setCallId(payload.callId)
@@ -709,7 +722,13 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.onReconnected((connectionId) => {
       localConnectionIdRef.current = connectionId || localConnectionIdRef.current
-      setPhase((prev) => (prev === 'auth-expired' ? prev : 'connected'))
+      setPhase((prev) => {
+        if (prev === 'auth-expired') return prev
+        if (prev === 'incoming' || prev === 'ringing' || prev === 'accepted' || prev === 'in-call') {
+          return prev
+        }
+        return 'connected'
+      })
       void hub
         .invoke<IceConfigurationPayload>('GetIceConfiguration')
         .then((payload) => {
@@ -727,6 +746,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActivePeerConnectionId,
     setActiveRoomId,
     setErrorFrom,
+    setPhaseSafely,
   ])
 
   const connect = useCallback(async () => {
@@ -762,7 +782,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const id = hubRef.current.connectionId
       localConnectionIdRef.current = id || null
       setSessionEndReason(null)
-      setPhase('connected')
+      setPhaseSafely('connected')
     } catch (err) {
       setErrorFrom(err)
       if (String((err as Error)?.message || '').toLowerCase().includes('401')) {
@@ -814,10 +834,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionEndReason(null)
       try {
         await ensureCallHubConnected()
-        // Activate microphone immediately on dispatcher accept.
-        await ensurePeerConnection()
         await hubRef.current.invoke('AcceptCall', targetCallId)
-        // Close incoming modal immediately; room events will drive next states.
+        // Close incoming modal immediately; room/signaling events will drive the next states.
         setIncomingCall(null)
         setRinging(null)
         setPhase('accepted')
@@ -825,7 +843,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setErrorFrom(err)
       }
     },
-    [ensureCallHubConnected, ensurePeerConnection, setErrorFrom]
+    [ensureCallHubConnected, setErrorFrom]
   )
 
   const rejectCall = useCallback(
