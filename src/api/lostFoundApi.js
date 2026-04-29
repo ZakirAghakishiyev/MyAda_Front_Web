@@ -447,7 +447,12 @@ function formatErrorMessage(data, status) {
 async function parseResponse(res) {
   if (res.status === 204) return null
   const text = await res.text()
-  const data = text ? JSON.parse(text) : null
+  let data = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    data = text || null
+  }
   if (!res.ok) {
     const message = formatErrorMessage(data, res.status)
     const err = new Error(message)

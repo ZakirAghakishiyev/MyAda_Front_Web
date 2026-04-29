@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
+  fetchClub,
   fetchClubAdminEmployees,
   fetchClubAdminPositions,
   patchClubAdminEmployeesPositions,
@@ -11,9 +12,10 @@ import {
   fetchAuthUserForClubRoster,
   personNamePartsFromClubRosterDto,
 } from '../../api/authUsersApi'
+import { officerLooksLikePresident, officerRoleLabelFromApiDto } from '../../api/clubMappers'
 import { useClubAdminClubId } from '../../hooks/useClubAdminClubId'
 import { clubEmployeePositionDropdownFromApi, findClubPositionByName } from '../../data/clubAdminData'
-import { pickUserGuidForAuthLookup } from '../../utils/userGuids'
+import { pickClubEmployeePersonLookupKey, pickUserGuidForAuthLookup } from '../../utils/userGuids'
 import './ClubAdmin.css'
 
 const IconSearch = () => (
@@ -47,7 +49,8 @@ const ClubAdminEmployees = () => {
     setLoading(true)
     setLoadError('')
     try {
-      const [res, posRes] = await Promise.all([
+      const [clubRes, res, posRes] = await Promise.all([
+        fetchClub(clubId).catch(() => null),
         fetchClubAdminEmployees(clubId),
         fetchClubAdminPositions(clubId).catch(() => ({ items: [] })),
       ])
@@ -55,11 +58,19 @@ const ClubAdminEmployees = () => {
       const posItems = clubAdminListItems(posRes)
       const positions = clubEmployeePositionDropdownFromApi(posItems)
       setPositionOptions(positions)
-      const base = (Array.isArray(items) ? items : []).map((e, index) => {
+
+      const rawOfficers = Array.isArray(clubRes?.officers) ? clubRes.officers : []
+      const employeeSource = rawOfficers.length ? rawOfficers : items
+
+      const base = (Array.isArray(employeeSource) ? employeeSource : []).map((e, index) => {
         let positionId = String(e.positionId ?? e.position?.id ?? '').trim()
         const titleFromDto =
-          (typeof e.position === 'string' ? e.position : null) ??
-          e.position?.name ??
+          officerRoleLabelFromApiDto(e) ||
+          (typeof e.position === 'string' ? e.position : null) ||
+          e.position?.name ||
+          e.role ||
+          e.title ||
+          e.Title ||
           ''
         if (!positionId && titleFromDto) {
           const hit = findClubPositionByName(positions, titleFromDto)
@@ -67,12 +78,13 @@ const ClubAdminEmployees = () => {
         }
         if (!positionId) positionId = String(positions[0]?.id ?? '')
         const positionName =
-          (typeof e.position === 'string' ? e.position : null) ??
-          e.position?.name ??
-          positions.find((p) => p.id === positionId)?.name ??
-          '—'
+          titleFromDto ||
+          (typeof e.position === 'string' ? e.position : null) ||
+          e.position?.name ||
+          (positions.find((p) => p.id === positionId)?.name ?? '—')
         const pre = personNamePartsFromClubRosterDto(e)
-        const lookupKey = pickUserGuidForAuthLookup(e) || ''
+        const lookupKey = pickUserGuidForAuthLookup(e) || pickClubEmployeePersonLookupKey(e) || ''
+        const isPresident = officerLooksLikePresident(e, positionName)
         return {
           id: String(e.id ?? e.employeeId ?? `e-${index}`),
           userId: lookupKey,
@@ -84,6 +96,8 @@ const ClubAdminEmployees = () => {
           department: e.department ?? '',
           age: e.age,
           joinedDate: e.joinedDate ?? e.joinedAt ?? '—',
+          isOfficerSource: rawOfficers.length > 0,
+          isPresident,
           raw: e,
         }
       })
@@ -148,14 +162,23 @@ const ClubAdminEmployees = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return employees
-    return employees.filter(
+    const list = !q
+      ? employees
+      : employees.filter(
       (e) =>
         `${e.name} ${e.surname}`.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q) ||
         (e.positionName && e.positionName.toLowerCase().includes(q)) ||
         (e.department && e.department.toLowerCase().includes(q))
-    )
+      )
+    return [...list].sort((a, b) => {
+      const ap = a.isPresident ? 1 : 0
+      const bp = b.isPresident ? 1 : 0
+      if (ap !== bp) return bp - ap
+      const an = `${a.name} ${a.surname}`.trim().toLowerCase()
+      const bn = `${b.name} ${b.surname}`.trim().toLowerCase()
+      return an.localeCompare(bn)
+    })
   }, [employees, search])
 
   const handleUpdatePosition = (id, newPositionId) => {
@@ -262,6 +285,7 @@ const ClubAdminEmployees = () => {
                         value={e.positionId ?? ''}
                         onChange={(ev) => handleUpdatePosition(e.id, ev.target.value)}
                         aria-label={`Update position for ${e.name} ${e.surname}`}
+                        disabled={Boolean(e.isOfficerSource)}
                       >
                         {positionOptions.map((pos) => (
                           <option key={pos.id} value={pos.id}>{pos.name}</option>
@@ -278,6 +302,7 @@ const ClubAdminEmployees = () => {
                       className="club-admin-btn-icon club-admin-btn-icon--reject"
                       aria-label="Remove employee"
                       onClick={() => handleRemove(e.id)}
+                      disabled={Boolean(e.isOfficerSource)}
                     >
                       <IconTrash />
                     </button>

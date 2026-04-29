@@ -390,13 +390,21 @@ const ClubDetail = () => {
         }
       })
       .filter((o) => o.name || o.role)
-    if (!rest.length) return []
+    const all = []
+    if (president?.name) {
+      all.push({ name: president.name, role: 'President' })
+    }
+    all.push(...rest)
+    if (!all.length) return []
     const limit = 3
-    if (officersExpanded) return rest
-    return rest.slice(0, limit)
-  }, [officerRows, officersExpanded])
+    if (officersExpanded) return all
+    return all.slice(0, limit)
+  }, [officerRows, officersExpanded, president])
 
-  const hasMoreOfficers = useMemo(() => officerRows.length > 3, [officerRows.length])
+  const hasMoreOfficers = useMemo(() => {
+    const total = officerRows.length + (president?.name ? 1 : 0)
+    return total > 3
+  }, [officerRows.length, president])
 
   const contactLinkRows = useMemo(() => {
     if (!club) return []
@@ -531,12 +539,6 @@ const ClubDetail = () => {
             </div>
           </div>
           <div className="club-detail-hero-actions">
-            {president?.name ? (
-              <div className="club-detail-president">
-                <div className="club-detail-president-label">President</div>
-                <div className="club-detail-president-name">{president.name}</div>
-              </div>
-            ) : null}
             {isClubMember ? (
               <button
                 type="button"

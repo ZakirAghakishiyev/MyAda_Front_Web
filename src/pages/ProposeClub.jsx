@@ -686,7 +686,7 @@ const ProposeClub = () => {
                 <div className="propose-id-with-name">
                   <input
                     type="text"
-                    placeholder="e.g. 987654321 or GUID"
+                    placeholder="123456789"
                     value={vicePresidentId}
                     onChange={(e) => {
                       setVicePresidentId(e.target.value)
