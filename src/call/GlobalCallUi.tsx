@@ -61,10 +61,12 @@ const GlobalCallUi: React.FC = () => {
     incomingCall,
     callId,
     roomId,
+    ringing,
     connect,
     disconnect,
     acceptCall,
     rejectCall,
+    cancelCall,
     endCall,
     otherParticipants,
     localStream,
@@ -185,6 +187,7 @@ const GlobalCallUi: React.FC = () => {
 
   useEffect(() => {
     const shouldLockModal =
+      phase === 'ringing' ||
       phase === 'accepted' ||
       phase === 'in-call' ||
       ((phase === 'connected' || phase === 'connecting') && !incomingCall && (hasCallMedia || hasCallIdentity))
@@ -266,9 +269,15 @@ const GlobalCallUi: React.FC = () => {
   const showIncoming = Boolean(incomingCall) && phase !== 'in-call' && phase !== 'accepted'
   const showLiveCallModal = isCallModalLocked
   const hasLocalAudioTracks = Boolean(localStream?.getAudioTracks().length)
+  const isOutgoingRinging = phase === 'ringing'
   const isLiveCall = phase === 'in-call' || (isCallModalLocked && callStartedAtMs !== null)
   const primaryPeer = (otherParticipants || [])[0]
-  const peerName = primaryPeer?.displayName || primaryPeer?.userId || 'Participant'
+  const peerName =
+    primaryPeer?.displayName ||
+    primaryPeer?.userId ||
+    ringing?.targetUserId ||
+    ringing?.dispatcherUserId ||
+    'Participant'
 
   const showSessionEndBanner =
     Boolean(sessionEndReason) &&
@@ -277,6 +286,14 @@ const GlobalCallUi: React.FC = () => {
   const handleToggleMute = () => {
     if (!hasLocalAudioTracks) return
     setIsMuted((prev) => !prev)
+  }
+
+  const handleCallAction = async () => {
+    if (isOutgoingRinging && callId) {
+      await cancelCall(callId, 'Caller cancelled the request.')
+      return
+    }
+    await endCall()
   }
 
   return (
@@ -370,10 +387,10 @@ const GlobalCallUi: React.FC = () => {
         <div className="gc-live-call-modal" role="dialog" aria-modal="false" aria-labelledby="gc-live-call-title">
           <div className="gc-live-call-header">
             <h3 id="gc-live-call-title" className="gc-live-call-title">
-              {isLiveCall ? 'Call in progress' : 'Connecting call...'}
+              {isLiveCall ? 'Call in progress' : isOutgoingRinging ? 'Calling...' : 'Connecting call...'}
             </h3>
             <span className={`gc-live-call-status ${isLiveCall ? 'is-active' : ''}`}>
-              {isLiveCall ? 'Live' : 'Joining'}
+              {isLiveCall ? 'Live' : isOutgoingRinging ? 'Ringing' : 'Joining'}
             </span>
           </div>
 
@@ -392,8 +409,8 @@ const GlobalCallUi: React.FC = () => {
             >
               {isMuted ? 'Unmute' : 'Mute'}
             </button>
-            <button type="button" className="gc-live-call-btn gc-live-call-btn--decline" onClick={() => endCall()}>
-              Decline
+            <button type="button" className="gc-live-call-btn gc-live-call-btn--decline" onClick={() => void handleCallAction()}>
+              {isOutgoingRinging ? 'Cancel' : 'Decline'}
             </button>
           </div>
 
