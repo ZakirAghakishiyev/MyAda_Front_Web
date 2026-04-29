@@ -1,7 +1,9 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import { getAccessToken, getAccessTokenExpirationMs, forceLogoutAndRedirectLogin } from '../auth'
+import { getJwtUserId } from '../auth/jwtRoles'
 import { buildIceServersEndpoint, callHubClient } from './callHubClient'
+import { fetchCallHistory } from './callHistoryApi'
 import { invalidateCallHistory } from './callHistoryInvalidate'
 import type {
   CallAcceptedPayload,
@@ -115,6 +117,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const activeRoomIdRef = useRef<string | null>(null)
   const peerConnectionIdRef = useRef<string | null>(null)
   const localConnectionIdRef = useRef<string | null>(null)
+  const pendingIncomingPollRef = useRef(false)
+  const synthesizedIncomingCallIdRef = useRef<string | null>(null)
   const [phase, setPhase] = useState<CallPhase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [callId, setCallId] = useState<string | null>(null)
@@ -129,6 +133,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearSessionEndReason = useCallback(() => setSessionEndReason(null), [])
 
+  const setPhaseSafely = useCallback((next: CallPhase) => {
+    setPhase((prev) => {
+      if (
+        next === 'connected' &&
+        (prev === 'incoming' || prev === 'ringing' || prev === 'accepted' || prev === 'in-call')
+      ) {
+        return prev
+      }
+      return next
+    })
+  }, [])
+
   const setErrorFrom = useCallback((err: unknown) => {
     const msg = formatCallHubError(err)
     setError(msg)
@@ -139,6 +155,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     activeRoomIdRef.current = nextRoomId
     setRoomId(nextRoomId)
   }, [])
+
+  const clearTransientCallState = useCallback(() => {
+    setIncomingCall(null)
+    setRinging(null)
+    setOtherParticipants([])
+    setCallId(null)
+    setActiveRoomId(null)
+  }, [setActiveRoomId])
 
   const setActivePeerConnectionId = useCallback((nextPeerConnectionId: string | null, reason: string) => {
     if (peerConnectionIdRef.current && nextPeerConnectionId && peerConnectionIdRef.current !== nextPeerConnectionId) {
@@ -480,9 +504,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         iceConfigurationRef.current = payload.iceConfiguration
       }
       setConnected(payload)
-      setPhase('connected')
+      setPhaseSafely('connected')
     })
     hub.on('IncomingCall', (payload: IncomingCallPayload) => {
+      dbg('IncomingCall', payload)
+      synthesizedIncomingCallIdRef.current = payload.callId
       invalidateCallHistory()
       setIncomingCall(payload)
       setCallId(payload.callId)
@@ -503,6 +529,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.on('CallAccepted', (payload: CallAcceptedPayload) => {
       dbg('CallAccepted', payload)
+      synthesizedIncomingCallIdRef.current = payload.callId
       invalidateCallHistory()
       setCallId(payload.callId)
       setActiveRoomId(payload.roomId)
@@ -524,31 +551,19 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       invalidateCallHistory()
       setSessionEndReason(payload.reason ? `Call declined: ${payload.reason}` : 'Call was declined.')
       setError(payload.reason || 'Call rejected.')
-      setIncomingCall(null)
-      setRinging(null)
-      setOtherParticipants([])
-      setCallId(null)
-      setActiveRoomId(null)
+      clearTransientCallState()
       setPhase('rejected')
     })
     hub.on('CallCancelled', (payload: CallCancelledPayload) => {
       invalidateCallHistory()
       setSessionEndReason(payload.reason || 'The call was cancelled.')
-      setIncomingCall(null)
-      setRinging(null)
-      setOtherParticipants([])
-      setCallId(null)
-      setActiveRoomId(null)
+      clearTransientCallState()
       setPhase('cancelled')
     })
     hub.on('CallTimedOut', (payload: CallTimedOutPayload) => {
       invalidateCallHistory()
       setSessionEndReason(payload.reason || 'The call request timed out before a dispatcher answered.')
-      setIncomingCall(null)
-      setRinging(null)
-      setOtherParticipants([])
-      setCallId(null)
-      setActiveRoomId(null)
+      clearTransientCallState()
       setPhase('timeout')
     })
     hub.on('JoinedRoom', async (payload: JoinedRoomPayload) => {
@@ -582,11 +597,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hub.on('LeftRoom', (_payload: LeftRoomPayload) => {
       invalidateCallHistory()
       cleanupPeer()
-      setIncomingCall(null)
-      setRinging(null)
-      setOtherParticipants([])
-      setCallId(null)
-      setActiveRoomId(null)
+      clearTransientCallState()
       setPhase('connected')
     })
     hub.on('ParticipantLeft', (payload: ParticipantLeftPayload) => {
@@ -594,11 +605,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionEndReason(`${who} left the call. Your audio session has stopped.`)
       invalidateCallHistory()
       cleanupPeer()
-      setIncomingCall(null)
-      setRinging(null)
-      setOtherParticipants([])
-      setCallId(null)
-      setActiveRoomId(null)
+      clearTransientCallState()
       setPhase('ended')
     })
     hub.on('ReceiveOffer', async (payload: OfferPayload) => {
@@ -694,11 +701,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionEndReason('The call has ended.')
       invalidateCallHistory()
       cleanupPeer()
-      setIncomingCall(null)
-      setRinging(null)
-      setOtherParticipants([])
-      setCallId(null)
-      setActiveRoomId(null)
+      clearTransientCallState()
       setPhase('ended')
     })
     hub.onClose((err) => {
@@ -709,7 +712,13 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
     hub.onReconnected((connectionId) => {
       localConnectionIdRef.current = connectionId || localConnectionIdRef.current
-      setPhase((prev) => (prev === 'auth-expired' ? prev : 'connected'))
+      setPhase((prev) => {
+        if (prev === 'auth-expired') return prev
+        if (prev === 'incoming' || prev === 'ringing' || prev === 'accepted' || prev === 'in-call') {
+          return prev
+        }
+        return 'connected'
+      })
       void hub
         .invoke<IceConfigurationPayload>('GetIceConfiguration')
         .then((payload) => {
@@ -726,8 +735,84 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     flushQueuedIceCandidates,
     setActivePeerConnectionId,
     setActiveRoomId,
+    clearTransientCallState,
     setErrorFrom,
+    setPhaseSafely,
   ])
+
+  useEffect(() => {
+    const token = getAccessToken()?.trim() || null
+    const currentUserId = String(getJwtUserId() || '').trim().toLowerCase()
+    const shouldPollPendingIncoming =
+      Boolean(token) &&
+      Boolean(currentUserId) &&
+      phase !== 'idle' &&
+      phase !== 'auth-expired' &&
+      phase !== 'in-call' &&
+      phase !== 'accepted' &&
+      phase !== 'ended'
+
+    if (!shouldPollPendingIncoming) return
+
+    let cancelled = false
+
+    const hydratePendingIncoming = async () => {
+      if (pendingIncomingPollRef.current || cancelled) return
+      pendingIncomingPollRef.current = true
+      try {
+        const pending = await fetchCallHistory({ status: 'pending', limit: 20 })
+        if (cancelled) return
+
+        const target = pending
+          .filter((row) => {
+            const calledUserId = String(row?.dispatcher?.userId || '').trim().toLowerCase()
+            const callerUserId = String(row?.caller?.userId || '').trim().toLowerCase()
+            return Boolean(calledUserId) && calledUserId === currentUserId && callerUserId !== currentUserId
+          })
+          .sort((a, b) => Date.parse(String(b.requestedAtUtc || 0)) - Date.parse(String(a.requestedAtUtc || 0)))[0]
+
+        if (!target) return
+        if (incomingCall?.callId === target.callId || callId === target.callId) {
+          synthesizedIncomingCallIdRef.current = target.callId
+          return
+        }
+
+        synthesizedIncomingCallIdRef.current = target.callId
+        dbg('HydrateIncomingCallFromHistory', {
+          callId: target.callId,
+          roomId: target.roomId,
+          callerUserId: target.caller.userId,
+          callerDisplayName: target.caller.displayName,
+        })
+        setIncomingCall({
+          callId: target.callId,
+          roomId: target.roomId,
+          fromUserId: target.caller.userId,
+          fromConnectionId: '',
+          fromDisplayName: target.caller.displayName || undefined,
+          requestedAtUtc: target.requestedAtUtc || undefined,
+          expiresAtUtc: undefined,
+        })
+        setCallId(target.callId)
+        setActiveRoomId(target.roomId || null)
+        setPhase('incoming')
+      } catch (err) {
+        dbg('HydrateIncomingCallFromHistoryFailed', String((err as Error)?.message || err))
+      } finally {
+        pendingIncomingPollRef.current = false
+      }
+    }
+
+    void hydratePendingIncoming()
+    const timer = window.setInterval(() => {
+      void hydratePendingIncoming()
+    }, 2500)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [callId, incomingCall, phase, setActiveRoomId])
 
   const connect = useCallback(async () => {
     const accessToken = getAccessToken()?.trim() || null
@@ -762,7 +847,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const id = hubRef.current.connectionId
       localConnectionIdRef.current = id || null
       setSessionEndReason(null)
-      setPhase('connected')
+      setPhaseSafely('connected')
     } catch (err) {
       setErrorFrom(err)
       if (String((err as Error)?.message || '').toLowerCase().includes('401')) {
@@ -776,13 +861,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cleanupPeer()
     await hubRef.current.stop()
     iceConfigurationRef.current = null
+    synthesizedIncomingCallIdRef.current = null
     setSessionEndReason(null)
     setPhase('idle')
-    setIncomingCall(null)
-    setRinging(null)
-    setCallId(null)
-    setActiveRoomId(null)
-    setOtherParticipants([])
+    clearTransientCallState()
   }, [cleanupPeer, setActiveRoomId])
 
   const ensureCallHubConnected = useCallback(async () => {
@@ -814,10 +896,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionEndReason(null)
       try {
         await ensureCallHubConnected()
-        // Activate microphone immediately on dispatcher accept.
-        await ensurePeerConnection()
         await hubRef.current.invoke('AcceptCall', targetCallId)
-        // Close incoming modal immediately; room events will drive next states.
+        synthesizedIncomingCallIdRef.current = targetCallId
+        // Close incoming modal immediately; room/signaling events will drive the next states.
         setIncomingCall(null)
         setRinging(null)
         setPhase('accepted')
@@ -825,7 +906,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setErrorFrom(err)
       }
     },
-    [ensureCallHubConnected, ensurePeerConnection, setErrorFrom]
+    [ensureCallHubConnected, setErrorFrom]
   )
 
   const rejectCall = useCallback(
@@ -834,17 +915,13 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await ensureCallHubConnected()
         await hubRef.current.invoke('RejectCall', targetCallId, reason || null)
-        setIncomingCall(null)
-        setRinging(null)
-        setOtherParticipants([])
-        setCallId(null)
-        setActiveRoomId(null)
+        clearTransientCallState()
         setPhase('connected')
       } catch (err) {
         setErrorFrom(err)
       }
     },
-    [ensureCallHubConnected, setActiveRoomId, setErrorFrom]
+    [clearTransientCallState, ensureCallHubConnected, setErrorFrom]
   )
 
   const cancelCall = useCallback(
@@ -869,13 +946,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setErrorFrom(err)
     }
     cleanupPeer()
-    setIncomingCall(null)
-    setRinging(null)
-    setOtherParticipants([])
-    setCallId(null)
-    setActiveRoomId(null)
+    clearTransientCallState()
     setPhase('connected')
-  }, [cleanupPeer, setActiveRoomId, setErrorFrom])
+  }, [cleanupPeer, clearTransientCallState, setErrorFrom])
 
   const endCall = useCallback(async () => {
     try {
@@ -886,13 +959,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setErrorFrom(err)
     }
     cleanupPeer()
-    setIncomingCall(null)
-    setRinging(null)
-    setOtherParticipants([])
-    setCallId(null)
-    setActiveRoomId(null)
+    clearTransientCallState()
     setPhase('ended')
-  }, [cleanupPeer, setActiveRoomId, setErrorFrom])
+  }, [cleanupPeer, clearTransientCallState, setErrorFrom])
 
   const value = useMemo<CallContextValue>(
     () => ({

@@ -590,12 +590,14 @@ function emailFromAuthDirectoryUser(item) {
 }
 
 function mapAuthDirectoryUser(item, fallbackRole = '') {
-  const id = item?.id != null ? String(item.id).trim() : ''
-  if (!id) return null
+  const targetUserId = String(item?.sub ?? item?.userId ?? item?.memberId ?? item?.id ?? '').trim()
+  if (!targetUserId) return null
+  const id = item?.id != null ? String(item.id).trim() : targetUserId
   const status = String(item?.status || '').trim().toLowerCase()
   if (status && status !== 'active') return null
   return {
     id,
+    targetUserId,
     name: displayNameFromAuthUser(item),
     email: emailFromAuthDirectoryUser(item),
     role: String(item?.role || fallbackRole || '').trim().toLowerCase(),
@@ -652,7 +654,7 @@ export async function fetchAuthUsersByRole(role) {
  * Call contacts directory backed by Auth `GET /api/auth/users-by-role/{role}`.
  * Returns active users only, normalized for UI use and sorted by display name.
  * @param {string} role
- * @returns {Promise<{ id: string, name: string, email: string | null, role: string }[]>}
+ * @returns {Promise<{ id: string, targetUserId: string, name: string, email: string | null, role: string }[]>}
  */
 export async function getCallContactsByRole(role) {
   const users = await fetchAuthUsersByRole(role)

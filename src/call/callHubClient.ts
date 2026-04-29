@@ -109,6 +109,9 @@ class CallHubClient {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(candidate.hubUrl, {
         accessTokenFactory: () => getAccessToken() || '',
+        // We authenticate hubs with bearer tokens, so cross-origin cookies/credentials
+        // are unnecessary and can trigger stricter CORS requirements during negotiate.
+        withCredentials: false,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
       .build()

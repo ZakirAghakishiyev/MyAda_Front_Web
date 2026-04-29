@@ -44,6 +44,7 @@ export class SupportUpdatesService {
         this.connection = new signalR.HubConnectionBuilder()
           .withUrl(url, {
             accessTokenFactory: () => getAccessToken() || '',
+            withCredentials: false,
           })
           .configureLogging(signalR.LogLevel.None)
           .withAutomaticReconnect()
