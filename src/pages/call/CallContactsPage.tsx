@@ -25,31 +25,31 @@ const ROLE_TABS: { id: CallRole; label: string; eyebrow: string; description: st
     id: 'instructor',
     label: 'Instructors',
     eyebrow: 'Academic',
-    description: 'Reach faculty and instructors directly from the role-based auth directory.',
+    description: 'Reach faculty members and instructors from one curated academic contact space.',
   },
   {
     id: 'tech_staff',
     label: 'Tech Staff',
     eyebrow: 'Facilities',
-    description: 'Browse technical facilities staff members and call the right person quickly.',
+    description: 'Connect with facilities and technical operations staff when hands-on support is needed.',
   },
   {
     id: 'student_services',
     label: 'Student Services',
     eyebrow: 'Student Support',
-    description: 'Find student-services contacts grouped in one focused view.',
+    description: 'Keep student-support communication focused, fast, and easy to navigate.',
   },
   {
     id: 'it_staff',
     label: 'IT Staff',
     eyebrow: 'Technology',
-    description: 'Open the IT contact list sourced from the users-by-role gateway endpoint.',
+    description: 'Browse the technology support team and place calls without leaving the directory.',
   },
   {
     id: 'dispatcher',
     label: 'Dispatchers',
     eyebrow: 'Operations',
-    description: 'Review dispatchers and start a call without leaving the contacts workspace.',
+    description: 'Reach operations coordinators quickly when you need immediate call routing support.',
   },
 ]
 
@@ -109,7 +109,6 @@ function ContactRow({
             <span className="ccp-contact-role">{contact.role.replace(/_/g, ' ')}</span>
           </div>
           <p>{contact.email || 'No email provided by the directory.'}</p>
-          <div className="ccp-contact-id">User ID: {contact.targetUserId}</div>
         </div>
       </div>
       <div className="ccp-contact-actions">
@@ -188,7 +187,7 @@ const CallContactsPage: React.FC = () => {
           <p className="ccp-kicker">Communication Directory</p>
           <h1>Call Contacts</h1>
           <p className="ccp-subtitle">
-            Role-filtered contacts sourced from <strong>/api/auth/users-by-role/{activeRole}</strong>. Switch tabs to load only that role, then place a call beside any contact.
+            Browse people by team, move between roles instantly, and start a voice call from a clean, focused contact workspace.
           </p>
         </div>
         <div className="ccp-hero-side">
@@ -198,24 +197,6 @@ const CallContactsPage: React.FC = () => {
             <Link to="/">Home</Link>
           </div>
         </div>
-      </section>
-
-      <section className="ccp-summary-grid">
-        <article className="ccp-summary-card">
-          <span className="ccp-summary-label">Selected role</span>
-          <strong className="ccp-summary-value">{activeTab.label}</strong>
-          <p>{activeTab.eyebrow}</p>
-        </article>
-        <article className="ccp-summary-card">
-          <span className="ccp-summary-label">Directory count</span>
-          <strong className="ccp-summary-value">{loading ? '...' : items.length}</strong>
-          <p>{activeTab.description}</p>
-        </article>
-        <article className="ccp-summary-card">
-          <span className="ccp-summary-label">Endpoint</span>
-          <strong className="ccp-summary-value ccp-summary-value--small">users-by-role/{activeRole}</strong>
-          <p>Loaded through the auth gateway directory endpoint.</p>
-        </article>
       </section>
 
       <div className="ccp-tabs" role="tablist" aria-label="Call contacts by role">
@@ -233,6 +214,18 @@ const CallContactsPage: React.FC = () => {
           </button>
         ))}
       </div>
+
+      <section className="ccp-section-bar" aria-label="Selected contact group summary">
+        <div className="ccp-section-copy">
+          <p className="ccp-section-eyebrow">{activeTab.eyebrow}</p>
+          <h2>{activeTab.label}</h2>
+          <p>{activeTab.description}</p>
+        </div>
+        <div className="ccp-section-stat">
+          <span>Contacts</span>
+          <strong>{loading ? '...' : items.length}</strong>
+        </div>
+      </section>
 
       {actionMessage ? <div className="ccp-banner ccp-banner--success">{actionMessage}</div> : null}
       {callError ? <div className="ccp-banner ccp-banner--error">{callError}</div> : null}
