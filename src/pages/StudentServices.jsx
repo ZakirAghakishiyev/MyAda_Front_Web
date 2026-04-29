@@ -1945,9 +1945,9 @@ const StudentServices = () => {
                 <div className="club-admin-field">
                   <label>Background / hero image</label>
                   <p style={{ margin: '0 0 8px', fontSize: 13, color: '#64748b' }}>
-                    API: <code>backgroundFile</code> (multipart) via club-admin <code>PATCH .../profile</code>, or{' '}
-                    <code>POST .../background-image</code> under student-services when deployed (same field name). Choose
-                    a file and save; the wide image is shown on the public club header.
+                    API: <code>backgroundFile</code> (multipart) via documented club-admin{' '}
+                    <code>PATCH .../profile</code>. Choose a file and save; the wide image is shown on the public club
+                    header.
                   </p>
                   <div
                     style={

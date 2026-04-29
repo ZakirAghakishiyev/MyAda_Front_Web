@@ -2,15 +2,24 @@ import { API_BASE } from './apiBase'
 
 /**
  * Club service base URL (see Club API docs).
- * Default source of truth is the API gateway base plus `/club`.
+ * Default source of truth is the API gateway origin / host.
+ * Documented club endpoints are exposed directly under `/api/v1/...` on that host.
  */
-export const CLUB_API_BASE = String(
-  import.meta.env.VITE_CLUB_API_BASE ?? `${API_BASE}/club`
-).replace(/\/+$/, '')
+function normalizeClubApiBase(raw) {
+  return String(raw ?? '')
+    .trim()
+    .replace(/\/api\/v1\/?$/i, '')
+    .replace(/\/club\/?$/i, '')
+    .replace(/\/+$/, '')
+}
 
-/** Origin without `/club` — used for legacy fallbacks (e.g. default.png on the gateway). */
+export const CLUB_API_BASE = normalizeClubApiBase(
+  import.meta.env.VITE_CLUB_API_BASE ?? API_BASE
+)
+
+/** Gateway origin / host used for default media fallbacks. */
 export function clubGatewayOrigin() {
-  return CLUB_API_BASE.replace(/\/club$/i, '') || CLUB_API_BASE
+  return CLUB_API_BASE
 }
 
 /**
@@ -35,7 +44,7 @@ export function resolveClubMediaUrl(path) {
 }
 
 /**
- * Join a relative club media path to the Club API gateway (Vite `/club` proxy or full gateway URL).
+ * Join a relative club media path to the documented club API gateway host.
  * Pending / locally stored profile images are often served here, not yet on S3.
  */
 export function resolveClubMediaViaGateway(path) {

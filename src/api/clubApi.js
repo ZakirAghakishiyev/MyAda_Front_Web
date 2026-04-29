@@ -174,6 +174,17 @@ export function buildEventProposalSubmitDto(form) {
   const subEvents = Array.isArray(f.subEvents) ? f.subEvents : []
   const log = f.logistics && typeof f.logistics === 'object' ? f.logistics : {}
   const otherNeeds = log.otherNeeds != null ? String(log.otherNeeds).trim() : ''
+  const buildingIdRaw = f.buildingId != null ? String(f.buildingId).trim() : ''
+  const roomIdRaw = f.roomId != null ? String(f.roomId).trim() : ''
+  const buildingId = Number(buildingIdRaw)
+  const roomId = Number(roomIdRaw)
+  const hasValidLocationPair =
+    buildingIdRaw &&
+    roomIdRaw &&
+    Number.isInteger(buildingId) &&
+    Number.isInteger(roomId) &&
+    buildingId > 0 &&
+    roomId > 0
   const objectives =
     typeof f.objectives === 'string'
       ? f.objectives
@@ -202,6 +213,7 @@ export function buildEventProposalSubmitDto(form) {
       cleaning: Boolean(log.cleaning),
       ...(otherNeeds ? { otherNeeds } : {}),
     },
+    ...(hasValidLocationPair ? { buildingId, roomId } : {}),
   }
   const out = { ...base }
   const so = f.submittedByOrganization != null ? String(f.submittedByOrganization).trim() : ''
@@ -227,6 +239,8 @@ function buildEventProposalFormData(dto, options = {}) {
   fd.append('objectives', dto.objectives)
   fd.append('subEventsJson', JSON.stringify(dto.subEvents))
   fd.append('logisticsJson', JSON.stringify(dto.logistics))
+  if (dto.buildingId != null) fd.append('buildingId', String(dto.buildingId))
+  if (dto.roomId != null) fd.append('roomId', String(dto.roomId))
   if (dto.submittedByOrganization) fd.append('submittedByOrganization', dto.submittedByOrganization)
   if (includeImageUrl && dto.imageUrl) fd.append('imageUrl', dto.imageUrl)
   return fd
@@ -300,7 +314,7 @@ export function fetchEvents(params = {}) {
   if (params.myClubsOnly != null) q.set('myClubsOnly', String(params.myClubsOnly))
   if (params.search) q.set('search', params.search)
   q.set('page', String(params.page ?? 1))
-  q.set('limit', String(params.limit ?? 24))
+  q.set('limit', String(params.limit ?? 12))
   const qs = q.toString()
   return clubAuthJson(`events${qs ? `?${qs}` : ''}`, { method: 'GET' })
 }
@@ -324,7 +338,7 @@ export function fetchEventRegistrationsList(eventId, params = {}) {
   q.set('page', String(params.page ?? 1))
   q.set('limit', String(params.limit ?? 500))
   return clubAuthJson(
-    `events/${encodeURIComponent(eventId)}/registrations?${q.toString()}`,
+    `event-registrations/by-event/${encodeURIComponent(eventId)}?${q.toString()}`,
     { method: 'GET' }
   )
 }
@@ -428,9 +442,6 @@ export function fetchMyClubMemberships() {
   return clubAuthJson(usersScopedPath('club-memberships'), { method: 'GET' })
 }
 
-/**
- * End the current user's membership in a club. Tries several common gateway routes (DELETE and POST fallbacks).
- */
 export async function leaveClubMembership(clubId) {
   const raw = String(clubId ?? '').trim()
   if (!raw) {
@@ -438,46 +449,15 @@ export async function leaveClubMembership(clubId) {
     err.status = 400
     throw err
   }
-  const enc = encodeURIComponent(raw)
-  const deletePaths = [
-    `users/me/club-memberships/${enc}`,
-    `${usersScopedPath(`club-memberships/${enc}`)}`,
-    `clubs/${enc}/members/me`,
-    `clubs/${enc}/membership`,
-  ]
-  let lastErr
-  for (const p of deletePaths) {
-    try {
-      await clubAuthDeleteExpectOk(p)
-      return
-    } catch (e) {
-      lastErr = e
-      if (e?.status === 404) continue
-      throw e
-    }
+  const memberships = await clubAuthJson(`club-memberships?clubId=${encodeURIComponent(raw)}`, { method: 'GET' })
+  const items = clubAdminListItems(memberships)
+  const match = items.find((item) => String(item?.clubId ?? '') === raw)
+  if (!match?.id) {
+    const err = new Error('Membership record not found for this club.')
+    err.status = 404
+    throw err
   }
-  try {
-    await clubAuthJson(`clubs/${enc}/leave`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    })
-    return
-  } catch (e) {
-    if (e?.status === 404) {
-      try {
-        await clubAuthJson(`clubs/${enc}/cancel-membership`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        })
-        return
-      } catch (e2) {
-        throw lastErr || e2
-      }
-    }
-    throw e
-  }
+  await clubAuthDeleteExpectOk(`club-memberships/${encodeURIComponent(String(match.id))}`)
 }
 
 export function fetchMyVacancyApplications(params = {}) {
@@ -582,7 +562,12 @@ export async function submitClubProposal(proposal) {
     throw err
   }
 
-  let submitterId = p.id != null && p.id !== '' ? String(p.id).trim() : ''
+  let submitterId =
+    p.organizationId != null && p.organizationId !== ''
+      ? String(p.organizationId).trim()
+      : p.id != null && p.id !== ''
+        ? String(p.id).trim()
+        : ''
   if (!submitterId) {
     submitterId = (await fetchCurrentUserOrganizationalId()) || ''
   }
@@ -594,7 +579,7 @@ export async function submitClubProposal(proposal) {
     throw err
   }
   if (submitterId) {
-    fd.append('id', submitterId)
+    fd.append('organizationId', submitterId)
   }
 
   const name = String(p.name || '').trim()
@@ -1142,63 +1127,39 @@ export function fetchStudentServicesClubProposals(params = {}) {
   if (params.search) q.set('search', String(params.search))
   q.set('page', String(params.page ?? 1))
   q.set('limit', String(params.limit ?? 50))
-  const qs = `?${q}`
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/proposals${qs}`,
-    `student-services/club-proposals${qs}`,
-    { method: 'GET' }
-  )
+  return clubAuthJson(`student-services/clubs/proposals?${q}`, { method: 'GET' })
 }
 
 export function fetchStudentServicesClubProposal(proposalId) {
   const enc = encodeURIComponent(proposalId)
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/proposals/${enc}`,
-    `student-services/club-proposals/${enc}`,
-    { method: 'GET' }
-  )
+  return clubAuthJson(`student-services/clubs/proposals/${enc}`, { method: 'GET' })
 }
 
 export function approveStudentServicesClubProposal(proposalId) {
   const enc = encodeURIComponent(proposalId)
-  const init = {
+  return clubAuthJson(`student-services/clubs/proposals/${enc}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
-  }
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/proposals/${enc}/approve`,
-    `student-services/club-proposals/${enc}/approve`,
-    init
-  )
+  })
 }
 
 export function rejectStudentServicesClubProposal(proposalId, reason) {
   const enc = encodeURIComponent(proposalId)
-  const init = {
+  return clubAuthJson(`student-services/clubs/proposals/${enc}/reject`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
-  }
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/proposals/${enc}/reject`,
-    `student-services/club-proposals/${enc}/reject`,
-    init
-  )
+  })
 }
 
 export function requestRevisionStudentServicesClubProposal(proposalId, changes) {
   const enc = encodeURIComponent(proposalId)
-  const init = {
+  return clubAuthJson(`student-services/clubs/proposals/${enc}/request-revision`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ changes }),
-  }
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/clubs/proposals/${enc}/request-revision`,
-    `student-services/club-proposals/${enc}/request-revision`,
-    init
-  )
+  })
 }
 
 export function fetchStudentServicesProposalRequirements() {
@@ -1219,12 +1180,7 @@ export function fetchStudentServicesEventProposals(params = {}) {
   if (params.search) q.set('search', String(params.search))
   q.set('page', String(params.page ?? 1))
   q.set('limit', String(params.limit ?? 50))
-  const qs = `?${q}`
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/events/proposals${qs}`,
-    `student-services/event-proposals${qs}`,
-    { method: 'GET' }
-  )
+  return clubAuthJson(`student-services/events/proposals?${q}`, { method: 'GET' })
 }
 
 /**
@@ -1235,21 +1191,12 @@ export function fetchStudentServicesEventProposals(params = {}) {
  */
 export function submitStudentServicesEventProposal(formState, imageFile) {
   const dto = buildEventProposalSubmitDto(formState)
-  return postEventProposalResolvingPath(
-    'student-services/events/proposals',
-    'student-services/event-proposals',
-    dto,
-    imageFile
-  )
+  return postEventProposalResolvingPath('student-services/events/proposals', null, dto, imageFile)
 }
 
 export function fetchStudentServicesEventProposal(proposalId) {
   const enc = encodeURIComponent(proposalId)
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/events/proposals/${enc}`,
-    `student-services/event-proposals/${enc}`,
-    { method: 'GET' }
-  )
+  return clubAuthJson(`student-services/events/proposals/${enc}`, { method: 'GET' })
 }
 
 /**
@@ -1272,39 +1219,25 @@ export function approveStudentServicesEventProposal(proposalId, approveDtoOrAssi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/events/proposals/${enc}/approve`,
-    `student-services/event-proposals/${enc}/approve`,
-    init
-  )
+  return clubAuthJson(`student-services/events/proposals/${enc}/approve`, init)
 }
 
 export function rejectStudentServicesEventProposal(proposalId, reason) {
   const enc = encodeURIComponent(proposalId)
-  const init = {
+  return clubAuthJson(`student-services/events/proposals/${enc}/reject`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
-  }
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/events/proposals/${enc}/reject`,
-    `student-services/event-proposals/${enc}/reject`,
-    init
-  )
+  })
 }
 
 export function requestRevisionStudentServicesEventProposal(proposalId, changes) {
   const enc = encodeURIComponent(proposalId)
-  const init = {
+  return clubAuthJson(`student-services/events/proposals/${enc}/request-revision`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ changes }),
-  }
-  return clubAuthJsonPrimaryOrFallback(
-    `student-services/events/proposals/${enc}/request-revision`,
-    `student-services/event-proposals/${enc}/request-revision`,
-    init
-  )
+  })
 }
 
 export function fetchStudentServicesEvents() {
@@ -1367,25 +1300,13 @@ export async function uploadStudentServicesClubProfileImage(clubId, file) {
 }
 
 /**
- * Pending club background for Student Services (when implemented).
- * Falls back to club-admin profile PATCH with `backgroundFile` if the SS route is not deployed (404).
+ * Background / hero image for Student Services.
+ * The documented contract uses club-admin profile PATCH with multipart `backgroundFile`.
  */
-export async function uploadStudentServicesClubBackgroundImage(clubId, file) {
+export function uploadStudentServicesClubBackgroundImage(clubId, file) {
   const fd = new FormData()
   fd.append('backgroundFile', file)
-  try {
-    return await clubAuthJson(`student-services/clubs/${encodeURIComponent(clubId)}/background-image`, {
-      method: 'POST',
-      body: fd,
-    })
-  } catch (e) {
-    if (e?.status === 403 || e?.status === 404) {
-      const fd2 = new FormData()
-      fd2.append('backgroundFile', file)
-      return patchClubAdminProfile(clubId, fd2)
-    }
-    throw e
-  }
+  return patchClubAdminProfile(clubId, fd)
 }
 
 export function approveStudentServicesClubProfileImage(clubId) {

@@ -265,6 +265,7 @@ const StudentServicesSuggestEvent = () => {
           duration,
           attendance,
           venue: venue || 'TBD',
+          ...(buildingId && roomId ? { buildingId, roomId } : {}),
           description,
           objectives,
           subEvents,
