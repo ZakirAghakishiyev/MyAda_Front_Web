@@ -55,6 +55,7 @@ export class CallHubService {
           this.connection = new signalR.HubConnectionBuilder()
             .withUrl(url, {
               accessTokenFactory: () => getAccessToken() || '',
+              withCredentials: false,
             })
             .withAutomaticReconnect()
             .build()
