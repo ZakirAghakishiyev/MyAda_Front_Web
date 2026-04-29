@@ -2,24 +2,23 @@ import { API_BASE } from './apiBase'
 
 /**
  * Club service base URL (see Club API docs).
- * Default source of truth is the API gateway origin / host.
- * Documented club endpoints are exposed directly under `/api/v1/...` on that host.
+ * Live deployment currently mounts the club service under `/club`.
+ * Example: `https://myada.site/club/api/v1/clubs`
  */
 function normalizeClubApiBase(raw) {
   return String(raw ?? '')
     .trim()
     .replace(/\/api\/v1\/?$/i, '')
-    .replace(/\/club\/?$/i, '')
     .replace(/\/+$/, '')
 }
 
 export const CLUB_API_BASE = normalizeClubApiBase(
-  import.meta.env.VITE_CLUB_API_BASE ?? API_BASE
+  import.meta.env.VITE_CLUB_API_BASE ?? `${API_BASE}/club`
 )
 
-/** Gateway origin / host used for default media fallbacks. */
+/** Origin without `/club` — useful for host-level fallbacks. */
 export function clubGatewayOrigin() {
-  return CLUB_API_BASE
+  return CLUB_API_BASE.replace(/\/club$/i, '') || CLUB_API_BASE
 }
 
 /**
