@@ -1,6 +1,6 @@
 /**
  * Support service base (see SUPPORT_API_DOC.md).
- * Gateway: {origin}/support/api/... — in dev, Vite proxies /support to the API gateway.
+ * Gateway: {api-base}/support/api/... — source of truth is the API base, not the frontend origin.
  */
 import { AUTH_API_BASE } from '../auth/config'
 
@@ -12,20 +12,16 @@ export const SUPPORT_API_BASE_FALLBACKS = [
   'http://localhost:5008/api',
 ]
 
-/** Bases to try in order; first is same-origin when in browser (Vite proxy / deployed behind gateway). */
+/** Bases to try in order; first is the configured API gateway base. */
 export function getSupportApiBases() {
   const fromEnv = trim(import.meta.env.VITE_SUPPORT_API_BASE)
   if (fromEnv) return [fromEnv]
-  const sameOrigin =
-    typeof window !== 'undefined' && window.location?.origin
-      ? [`${window.location.origin}/support/api`]
-      : []
-  return [...sameOrigin, ...SUPPORT_API_BASE_FALLBACKS]
+  return [`${AUTH_API_BASE}/support/api`, ...SUPPORT_API_BASE_FALLBACKS]
 }
 
 /**
  * Same gateway root as login / `authFetch` ({@link AUTH_API_BASE}), so dispatcher
- * `users-by-role` calls hit e.g. `https://myada.duckdns.org/api/auth/users-by-role/...`.
+ * `users-by-role` calls hit e.g. `https://myada.site/api/auth/users-by-role/...`.
  * Override list only with `VITE_AUTH_API_BASES` (comma/semicolon-separated full `.../users-by-role` bases).
  */
 export const DISPATCHER_ROLE_USER_URLS = import.meta.env.VITE_AUTH_API_BASES

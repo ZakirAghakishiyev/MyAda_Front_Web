@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const GATEWAY_TARGET = process.env.VITE_DEV_GATEWAY_TARGET || 'https://myada.duckdns.org'
+const GATEWAY_TARGET = process.env.VITE_DEV_GATEWAY_TARGET || 'https://myada.site'
 
 const proxyToGateway = (extra = {}) => ({
   target: GATEWAY_TARGET,

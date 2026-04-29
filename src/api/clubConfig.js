@@ -1,13 +1,11 @@
+import { API_BASE } from './apiBase'
+
 /**
  * Club service base URL (see Club API docs).
- * Local Docker service: `http://localhost:5003` → `{base}/api/v1/...`
- * Gateway route (recommended for local dev): `/club` (proxied by Vite to your gateway target).
- * Deployed gateway: `http://<host>:5000/club` (gateway strips `/club` before forwarding).
+ * Default source of truth is the API gateway base plus `/club`.
  */
 export const CLUB_API_BASE = String(
-  import.meta.env.VITE_CLUB_API_BASE ??
-    // Default to relative path so local `vite` proxy can route it.
-    '/club'
+  import.meta.env.VITE_CLUB_API_BASE ?? `${API_BASE}/club`
 ).replace(/\/+$/, '')
 
 /** Origin without `/club` — used for legacy fallbacks (e.g. default.png on the gateway). */

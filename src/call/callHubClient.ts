@@ -1,6 +1,6 @@
 import * as signalR from '@microsoft/signalr'
 
-const DEFAULT_GATEWAY_BASE = 'https://myada.duckdns.org'
+const DEFAULT_GATEWAY_BASE = 'https://myada.site'
 const DEFAULT_CALL_HUB_URL = `${DEFAULT_GATEWAY_BASE}/call/hub`
 
 function trimTrailingSlash(value: string) {
@@ -13,16 +13,13 @@ function uniqueUrls(urls: string[]) {
 
 type HubConnectionCandidate = {
   hubUrl: string
-  skipNegotiation?: boolean
-  transport?: signalR.HttpTransportType
 }
 
 function resolveGatewayBase() {
+  const envBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+  if (envBaseUrl) return trimTrailingSlash(envBaseUrl)
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim()
   if (envBase) return trimTrailingSlash(envBase)
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return trimTrailingSlash(window.location.origin)
-  }
   return DEFAULT_GATEWAY_BASE
 }
 
@@ -39,69 +36,19 @@ function resolveHubUrl() {
   return `${base}/call/hub`
 }
 
-function isVercelHostedBrowser() {
-  if (typeof window === 'undefined') return false
-  const host = String(window.location?.hostname || '').toLowerCase()
-  return host.endsWith('.vercel.app')
-}
-
-function isSameOriginUrl(url: string) {
-  if (typeof window === 'undefined' || !window.location?.origin) return false
-  try {
-    return new URL(url).origin === window.location.origin
-  } catch {
-    return false
-  }
-}
-
-function shouldPreferDirectWebSockets() {
-  const fromEnv = String(import.meta.env.VITE_CALL_PREFER_DIRECT_WS || '').trim().toLowerCase()
-  if (fromEnv === 'true') return true
-  if (fromEnv === 'false') return false
-  return !import.meta.env.DEV && isVercelHostedBrowser()
-}
-
 function buildHubConnectionCandidates(): HubConnectionCandidate[] {
   const explicit = (import.meta.env.VITE_CALL_HUB_URL as string | undefined)?.trim()
-  const preferDirectWebSockets = shouldPreferDirectWebSockets()
 
   if (explicit) {
     const normalized = trimTrailingSlash(explicit)
-    return [
-      {
-        hubUrl: normalized,
-        skipNegotiation: preferDirectWebSockets && !isSameOriginUrl(normalized),
-        transport:
-          preferDirectWebSockets && !isSameOriginUrl(normalized)
-            ? signalR.HttpTransportType.WebSockets
-            : undefined,
-      },
-    ]
+    return [{ hubUrl: normalized }]
   }
 
-  const sameOrigin =
-    typeof window !== 'undefined' && window.location?.origin
-      ? [`${trimTrailingSlash(window.location.origin)}/call/hub`]
-      : []
-  const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim()
+  const envBase =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
+    (import.meta.env.VITE_API_BASE as string | undefined)?.trim()
   const envHub = envBase ? [`${trimTrailingSlash(envBase)}/call/hub`] : []
-  const directHubUrls = uniqueUrls([...envHub, DEFAULT_CALL_HUB_URL]).filter((url) => !isSameOriginUrl(url))
-  const proxiedHubUrls = uniqueUrls([...sameOrigin, ...envHub, DEFAULT_CALL_HUB_URL])
-
-  if (preferDirectWebSockets && directHubUrls.length > 0) {
-    return [
-      ...directHubUrls.map((hubUrl) => ({
-        hubUrl,
-        skipNegotiation: true,
-        transport: signalR.HttpTransportType.WebSockets,
-      })),
-      ...proxiedHubUrls
-        .filter((hubUrl) => !directHubUrls.includes(hubUrl))
-        .map((hubUrl) => ({ hubUrl })),
-    ]
-  }
-
-  return proxiedHubUrls.map((hubUrl) => ({ hubUrl }))
+  return uniqueUrls([...envHub, DEFAULT_CALL_HUB_URL]).map((hubUrl) => ({ hubUrl }))
 }
 
 /**
@@ -162,8 +109,6 @@ class CallHubClient {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(candidate.hubUrl, {
         accessTokenFactory: () => getAccessToken() || '',
-        transport: candidate.transport,
-        skipNegotiation: candidate.skipNegotiation,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
       .build()
@@ -197,8 +142,6 @@ class CallHubClient {
       hubUrls,
       candidateModes: candidates.map((candidate) => ({
         hubUrl: candidate.hubUrl,
-        skipNegotiation: Boolean(candidate.skipNegotiation),
-        transport: candidate.transport ?? null,
       })),
       hasToken,
     })
@@ -253,8 +196,6 @@ class CallHubClient {
 
         console.info('[CALL-DBG] CallHubClient.starting connection', {
           hubUrl: candidate.hubUrl,
-          skipNegotiation: Boolean(candidate.skipNegotiation),
-          transport: candidate.transport ?? null,
         })
         try {
           await this.connection.start()
@@ -268,8 +209,6 @@ class CallHubClient {
           const statusCode = (err as any).statusCode ?? (err as any).status ?? null
           console.error('[CALL-DBG] CallHubClient.start failed', {
             hubUrl: candidate.hubUrl,
-            skipNegotiation: Boolean(candidate.skipNegotiation),
-            transport: candidate.transport ?? null,
             statusCode,
             message: String((err as Error)?.message || err),
           })

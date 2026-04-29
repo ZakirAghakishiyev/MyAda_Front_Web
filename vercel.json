@@ -3,31 +3,31 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://myada.duckdns.org/api/:path*"
+      "destination": "https://myada.site/api/:path*"
     },
     {
       "source": "/attendance/:path*",
-      "destination": "https://myada.duckdns.org/attendance/:path*"
+      "destination": "https://myada.site/attendance/:path*"
     },
     {
       "source": "/location/:path*",
-      "destination": "https://myada.duckdns.org/location/:path*"
+      "destination": "https://myada.site/location/:path*"
     },
     {
       "source": "/lostfound/:path*",
-      "destination": "https://myada.duckdns.org/lostfound/:path*"
+      "destination": "https://myada.site/lostfound/:path*"
     },
     {
       "source": "/call/:path*",
-      "destination": "https://myada.duckdns.org/call/:path*"
+      "destination": "https://myada.site/call/:path*"
     },
     {
       "source": "/club/:path*",
-      "destination": "https://myada.duckdns.org/club/:path*"
+      "destination": "https://myada.site/club/:path*"
     },
     {
       "source": "/support/:path*",
-      "destination": "https://myada.duckdns.org/support/:path*"
+      "destination": "https://myada.site/support/:path*"
     }
   ]
 }

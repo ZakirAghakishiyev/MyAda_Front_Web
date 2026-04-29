@@ -6,6 +6,9 @@ let refreshInFlight = null
 /** @type {ReturnType<typeof setTimeout> | null} */
 let proactiveRefreshTimer = null
 
+const LOGIN_NETWORK_BLOCKED_MESSAGE =
+  'Cannot reach the server. Your network may be blocking myada.site. Try another network, VPN, or contact the administrator.'
+
 const REFRESH_BEFORE_ACCESS_EXPIRY_MS = 90 * 1000
 const RESUME_REFRESH_IF_REMAINING_MS = 2 * 60 * 1000
 
@@ -90,6 +93,56 @@ async function parseJsonSafe(res) {
   }
 }
 
+async function readResponseBody(res) {
+  const contentType = String(res.headers.get('content-type') || '').toLowerCase()
+  const text = await res.text()
+  const looksJson =
+    contentType.includes('application/json') || /^\s*[{[]/.test(text)
+  const looksHtml =
+    contentType.includes('text/html') ||
+    /^\s*<!doctype html/i.test(text) ||
+    /^\s*<html[\s>]/i.test(text) ||
+    /<body[\s>]/i.test(text)
+
+  if (!text) {
+    return { contentType, text: '', data: null, isJson: false, isHtml: false }
+  }
+
+  if (looksJson) {
+    try {
+      return {
+        contentType,
+        text,
+        data: JSON.parse(text),
+        isJson: true,
+        isHtml: false,
+      }
+    } catch (err) {
+      console.warn('[auth] Expected JSON response but parsing failed.', {
+        status: res.status,
+        contentType,
+        preview: text.slice(0, 200),
+        message: String(err?.message || err),
+      })
+    }
+  }
+
+  return {
+    contentType,
+    text,
+    data: null,
+    isJson: false,
+    isHtml: looksHtml,
+  }
+}
+
+function createFriendlyNetworkBlockedError(extra = {}) {
+  const err = new Error(LOGIN_NETWORK_BLOCKED_MESSAGE)
+  err.code = 'AUTH_SERVER_UNREACHABLE'
+  Object.assign(err, extra)
+  return err
+}
+
 /**
  * Refresh access token: POST /api/auth/refresh with { refreshToken }.
  * Single-flight: concurrent callers share one refresh. Rotates both tokens (AUTH_API_DOC).
@@ -134,23 +187,82 @@ export async function refreshSession() {
 }
 
 export async function login(username, password) {
-  const res = await fetch(`${AUTH_API_BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  })
+  const url = `${AUTH_API_BASE}/api/auth/login`
+  let res
 
-  const data = await parseJsonSafe(res)
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+  } catch (err) {
+    console.error('[auth] Login request could not reach the server.', {
+      url,
+      message: String(err?.message || err),
+      name: err?.name || null,
+    })
+    throw createFriendlyNetworkBlockedError({ cause: err })
+  }
+
+  const body = await readResponseBody(res)
+  const data = body.data
 
   if (!res.ok) {
-    const err = new Error(
-      data.message || (res.status === 401 ? 'Invalid username or password.' : 'Login failed.')
-    )
+    if (res.status === 401) {
+      console.warn('[auth] Login rejected with 401.', { url, status: res.status })
+      const err = new Error('Username or password is incorrect')
+      err.status = res.status
+      throw err
+    }
+
+    if (body.isJson && data && typeof data === 'object') {
+      const message = data.message || data.title || data.detail
+      if (message) {
+        console.warn('[auth] Login failed with backend JSON error.', {
+          url,
+          status: res.status,
+          message,
+        })
+        const err = new Error(String(message))
+        err.status = res.status
+        err.body = data
+        throw err
+      }
+    }
+
+    if (!body.isJson || body.isHtml) {
+      console.error('[auth] Login returned a non-JSON or blocked response.', {
+        url,
+        status: res.status,
+        contentType: body.contentType,
+        isHtml: body.isHtml,
+        preview: body.text.slice(0, 200),
+      })
+      throw createFriendlyNetworkBlockedError({
+        status: res.status,
+        bodyPreview: body.text.slice(0, 200),
+      })
+    }
+
+    console.error('[auth] Login failed with an unexpected response.', {
+      url,
+      status: res.status,
+      contentType: body.contentType,
+    })
+    const err = new Error('Login failed.')
     err.status = res.status
     throw err
   }
 
-  if (!data.accessToken || !data.refreshToken) {
+  if (!data?.accessToken || !data?.refreshToken) {
+    console.error('[auth] Login succeeded but token payload was missing.', {
+      url,
+      status: res.status,
+      contentType: body.contentType,
+      hasAccessToken: Boolean(data?.accessToken),
+      hasRefreshToken: Boolean(data?.refreshToken),
+    })
     const err = new Error('Unexpected response from server.')
     err.status = res.status
     throw err

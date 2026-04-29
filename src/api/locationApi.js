@@ -4,7 +4,7 @@ import { API_BASE } from './apiBase'
 // Base should point to the Location service or gateway prefix (no trailing slash).
 // Examples:
 // - Local:    http://localhost:5010
-// - Gateway:  https://myada.duckdns.org/location
+// - Gateway:  https://myada.site/location
 const LOCATION_API_BASE = (
   import.meta.env.VITE_LOCATION_API_BASE ?? `${API_BASE}/location`
 ).replace(/\/+$/, '')

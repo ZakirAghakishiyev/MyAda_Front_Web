@@ -5,22 +5,17 @@ function uniqueUrls(urls: string[]) {
 }
 
 /**
- * Dev: prefer Vite proxy (`/call/hub`) when enabled to avoid CORS.
- * Prod / direct: use the HTTPS gateway `/call/hub`.
- * Override with `VITE_CALL_HUB_URL` or `VITE_API_BASE`.
+ * Call hub should resolve from the API gateway origin, not the frontend origin.
+ * Override with `VITE_CALL_HUB_URL`, `VITE_API_BASE_URL`, or `VITE_API_BASE`.
  */
 export function buildCallHubUrlCandidates(): string[] {
   const explicit = import.meta.env.VITE_CALL_HUB_URL as string | undefined
   if (explicit) return uniqueUrls([explicit])
 
-  const envBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
-  const sameOrigin =
-    typeof window !== 'undefined' && window.location?.origin
-      ? [window.location.origin]
-      : []
-  const bases = envBase
-    ? [envBase, ...sameOrigin]
-    : [...sameOrigin, 'https://myada.duckdns.org']
+  const envBase =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
+    (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
+  const bases = envBase ? [envBase] : ['https://myada.site']
 
   return uniqueUrls(bases.map((b) => `${b}/call/hub`))
 }
