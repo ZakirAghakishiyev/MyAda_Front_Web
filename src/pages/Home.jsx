@@ -4,6 +4,7 @@ import { useFilter } from '../contexts/FilterContext'
 import { fetchMyClubMemberships } from '../api/clubApi'
 import { roleMayManageClub } from '../auth/clubStaffRoles'
 import { getJwtHomeMenuKey, getResolvedHomeMenuKey, userSeesFullHomeAsAdmin } from '../auth/homeRoles'
+import CallCard from '../call/CallCard'
 import Card from '../components/Card'
 import './Home.css'
 
@@ -43,6 +44,18 @@ const SECTION_META = {
   projects: { title: 'Projects', category: 'work' },
 }
 
+function buildHomeCallCard(catalog) {
+  return {
+    title: 'Call Card',
+    category: 'community',
+    buttons: [
+      catalog.callContacts,
+      catalog.callHistory,
+    ],
+    children: <CallCard />,
+  }
+}
+
 /**
  * @param {(path: string, extra?: boolean | { title: string } | null) => () => void} nav
  */
@@ -61,7 +74,9 @@ function makeCatalog(nav) {
     fmSupport: { text: 'FM Support', onClick: nav('/fm-support', true) },
     myRequests: { text: 'My Requests', onClick: nav('/my-requests', false) },
     supportDispatcher: { text: 'Support Dispatcher', onClick: nav('/support-dispatcher', false) },
+    callContacts: { text: 'Contacts', onClick: nav('/calls/contacts', false) },
     staffPortal: { text: 'Staff Portal', onClick: nav('/staff-portal', false) },
+    callHistory: { text: 'Call History', onClick: nav('/calls/history', false) },
     viewGrades: { text: 'View My Grades', onClick: nav('/coming-soon', { title: 'View My Grades' }) },
     viewTranscript: { text: 'View Transcript', onClick: nav('/coming-soon', { title: 'View Transcript' }) },
     courseRegistration: { text: 'Course Registration', onClick: nav('/coming-soon', { title: 'Course Registration' }) },
@@ -168,6 +183,9 @@ function cardsFromKeyMap(keyMap, catalog, role) {
       subTitle: subTitle || undefined,
       buttons,
     })
+    if (sectionId === 'itfm') {
+      out.push(buildHomeCallCard(catalog))
+    }
   }
   return out
 }
@@ -285,6 +303,7 @@ const Home = () => {
             <Card
               key={`${card.title}-${index}`}
               title={card.title}
+              children={card.children}
               buttons={card.buttons}
               centerButtons={card.centerButtons}
               subTitle={card.subTitle}

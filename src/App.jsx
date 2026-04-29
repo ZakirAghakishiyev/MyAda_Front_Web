@@ -80,6 +80,7 @@ import StudentServicesSuggestEvent from './pages/StudentServicesSuggestEvent'
 import CallerCallPage from './pages/call/CallerCallPage'
 import DispatcherCallPage from './pages/call/DispatcherCallPage'
 import CallHistoryPage from './pages/call/CallHistoryPage'
+import CallContactsPage from './pages/call/CallContactsPage'
 import { getAccessToken } from './auth/tokenStorage'
 import './App.css'
 
@@ -372,6 +373,7 @@ const AppContent = () => {
           <Route path="/dispatcher" element={<Navigate to="/calls/dispatcher" replace />} />
           <Route path="/calls/caller" element={<CallerCallPage />} />
           <Route path="/calls/dispatcher" element={<DispatcherCallPage />} />
+          <Route path="/calls/contacts" element={<CallContactsPage />} />
           <Route path="/calls/history" element={<CallHistoryPage />} />
           <Route path="/staff-portal" element={<RequireSupportStaffPortal />}>
             <Route element={<StaffPortalLayout />}>

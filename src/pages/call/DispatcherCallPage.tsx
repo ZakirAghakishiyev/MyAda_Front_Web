@@ -27,7 +27,6 @@ const DispatcherCallPage: React.FC = () => {
         <p>Room ID: {roomId || '-'}</p>
         <p>Participants: {(otherParticipants || []).map((x) => x.displayName || x.userId).join(', ') || '-'}</p>
       </section>
-
       <StaffActivityWidget />
     </div>
   )

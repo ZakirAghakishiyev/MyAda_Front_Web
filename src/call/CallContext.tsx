@@ -802,6 +802,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await hubRef.current.invoke('RequestCall', targetUserId)
       } catch (err) {
         setErrorFrom(err)
+        throw err
       }
     },
     [ensureCallHubConnected, setErrorFrom]

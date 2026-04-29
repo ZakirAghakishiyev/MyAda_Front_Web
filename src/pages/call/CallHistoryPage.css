@@ -1,18 +1,65 @@
 .ch-page {
-  max-width: 960px;
+  max-width: 1060px;
   margin: 24px auto;
   padding: 16px 20px 48px;
 }
 
+.ch-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 30%),
+    linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  color: #fff;
+  margin-bottom: 18px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.ch-kicker {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(191, 219, 254, 0.95);
+}
+
 .ch-page h1 {
   margin: 0 0 8px;
-  font-size: 1.5rem;
+  font-size: 2rem;
 }
 
 .ch-sub {
-  color: #64748b;
+  color: rgba(226, 232, 240, 0.92);
   font-size: 14px;
-  margin: 0 0 20px;
+  margin: 0;
+  max-width: 620px;
+  line-height: 1.55;
+}
+
+.ch-hero-actions {
+  display: flex;
+  align-items: flex-start;
+}
+
+.ch-primary-btn {
+  border: 1px solid rgba(191, 219, 254, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.ch-primary-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .ch-nav {
@@ -27,6 +74,42 @@
 
 .ch-nav a:hover {
   text-decoration: underline;
+}
+
+.ch-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.ch-stat-card {
+  border: 1px solid #dbe4f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.ch-stat-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.ch-stat-value {
+  color: #0f172a;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.ch-stat-value--small {
+  font-size: 0.95rem;
+  line-height: 1.45;
 }
 
 .ch-filters {
@@ -89,10 +172,11 @@
 }
 
 .ch-card {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px 16px;
-  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .ch-card-top {
@@ -114,6 +198,10 @@
   font-weight: 500;
   color: #64748b;
   font-size: 13px;
+}
+
+.ch-party-sep {
+  color: #94a3b8;
 }
 
 .ch-badges {
@@ -191,4 +279,15 @@
 
 .ch-retry:hover {
   background: #f8fafc;
+}
+
+@media (max-width: 768px) {
+  .ch-hero {
+    padding: 18px;
+    flex-direction: column;
+  }
+
+  .ch-page h1 {
+    font-size: 1.7rem;
+  }
 }

@@ -604,7 +604,7 @@ function mapAuthDirectoryUser(item, fallbackRole = '') {
 
 const authUsersByRoleCache = new Map()
 
-async function fetchAuthUsersByRole(role) {
+export async function fetchAuthUsersByRole(role) {
   const roleKey = String(role || '').trim().toLowerCase()
   if (!roleKey) return []
   if (authUsersByRoleCache.has(roleKey)) return authUsersByRoleCache.get(roleKey)
@@ -646,6 +646,17 @@ async function fetchAuthUsersByRole(role) {
 
   authUsersByRoleCache.set(roleKey, pending)
   return pending
+}
+
+/**
+ * Call contacts directory backed by Auth `GET /api/auth/users-by-role/{role}`.
+ * Returns active users only, normalized for UI use and sorted by display name.
+ * @param {string} role
+ * @returns {Promise<{ id: string, name: string, email: string | null, role: string }[]>}
+ */
+export async function getCallContactsByRole(role) {
+  const users = await fetchAuthUsersByRole(role)
+  return [...users].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')))
 }
 
 async function fetchTeacherDirectoryUsers() {

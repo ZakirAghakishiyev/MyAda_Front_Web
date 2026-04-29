@@ -13,7 +13,7 @@ const FILTER_TABS: { id: CallHistoryFilter; label: string }[] = [
 ]
 
 function formatUtc(iso: string | null | undefined) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso)
   if (!Number.isFinite(d.getTime())) return iso
   return d.toLocaleString(undefined, {
@@ -23,7 +23,7 @@ function formatUtc(iso: string | null | undefined) {
 }
 
 function formatDuration(totalSeconds: number | null | undefined) {
-  if (totalSeconds == null || !Number.isFinite(totalSeconds) || totalSeconds < 0) return '—'
+  if (totalSeconds == null || !Number.isFinite(totalSeconds) || totalSeconds < 0) return '-'
   const s = Math.floor(totalSeconds)
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
@@ -48,12 +48,8 @@ function badgeClass(status: CallHistoryStatus) {
 }
 
 function statusHeadline(row: CallHistoryItem) {
-  if (row.status === 'accepted' && row.endedAtUtc) {
-    return 'Accepted (finished)'
-  }
-  if (row.status === 'accepted') {
-    return 'Accepted'
-  }
+  if (row.status === 'accepted' && row.endedAtUtc) return 'Accepted (finished)'
+  if (row.status === 'accepted') return 'Accepted'
   return row.status.replace(/-/g, ' ')
 }
 
@@ -67,11 +63,11 @@ function CallHistoryCard({ row }: { row: CallHistoryItem }) {
         <div>
           <div className="ch-parties">
             <span className="ch-party-label">Caller</span> {callerName}{' '}
-            <span style={{ color: '#94a3b8' }}>↔</span>{' '}
+            <span className="ch-party-sep">to</span>{' '}
             <span className="ch-party-label">Dispatcher</span> {dispatcherName}
           </div>
           <p className="ch-meta" style={{ marginTop: 6 }}>
-            <strong>Call</strong> {row.callId} · <strong>Room</strong> {row.roomId || '—'}
+            <strong>Call</strong> {row.callId} · <strong>Room</strong> {row.roomId || '-'}
           </p>
         </div>
         <div className="ch-badges">
@@ -125,17 +121,53 @@ function CallHistoryCard({ row }: { row: CallHistoryItem }) {
 
 const CallHistoryPage: React.FC = () => {
   const { filter, setFilter, items, loading, error, reload } = useCallHistory('all')
+  const acceptedCount = items.filter((row) => row.status === 'accepted').length
+  const missedCount = items.filter((row) => row.status === 'timed-out' || row.status === 'rejected').length
+  const latestCall = items[0] || null
 
   return (
     <div className="ch-page">
-      <h1>Call history</h1>
-      <p className="ch-sub">Calls where you were the caller or dispatcher. Data is loaded from the server.</p>
+      <section className="ch-hero">
+        <div>
+          <p className="ch-kicker">Communication</p>
+          <h1>Call History</h1>
+          <p className="ch-sub">
+            Calls where you were the caller or dispatcher. This page keeps the full timeline, while the home card only shows the latest call.
+          </p>
+        </div>
+        <div className="ch-hero-actions">
+          <button type="button" className="ch-primary-btn" onClick={() => void reload()}>
+            Refresh history
+          </button>
+        </div>
+      </section>
 
       <div className="ch-nav">
         <Link to="/calls/caller">Caller panel</Link>
         {' · '}
         <Link to="/calls/dispatcher">Dispatcher panel</Link>
       </div>
+
+      <section className="ch-stats">
+        <article className="ch-stat-card">
+          <span className="ch-stat-label">Total calls</span>
+          <strong className="ch-stat-value">{items.length}</strong>
+        </article>
+        <article className="ch-stat-card">
+          <span className="ch-stat-label">Accepted</span>
+          <strong className="ch-stat-value">{acceptedCount}</strong>
+        </article>
+        <article className="ch-stat-card">
+          <span className="ch-stat-label">Missed / rejected</span>
+          <strong className="ch-stat-value">{missedCount}</strong>
+        </article>
+        <article className="ch-stat-card">
+          <span className="ch-stat-label">Latest call</span>
+          <strong className="ch-stat-value ch-stat-value--small">
+            {latestCall ? formatUtc(latestCall.requestedAtUtc) : 'No calls yet'}
+          </strong>
+        </article>
+      </section>
 
       <div className="ch-filters" role="tablist" aria-label="Filter by outcome">
         {FILTER_TABS.map((tab) => (
@@ -163,7 +195,7 @@ const CallHistoryPage: React.FC = () => {
         </div>
       ) : null}
 
-      {loading ? <p className="ch-loading">Loading history…</p> : null}
+      {loading ? <p className="ch-loading">Loading history...</p> : null}
 
       {!loading && !error && items.length === 0 ? (
         <div className="ch-banner ch-banner--empty">No calls match this filter.</div>

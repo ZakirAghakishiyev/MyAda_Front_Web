@@ -15,7 +15,12 @@ function isAuthRoute(pathname: string) {
 }
 
 function isCallRoute(pathname: string) {
-  return pathname === '/calls/caller' || pathname === '/calls/dispatcher' || pathname === '/calls/history'
+  return (
+    pathname === '/calls/caller' ||
+    pathname === '/calls/dispatcher' ||
+    pathname === '/calls/history' ||
+    pathname === '/calls/contacts'
+  )
 }
 
 function formatCallDuration(totalSeconds: number) {
