@@ -706,7 +706,10 @@ export function mapVacancyFromApi(dto, index = 0) {
     index
   const desc = dto.description != null ? String(dto.description) : ''
   const aboutRole = desc
-    ? desc.split(/\n\n+/).map((p) => p.trim()).filter(Boolean)
+    ? desc
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter(Boolean)
     : []
   const isActive = dto.isActive !== undefined ? Boolean(dto.isActive) : !/^inactive$/i.test(String(dto.status ?? ''))
   const statusLabel =
@@ -716,27 +719,77 @@ export function mapVacancyFromApi(dto, index = 0) {
         ? 'active'
         : 'inactive'
   const clubNameRaw = dto.clubName ?? dto.club?.name ?? dto.club?.title ?? dto.club
+
+  const positionObj = dto.position && typeof dto.position === 'object' && !Array.isArray(dto.position) ? dto.position : null
+  const positionIdRaw =
+    dto.positionId ??
+    dto.PositionId ??
+    dto.clubPositionId ??
+    dto.ClubPositionId ??
+    positionObj?.id ??
+    positionObj?.Id ??
+    null
+  const positionId =
+    positionIdRaw != null && String(positionIdRaw).trim() && !Number.isNaN(Number(positionIdRaw))
+      ? Number(positionIdRaw)
+      : null
+  const requirementSource =
+    (Array.isArray(dto.requirements) && dto.requirements) ||
+    (Array.isArray(dto.Requirements) && dto.Requirements) ||
+    (Array.isArray(positionObj?.requirements) && positionObj.requirements) ||
+    (Array.isArray(positionObj?.Requirements) && positionObj.Requirements) ||
+    []
+  const requirements = requirementSource.map((r) => String(r ?? '').trim()).filter(Boolean)
+
+  const responsibilitiesSource =
+    (Array.isArray(dto.responsibilities) && dto.responsibilities) ||
+    (Array.isArray(dto.Responsibilities) && dto.Responsibilities) ||
+    (Array.isArray(dto.tasks) && dto.tasks) ||
+    (Array.isArray(dto.Tasks) && dto.Tasks) ||
+    []
+  const responsibilities = responsibilitiesSource.map((r) => String(r ?? '').trim()).filter(Boolean)
+
+  const categoryRaw =
+    dto.category ??
+    dto.categoryName ??
+    positionObj?.category ??
+    positionObj?.categoryName ??
+    dto.Category ??
+    dto.CategoryName ??
+    undefined
+
+  const titleRaw =
+    dto.title ??
+    dto.position ??
+    dto.positionTitle ??
+    dto.jobTitle ??
+    positionObj?.title ??
+    positionObj?.name ??
+    positionObj?.positionTitle ??
+    ''
+
+  const employmentTypeRaw = dto.employmentType ?? dto.type ?? dto.workType ?? dto.EmploymentType ?? undefined
+  const locationRaw = dto.location ?? dto.workLocation ?? dto.Location ?? undefined
+
+  const postedAtRaw = dto.postedAt ?? dto.createdAt ?? dto.postedOn ?? dto.createdOn ?? dto.CreatedAt ?? undefined
+  const deadlineRaw = dto.deadline ?? dto.applicationDeadline ?? dto.applicationEndDate ?? dto.Deadline ?? dto.ApplicationDeadline ?? undefined
+
   return {
     id: String(id),
-    position: String(dto.title ?? dto.position ?? ''),
+    position: String(titleRaw ?? ''),
     clubName: clubNameRaw != null ? String(clubNameRaw) : '',
     clubId: dto.clubId != null ? String(dto.clubId) : undefined,
-    category: String(dto.category ?? 'General'),
+    positionId: positionId ?? undefined,
+    category: String(categoryRaw ?? 'General'),
     categoryTag: dto.categoryTag != null ? String(dto.categoryTag) : undefined,
-    employmentType: dto.employmentType != null ? String(dto.employmentType) : 'Part-time',
-    location: dto.location != null ? String(dto.location) : 'On-campus',
-    postedAt: dto.postedAt
-      ? new Date(String(dto.postedAt)).toLocaleDateString()
-      : dto.createdAt
-        ? new Date(String(dto.createdAt)).toLocaleDateString()
-        : '',
-    deadline: dto.deadline
-      ? new Date(String(dto.deadline)).toLocaleDateString()
-      : dto.applicationDeadline
-        ? new Date(String(dto.applicationDeadline)).toLocaleDateString()
-        : '',
+    employmentType: employmentTypeRaw != null ? String(employmentTypeRaw) : 'Part-time',
+    location: locationRaw != null ? String(locationRaw) : 'On-campus',
+    postedAt: postedAtRaw ? new Date(String(postedAtRaw)).toLocaleDateString() : '',
+    deadline: deadlineRaw ? new Date(String(deadlineRaw)).toLocaleDateString() : '',
     applicants: dto.applicantsCount ?? dto.applicationsCount ?? dto.totalApplicants ?? undefined,
     aboutRole: aboutRole.length ? aboutRole : [desc || 'Details coming soon.'],
+    responsibilities: responsibilities.length ? responsibilities : undefined,
+    requirements: requirements.length ? requirements : undefined,
     benefits: Array.isArray(dto.benefits) ? dto.benefits : undefined,
     isActive,
     status: statusLabel,

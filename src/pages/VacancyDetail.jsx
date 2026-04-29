@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { fetchVacancy } from '../api/clubApi'
+import { fetchVacancy, fetchClubPositionRequirements } from '../api/clubApi'
 import { mapVacancyFromApi } from '../api/clubMappers'
 import { getSavedVacancyIds, setSavedVacancyIds } from '../utils/savedVacanciesCookie'
 import './VacancyDetail.css'
@@ -73,6 +73,29 @@ const VacancyDetail = () => {
     })()
     return () => { cancelled = true }
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!vacancy?.positionId) return
+      if (Array.isArray(vacancy.requirements) && vacancy.requirements.length > 0) return
+      try {
+        const reqs = await fetchClubPositionRequirements(vacancy.positionId)
+        if (cancelled) return
+        if (!reqs || reqs.length === 0) return
+        setVacancy((prev) => {
+          if (!prev) return prev
+          if (Array.isArray(prev.requirements) && prev.requirements.length > 0) return prev
+          return { ...prev, requirements: reqs }
+        })
+      } catch {
+        /* optional enrichment only */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [vacancy?.positionId, vacancy?.requirements])
 
   useEffect(() => {
     if (vacancyId == null) return
@@ -183,7 +206,9 @@ const VacancyDetail = () => {
             </section>
             <div className="vacancy-detail-application-details">
               <p><strong>Deadline:</strong> <span>{vacancy.deadline || '—'}</span></p>
-              <p><strong>Applicants:</strong> <span>{vacancy.applicants || '—'}</span></p>
+              {vacancy.applicants != null && vacancy.applicants !== '' ? (
+                <p><strong>Applicants:</strong> <span>{vacancy.applicants}</span></p>
+              ) : null}
             </div>
           </div>
         </div>

@@ -397,6 +397,31 @@ export function submitVacancyApplication(vacancyId, formData) {
   })
 }
 
+/**
+ * Get requirement strings for a club position.
+ * @see CLUB_API_DOC: GET /api/v1/club-position-requirements?clubPositionId={id}
+ * Auth: Bearer required
+ * Returns either a list, or an object containing `items`.
+ * @param {string|number} clubPositionId
+ * @returns {Promise<string[]>}
+ */
+export async function fetchClubPositionRequirements(clubPositionId) {
+  const id = String(clubPositionId ?? '').trim()
+  if (!id) return []
+  const q = new URLSearchParams()
+  q.set('clubPositionId', id)
+  const data = await clubAuthJson(`club-position-requirements?${q.toString()}`, { method: 'GET' })
+  const items = Array.isArray(data) ? data : (data?.items ?? data?.Items ?? [])
+  const rows = Array.isArray(items) ? items : []
+  return rows
+    .map((r) => {
+      if (typeof r === 'string') return r.trim()
+      if (!r || typeof r !== 'object') return ''
+      return String(r.text ?? r.requirement ?? r.value ?? r.name ?? r.title ?? '').trim()
+    })
+    .filter(Boolean)
+}
+
 /* --- Me --- */
 
 export function fetchMyClubMemberships() {

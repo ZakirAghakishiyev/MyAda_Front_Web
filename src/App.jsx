@@ -1,6 +1,12 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, Outlet } from 'react-router-dom'
-import { RequireAuth, RequireStudentServices, RequireClubAdminPortal, RequireSupportStaffPortal } from './auth/RouteGuards'
+import {
+  RequireAuth,
+  RequireStudentServices,
+  RequireClubAdminPortal,
+  RequireSupportStaffPortal,
+  RequireNotStudent,
+} from './auth/RouteGuards'
 import { SessionRestoreGate } from './auth/SessionRestoreGate'
 import { FilterProvider } from './contexts/FilterContext'
 import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
@@ -344,37 +350,105 @@ const AppContent = () => {
           <Route path="/it-support" element={
             <>
               <Home />
-              <ITSupport />
+              <RequireNotStudent>
+                <ITSupport />
+              </RequireNotStudent>
             </>
           } />
           <Route path="/fm-support" element={
             <>
               <Home />
-              <FMSupport />
+              <RequireNotStudent>
+                <FMSupport />
+              </RequireNotStudent>
             </>
           } />
-          <Route path="/my-requests" element={<MyRequests />} />
+          <Route
+            path="/my-requests"
+            element={
+              <RequireNotStudent>
+                <MyRequests />
+              </RequireNotStudent>
+            }
+          />
           <Route path="/my-requests/:id" element={
             <>
-              <MyRequests />
-              <RequestDetail />
+              <RequireNotStudent>
+                <MyRequests />
+              </RequireNotStudent>
+              <RequireNotStudent>
+                <RequestDetail />
+              </RequireNotStudent>
             </>
           } />
-          <Route path="/support-dispatcher" element={<SupportDispatcher />} />
-          <Route path="/support-dispatcher/history" element={<SupportDispatcherHistory />} />
+          <Route
+            path="/support-dispatcher"
+            element={
+              <RequireNotStudent>
+                <SupportDispatcher />
+              </RequireNotStudent>
+            }
+          />
+          <Route
+            path="/support-dispatcher/history"
+            element={
+              <RequireNotStudent>
+                <SupportDispatcherHistory />
+              </RequireNotStudent>
+            }
+          />
           <Route path="/support-dispatcher/:id" element={
             <>
-              <SupportDispatcher />
-              <RequestDetailDispatcher />
+              <RequireNotStudent>
+                <SupportDispatcher />
+              </RequireNotStudent>
+              <RequireNotStudent>
+                <RequestDetailDispatcher />
+              </RequireNotStudent>
             </>
           } />
-          <Route path="/support-dispatcher/staff" element={<SupportStaffDirectory />} />
+          <Route
+            path="/support-dispatcher/staff"
+            element={
+              <RequireNotStudent>
+                <SupportStaffDirectory />
+              </RequireNotStudent>
+            }
+          />
           <Route path="/caller" element={<Navigate to="/calls/caller" replace />} />
           <Route path="/dispatcher" element={<Navigate to="/calls/dispatcher" replace />} />
-          <Route path="/calls/caller" element={<CallerCallPage />} />
-          <Route path="/calls/dispatcher" element={<DispatcherCallPage />} />
-          <Route path="/calls/contacts" element={<CallContactsPage />} />
-          <Route path="/calls/history" element={<CallHistoryPage />} />
+          <Route
+            path="/calls/caller"
+            element={
+              <RequireNotStudent>
+                <CallerCallPage />
+              </RequireNotStudent>
+            }
+          />
+          <Route
+            path="/calls/dispatcher"
+            element={
+              <RequireNotStudent>
+                <DispatcherCallPage />
+              </RequireNotStudent>
+            }
+          />
+          <Route
+            path="/calls/contacts"
+            element={
+              <RequireNotStudent>
+                <CallContactsPage />
+              </RequireNotStudent>
+            }
+          />
+          <Route
+            path="/calls/history"
+            element={
+              <RequireNotStudent>
+                <CallHistoryPage />
+              </RequireNotStudent>
+            }
+          />
           <Route path="/staff-portal" element={<RequireSupportStaffPortal />}>
             <Route element={<StaffPortalLayout />}>
               <Route index element={<StaffPortal />} />
@@ -393,8 +467,18 @@ const AppContent = () => {
             path="/support-dispatcher/assign-task"
             element={
               <>
-                {location.state?.from === 'staff' ? <SupportStaffDirectory /> : <SupportDispatcher />}
-                <AssignTask />
+                {location.state?.from === 'staff' ? (
+                  <RequireNotStudent>
+                    <SupportStaffDirectory />
+                  </RequireNotStudent>
+                ) : (
+                  <RequireNotStudent>
+                    <SupportDispatcher />
+                  </RequireNotStudent>
+                )}
+                <RequireNotStudent>
+                  <AssignTask />
+                </RequireNotStudent>
               </>
             }
           />

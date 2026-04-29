@@ -26,6 +26,38 @@ function unwrapAutoWrapper(data) {
   return data
 }
 
+function unwrapListPayload(payload) {
+  if (Array.isArray(payload)) return payload
+  if (payload && typeof payload === 'object') {
+    if (Array.isArray(payload.items)) return payload.items
+    if (Array.isArray(payload.value)) return payload.value
+    if (Array.isArray(payload.results)) return payload.results
+  }
+  return []
+}
+
+function normalizeBuilding(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const id = raw.id ?? raw.buildingId ?? raw.Id ?? raw.ID
+  const name = raw.name ?? raw.buildingName ?? raw.title ?? raw.building ?? raw.Name
+  if (id == null || name == null) return null
+  return { ...raw, id: Number(id), name: String(name) }
+}
+
+function normalizeRoom(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const id = raw.id ?? raw.roomId ?? raw.Id ?? raw.ID
+  const name = raw.name ?? raw.roomName ?? raw.title ?? raw.Name
+  const number = raw.number ?? raw.roomNumber ?? raw.roomNo ?? raw.Number
+  if (id == null) return null
+  return {
+    ...raw,
+    id: Number(id),
+    name: name == null ? '' : String(name),
+    number: number == null ? '' : String(number),
+  }
+}
+
 async function parseResponse(res) {
   if (res.status === 204) return null
   const text = await res.text()
@@ -96,7 +128,11 @@ async function requestMany(paths, options = {}) {
 
 export async function getBuildings() {
   const result = await requestMany(['/buildings', '/locations/buildings'])
-  return Array.isArray(result) ? result : []
+  const rows = unwrapListPayload(result)
+  return rows
+    .map(normalizeBuilding)
+    .filter(Boolean)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
 }
 
 export async function getRoomsByBuildingId(buildingId) {
@@ -104,7 +140,16 @@ export async function getRoomsByBuildingId(buildingId) {
   const result = await requestMany(
     [`/rooms/by-building/${buildingId}`, `/locations/rooms/by-building/${buildingId}`]
   )
-  return Array.isArray(result) ? result : []
+  const rows = unwrapListPayload(result)
+  return rows
+    .map(normalizeRoom)
+    .filter(Boolean)
+    .sort((a, b) => {
+      const an = String(a.number || '').trim()
+      const bn = String(b.number || '').trim()
+      if (an && bn && an !== bn) return an.localeCompare(bn, undefined, { numeric: true })
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true })
+    })
 }
 
 export async function validateRoomLocation(roomId, buildingId) {

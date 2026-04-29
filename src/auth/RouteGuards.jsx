@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getAccessToken } from './tokenStorage'
 import { userHasJwtAdminRole, userHasStudentServicesRole } from './jwtRoles'
-import { userMayAccessSupportStaffPortal } from './homeRoles'
+import { getJwtHomeMenuKey, userMayAccessSupportStaffPortal } from './homeRoles'
 import { fetchMyClubMemberships } from '../api/clubApi'
 import { roleMayManageClub } from './clubStaffRoles'
 
@@ -31,6 +31,18 @@ export function RequireSupportStaffPortal() {
     return <Navigate to="/" replace />
   }
   return <Outlet />
+}
+
+/** Any signed-in non-student may access the wrapped page(s). */
+export function RequireNotStudent({ children }) {
+  const location = useLocation()
+  if (!getAccessToken()) {
+    return <Navigate to={loginRedirectPath(location.pathname + location.search)} replace />
+  }
+  if (getJwtHomeMenuKey() === 'student') {
+    return <Navigate to="/" replace />
+  }
+  return children
 }
 
 /** Student Services: signed-in + (system Admin OR `student-services` JWT role). */

@@ -110,7 +110,6 @@ const ROLE_TO_KEYS = {
   student: {
     lostFound: ['lostFound'],
     studentLife: ['adaClubs'],
-    itfm: ['itSupport', 'fmSupport', 'myRequests'],
   },
   instructor: {
     scheduling: ['addPreferences'],
@@ -183,7 +182,7 @@ function cardsFromKeyMap(keyMap, catalog, role) {
       subTitle: subTitle || undefined,
       buttons,
     })
-    if (sectionId === 'itfm') {
+    if (sectionId === 'itfm' && role !== 'student') {
       out.push(buildHomeCallCard(catalog))
     }
   }
