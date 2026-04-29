@@ -133,14 +133,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearSessionEndReason = useCallback(() => setSessionEndReason(null), [])
 
-  const clearTransientCallState = useCallback(() => {
-    setIncomingCall(null)
-    setRinging(null)
-    setOtherParticipants([])
-    setCallId(null)
-    setActiveRoomId(null)
-  }, [setActiveRoomId])
-
   const setPhaseSafely = useCallback((next: CallPhase) => {
     setPhase((prev) => {
       if (
@@ -163,6 +155,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     activeRoomIdRef.current = nextRoomId
     setRoomId(nextRoomId)
   }, [])
+
+  const clearTransientCallState = useCallback(() => {
+    setIncomingCall(null)
+    setRinging(null)
+    setOtherParticipants([])
+    setCallId(null)
+    setActiveRoomId(null)
+  }, [setActiveRoomId])
 
   const setActivePeerConnectionId = useCallback((nextPeerConnectionId: string | null, reason: string) => {
     if (peerConnectionIdRef.current && nextPeerConnectionId && peerConnectionIdRef.current !== nextPeerConnectionId) {
