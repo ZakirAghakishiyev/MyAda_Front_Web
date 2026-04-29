@@ -43,53 +43,55 @@ export default function ClubsAreaNav({ rightSlot = null, showNotificationDot = f
 
   return (
     <header className="vacancies-nav">
-      <div className="vacancies-nav-left">
-        <div
-          className="vacancies-nav-logo"
-          onClick={() => navigate('/')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
-        >
-          <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
+      <div className="vacancies-nav-inner">
+        <div className="vacancies-nav-left">
+          <div
+            className="vacancies-nav-logo"
+            onClick={() => navigate('/')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+          >
+            <img src={adaLogo} alt="ADA University" className="vacancies-ada-logo" />
+          </div>
+          <nav className="vacancies-nav-links" aria-label="Clubs area">
+            <button type="button" className={tabClass('vacancies')} onClick={() => navigate('/clubs/vacancies')}>
+              Vacancies
+            </button>
+            <button type="button" className={tabClass('applications')} onClick={() => navigate('/clubs/vacancies/my-applications')}>
+              My Applications
+            </button>
+            <button type="button" className={tabClass('events')} onClick={() => navigate('/clubs/events')}>
+              Events
+            </button>
+            <button type="button" className={tabClass('clubs')} onClick={() => navigate('/clubs')}>
+              Clubs
+            </button>
+            <button type="button" className={tabClass('propose')} onClick={() => navigate('/clubs/propose')}>
+              Propose Club
+            </button>
+          </nav>
         </div>
-        <nav className="vacancies-nav-links" aria-label="Clubs area">
-          <button type="button" className={tabClass('vacancies')} onClick={() => navigate('/clubs/vacancies')}>
-            Vacancies
+        <div className="vacancies-nav-right">
+          {rightSlot}
+          <button
+            type="button"
+            className={onNotifications ? 'vacancies-nav-icon vacancies-nav-icon--active' : 'vacancies-nav-icon'}
+            aria-label="Notifications"
+            onClick={() => navigate('/clubs/notifications')}
+          >
+            <IconBell />
+            {showNotificationDot ? <span className="cn-badge" /> : null}
           </button>
-          <button type="button" className={tabClass('applications')} onClick={() => navigate('/clubs/vacancies/my-applications')}>
-            My Applications
+          <button
+            type="button"
+            className="vacancies-nav-avatar"
+            aria-label="Profile and my clubs"
+            onClick={() => navigate('/clubs/my-memberships')}
+          >
+            U
           </button>
-          <button type="button" className={tabClass('events')} onClick={() => navigate('/clubs/events')}>
-            Events
-          </button>
-          <button type="button" className={tabClass('clubs')} onClick={() => navigate('/clubs')}>
-            Clubs
-          </button>
-          <button type="button" className={tabClass('propose')} onClick={() => navigate('/clubs/propose')}>
-            Propose Club
-          </button>
-        </nav>
-      </div>
-      <div className="vacancies-nav-right">
-        {rightSlot}
-        <button
-          type="button"
-          className={onNotifications ? 'vacancies-nav-icon vacancies-nav-icon--active' : 'vacancies-nav-icon'}
-          aria-label="Notifications"
-          onClick={() => navigate('/clubs/notifications')}
-        >
-          <IconBell />
-          {showNotificationDot ? <span className="cn-badge" /> : null}
-        </button>
-        <button
-          type="button"
-          className="vacancies-nav-avatar"
-          aria-label="Profile and my clubs"
-          onClick={() => navigate('/clubs/my-memberships')}
-        >
-          U
-        </button>
+        </div>
       </div>
     </header>
   )
