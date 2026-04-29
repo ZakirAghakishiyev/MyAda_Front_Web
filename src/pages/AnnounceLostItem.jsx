@@ -5,7 +5,7 @@ import { createLostReport, getLostFoundCategories } from '../api/lostFoundApi'
 import { getBuildings, getRoomsByBuildingId } from '../api/locationApi'
 
 const MAX_DESCRIPTION_LENGTH = 500
-const DEFAULT_CATEGORIES = ['Electronics', 'Documents', 'Personal Items', 'Accessories']
+const DEFAULT_CATEGORIES = []
 
 const AnnounceLostItem = () => {
   const navigate = useNavigate()
@@ -20,6 +20,7 @@ const AnnounceLostItem = () => {
   const [roomAreaText, setRoomAreaText] = useState('')
   const [campusLocation, setCampusLocation] = useState('')
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -40,10 +41,18 @@ const AnnounceLostItem = () => {
     getLostFoundCategories()
       .then((result) => {
         if (!isMounted) return
-        setCategories(result.length ? result : DEFAULT_CATEGORIES)
+        const nextCategories = result.length ? result : DEFAULT_CATEGORIES
+        setCategories(nextCategories)
+        setSelectedCategoryId((current) => {
+          if (nextCategories.some((category) => String(category.id) === String(current))) return current
+          const firstValid = nextCategories.find((category) => category.id != null)
+          return firstValid ? String(firstValid.id) : ''
+        })
       })
       .catch(() => {
-        if (isMounted) setCategories(DEFAULT_CATEGORIES)
+        if (!isMounted) return
+        setCategories(DEFAULT_CATEGORIES)
+        setSelectedCategoryId('')
       })
     return () => {
       isMounted = false
@@ -87,11 +96,16 @@ const AnnounceLostItem = () => {
         setIsSubmitting(false)
         return
       }
+      if (!selectedCategoryId) {
+        alert('Please choose a valid category.')
+        setIsSubmitting(false)
+        return
+      }
       const timeLost = String(formData.get('timeLost') || '').trim() || '12:00'
       const lostBody = {
         type: 'lost',
         itemName: String(formData.get('itemName') || '').trim(),
-        category: String(formData.get('category') || '').trim() || DEFAULT_CATEGORIES[0],
+        categoryId: Number(selectedCategoryId),
         description: String(description || '').trim(),
         location,
         dateLost: String(formData.get('dateLost') || '').trim(),
@@ -156,10 +170,12 @@ const AnnounceLostItem = () => {
               <input type="text" required name="itemName" placeholder="Item Name *" />
             </label>
             <label className="lf-field">
-                <select required defaultValue="" name="category">
+                <select required value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
                   <option value="" disabled>Category *</option>
                   {categories.map((category) => (
-                    <option key={category} value={category}>{category}</option>
+                    <option key={category.id ?? category.name} value={category.id != null ? String(category.id) : ''} disabled={category.id == null}>
+                      {category.name}
+                    </option>
                   ))}
                 </select>
               </label>

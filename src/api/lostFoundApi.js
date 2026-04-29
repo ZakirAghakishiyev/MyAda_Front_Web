@@ -9,6 +9,33 @@ const LOST_FOUND_HOST = (import.meta.env.VITE_LOST_FOUND_HOST ?? API_BASE).repla
 const LOST_FOUND_API_BASE = `${LOST_FOUND_HOST}/lostfound/api/lost-and-found`
 const LOST_FOUND_CATEGORIES_URL = `${LOST_FOUND_HOST}/lostfound/api/v1/categories`
 
+function normalizeCategoryId(value) {
+  if (value === undefined || value === null) return null
+  const raw = String(value).trim()
+  if (!raw) return null
+  const num = Number(raw)
+  if (Number.isInteger(num) && num > 0) return num
+  return raw
+}
+
+function normalizeCategoryOption(category) {
+  if (category == null) return null
+  if (typeof category === 'string') {
+    const name = category.trim()
+    return name ? { id: null, name } : null
+  }
+  if (typeof category !== 'object') return null
+  const id = normalizeCategoryId(
+    category.id ??
+      category.Id ??
+      category.categoryId ??
+      category.CategoryId
+  )
+  const name = String(category.name ?? category.Name ?? '').trim()
+  if (!name) return null
+  return { id, name }
+}
+
 function normalizeMediaUrl(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
@@ -462,7 +489,7 @@ export async function uploadLostFoundImages(files = []) {
 const LOST_REPORT_JSON_KEYS = new Set([
   'type',
   'itemName',
-  'category',
+  'categoryId',
   'description',
   'location',
   'dateLost',
@@ -482,7 +509,10 @@ export async function createLostReport(payload) {
   }
   const src = payload && typeof payload === 'object' ? payload : {}
   const body = {}
+  const categoryId = normalizeCategoryId(src.categoryId ?? src.category)
+  if (categoryId != null) body.categoryId = categoryId
   for (const key of LOST_REPORT_JSON_KEYS) {
+    if (key === 'categoryId') continue
     if (!Object.prototype.hasOwnProperty.call(src, key)) continue
     const val = src[key]
     if (val === undefined || val === null) continue
@@ -502,7 +532,7 @@ export async function createLostReport(payload) {
 
 const FOUND_FORM_FIELDS = new Set([
   'itemName',
-  'category',
+  'categoryId',
   'description',
   'locationType',
   'collectionPlace',
@@ -537,7 +567,12 @@ function normalizeFoundFieldValue(key, value) {
 export async function createFoundReport(fields, files = []) {
   const formData = new FormData()
   const src = fields && typeof fields === 'object' ? fields : {}
+  const categoryId = normalizeCategoryId(src.categoryId ?? src.category)
+  if (categoryId != null) {
+    formData.append('categoryId', String(categoryId))
+  }
   for (const key of FOUND_FORM_FIELDS) {
+    if (key === 'categoryId') continue
     if (!Object.prototype.hasOwnProperty.call(src, key)) continue
     const normalized = normalizeFoundFieldValue(key, src[key])
     if (normalized == null) continue
@@ -671,23 +706,32 @@ export async function getLostFoundClaims(id) {
 }
 
 /**
- * Category names from `GET /api/v1/categories`, with fallback to distinct categories on listed items.
+ * Category options from `GET /api/v1/categories`, with fallback to distinct categories on listed items.
  */
 export async function getLostFoundCategories() {
   try {
     const res = await authFetch(LOST_FOUND_CATEGORIES_URL, { method: 'GET' })
     const data = await parseResponse(res)
     const list = Array.isArray(data) ? data : data?.items || data?.categories || data?.data || []
-    const names = list
-      .map((c) => (typeof c === 'string' ? c : c?.name))
-      .map((n) => String(n || '').trim())
+    const categories = list
+      .map(normalizeCategoryOption)
       .filter(Boolean)
-    if (names.length) return names
+    if (categories.length) return categories
   } catch {
     /* use fallback */
   }
   const result = await getLostFoundItems({ page: 1, limit: 200, type: 'all' })
   return Array.from(
-    new Set((result.items || []).map((item) => String(item?.category || '').trim()).filter(Boolean))
+    new Map(
+      (result.items || [])
+        .map((item) =>
+          normalizeCategoryOption({
+            id: item?.categoryId ?? item?.CategoryId,
+            name: item?.category,
+          })
+        )
+        .filter(Boolean)
+        .map((category) => [String(category.id ?? `name:${category.name.toLowerCase()}`), category])
+    ).values()
   )
 }

@@ -5,7 +5,7 @@ import { createFoundReport, getLostFoundCategories } from '../api/lostFoundApi'
 import { getBuildings, getRoomsByBuildingId, validateRoomLocation } from '../api/locationApi'
 
 const MAX_DESCRIPTION_LENGTH = 500
-const DEFAULT_CATEGORIES = ['Electronics', 'Documents', 'Personal Items', 'Accessories']
+const DEFAULT_CATEGORIES = []
 
 const AnnounceFoundItem = () => {
   const navigate = useNavigate()
@@ -18,6 +18,7 @@ const AnnounceFoundItem = () => {
   const [roomId, setRoomId] = useState('')
   const [roomAreaText, setRoomAreaText] = useState('')
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -38,10 +39,18 @@ const AnnounceFoundItem = () => {
     getLostFoundCategories()
       .then((result) => {
         if (!isMounted) return
-        setCategories(result.length ? result : DEFAULT_CATEGORIES)
+        const nextCategories = result.length ? result : DEFAULT_CATEGORIES
+        setCategories(nextCategories)
+        setSelectedCategoryId((current) => {
+          if (nextCategories.some((category) => String(category.id) === String(current))) return current
+          const firstValid = nextCategories.find((category) => category.id != null)
+          return firstValid ? String(firstValid.id) : ''
+        })
       })
       .catch(() => {
-        if (isMounted) setCategories(DEFAULT_CATEGORIES)
+        if (!isMounted) return
+        setCategories(DEFAULT_CATEGORIES)
+        setSelectedCategoryId('')
       })
     return () => {
       isMounted = false
@@ -76,6 +85,11 @@ const AnnounceFoundItem = () => {
     setIsSubmitting(true)
     try {
       const formData = new FormData(event.currentTarget)
+      if (!selectedCategoryId) {
+        alert('Please choose a valid category.')
+        setIsSubmitting(false)
+        return
+      }
       if (roomId) {
         const isValid = await validateRoomLocation(roomId, buildingId)
         if (!isValid) {
@@ -96,7 +110,7 @@ const AnnounceFoundItem = () => {
       }
       const foundFields = {
         itemName: String(formData.get('itemName') || '').trim(),
-        category: String(formData.get('category') || '').trim() || DEFAULT_CATEGORIES[0],
+        categoryId: Number(selectedCategoryId),
         description: String(description || '').trim(),
         locationType: 'building',
         building: selectedBuilding.name,
@@ -151,10 +165,12 @@ const AnnounceFoundItem = () => {
                 <input type="text" required name="itemName" placeholder="Item Name *" />
               </label>
               <label className="lf-field">
-                <select required defaultValue="" name="category">
+                <select required value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
                   <option value="" disabled>Category *</option>
                   {categories.map((category) => (
-                    <option key={category} value={category}>{category}</option>
+                    <option key={category.id ?? category.name} value={category.id != null ? String(category.id) : ''} disabled={category.id == null}>
+                      {category.name}
+                    </option>
                   ))}
                 </select>
               </label>

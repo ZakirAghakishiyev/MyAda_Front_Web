@@ -11,7 +11,7 @@ import { getBuildings, getRoomsByBuildingId, validateRoomLocation } from '../api
 import './LostAndFound2.css'
 
 const STEPS = ['Info'] /* single step: all fields on one screen, submit directly */
-const DEFAULT_REPORT_CATEGORIES = ['Electronics', 'Documents', 'Personal Items', 'Accessories']
+const DEFAULT_REPORT_CATEGORIES = []
 const ANNOUNCEMENT_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'lost', label: 'Lost items' },
@@ -20,6 +20,11 @@ const ANNOUNCEMENT_FILTERS = [
 ]
 const ITEMS_PER_PAGE = 8
 const MAX_DESCRIPTION_LENGTH = 500
+
+function firstValidCategoryId(categories) {
+  const match = (Array.isArray(categories) ? categories : []).find((category) => category?.id != null)
+  return match ? String(match.id) : ''
+}
 
 const DRAFT_COOKIE_KEYS = {
   'report-lost': 'lf2_draft_lost',
@@ -181,7 +186,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
   const [isSubmittingReport, setIsSubmittingReport] = useState(false)
   const [reportForm, setReportForm] = useState({
     itemName: '',
-    category: DEFAULT_REPORT_CATEGORIES[0],
+    categoryId: firstValidCategoryId(DEFAULT_REPORT_CATEGORIES),
     locationType: '',
     building: '',
     floor: '',
@@ -231,11 +236,18 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         setReportCategories(categories)
         setReportForm((prev) => ({
           ...prev,
-          category: categories.includes(prev.category) ? prev.category : categories[0],
+          categoryId: categories.some((category) => String(category.id) === String(prev.categoryId))
+            ? prev.categoryId
+            : firstValidCategoryId(categories),
         }))
       })
       .catch(() => {
-        if (isMounted) setReportCategories(DEFAULT_REPORT_CATEGORIES)
+        if (!isMounted) return
+        setReportCategories(DEFAULT_REPORT_CATEGORIES)
+        setReportForm((prev) => ({
+          ...prev,
+          categoryId: firstValidCategoryId(DEFAULT_REPORT_CATEGORIES),
+        }))
       })
     return () => {
       isMounted = false
@@ -299,7 +311,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
           limit: ITEMS_PER_PAGE,
           type,
           q: searchQuery.trim() || undefined,
-          category: categoryFilter === 'All Items' ? undefined : categoryFilter,
+          categoryId: categoryFilter === 'All Items' ? undefined : categoryFilter,
           postedBy: announcementFilter === 'my' ? 'me' : undefined,
         }
         const res = await getLostFoundItems(params)
@@ -363,7 +375,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
     setReportStep(0)
     setReportForm({
       itemName: '',
-      category: reportCategories[0] || DEFAULT_REPORT_CATEGORIES[0],
+      categoryId: firstValidCategoryId(reportCategories),
       locationType: '',
       building: '',
       floor: '',
@@ -385,6 +397,11 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
 
     setIsSubmittingReport(true)
     try {
+      if (!reportForm.categoryId) {
+        alert('Please choose a valid category.')
+        setIsSubmittingReport(false)
+        return
+      }
       if (
         (view === 'report-found' || view === 'report-lost') &&
         reportForm.locationType === 'building' &&
@@ -407,7 +424,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         const lostBody = {
           type: 'lost',
           itemName: reportForm.itemName.trim(),
-          category: reportForm.category,
+          categoryId: Number(reportForm.categoryId),
           description: (reportForm.description || '').trim(),
           location,
           dateLost,
@@ -433,7 +450,7 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         const locationType = reportForm.locationType || 'building'
         const foundFields = {
           itemName: reportForm.itemName.trim(),
-          category: reportForm.category,
+          categoryId: Number(reportForm.categoryId),
           description: (reportForm.description || '').trim(),
           locationType,
           collectionPlace: 'Campus Lost & Found Office',
@@ -572,11 +589,18 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
                     <label className="lf2-field">
                       <span className="lf2-label">Category *</span>
                       <select
-                        value={reportForm.category}
-                        onChange={e => setReportForm(f => ({ ...f, category: e.target.value }))}
+                        value={reportForm.categoryId}
+                        onChange={e => setReportForm(f => ({ ...f, categoryId: e.target.value }))}
                       >
+                        <option value="" disabled>Select category...</option>
                         {reportCategories.map((category) => (
-                          <option key={category} value={category}>{category}</option>
+                          <option
+                            key={category.id ?? category.name}
+                            value={category.id != null ? String(category.id) : ''}
+                            disabled={category.id == null}
+                          >
+                            {category.name}
+                          </option>
                         ))}
                       </select>
                     </label>
@@ -906,14 +930,20 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
       </div>
 
       <div className="lf2-categories">
-        {['All Items', ...reportCategories].map(cat => (
+        {[
+          { id: 'All Items', name: 'All Items' },
+          ...reportCategories.map((category) => ({
+            id: category.id != null ? String(category.id) : `name:${category.name}`,
+            name: category.name,
+          })),
+        ].map(cat => (
           <button
-            key={cat}
+            key={cat.id}
             type="button"
-            className={`lf2-cat-pill ${categoryFilter === cat ? 'lf2-cat-pill--active' : ''}`}
-            onClick={() => setCategoryFilter(cat)}
+            className={`lf2-cat-pill ${categoryFilter === cat.id ? 'lf2-cat-pill--active' : ''}`}
+            onClick={() => setCategoryFilter(cat.id)}
           >
-            {cat}
+            {cat.name}
           </button>
         ))}
       </div>
