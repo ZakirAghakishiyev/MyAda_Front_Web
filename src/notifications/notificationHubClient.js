@@ -1,7 +1,20 @@
 import * as signalR from '@microsoft/signalr'
 import { normalizeNotificationRecord, resolveNotificationHubUrl } from '../api/notificationApi'
 
-const NOTIFICATION_EVENT_NAME = 'notificationCreated'
+const NOTIFICATION_EVENT_NAMES = [
+  'notificationCreated',
+  'NotificationCreated',
+  'notificationReceived',
+  'NotificationReceived',
+  'ReceiveNotification',
+  'ReceiveNotifications',
+  'receiveNotification',
+  'receiveNotifications',
+  'clubNotificationCreated',
+  'ClubNotificationCreated',
+  'announcementCreated',
+  'AnnouncementCreated',
+]
 const DEBUG_NAMESPACE = '[notifications]'
 
 function isIntentionalStopError(error) {
@@ -94,16 +107,21 @@ class NotificationHubClient {
   }
 
   bindConnectionEvents(connection) {
-    connection.on(NOTIFICATION_EVENT_NAME, (payload) => {
-      const normalizedItems = normalizeHubPayloads(payload)
-      debugLog('info', `Hub event received: ${NOTIFICATION_EVENT_NAME}`, {
-        itemCount: normalizedItems?.length || 0,
-        connectionId: connection.connectionId || null,
-        hubUrl: this.lastHubUrl,
-      })
-      if (!normalizedItems?.length) return
-      normalizedItems.forEach((normalized) => {
-        this.notificationHandlers.forEach((handler) => handler(normalized, NOTIFICATION_EVENT_NAME))
+    NOTIFICATION_EVENT_NAMES.forEach((eventName) => {
+      connection.on(eventName, (payload) => {
+        const normalizedItems = normalizeHubPayloads(payload)
+        debugLog('info', `Hub event received: ${eventName}`, {
+          itemCount: normalizedItems?.length || 0,
+          connectionId: connection.connectionId || null,
+          hubUrl: this.lastHubUrl,
+        })
+        if (!normalizedItems?.length) {
+          this.notificationHandlers.forEach((handler) => handler(null, eventName))
+          return
+        }
+        normalizedItems.forEach((normalized) => {
+          this.notificationHandlers.forEach((handler) => handler(normalized, eventName))
+        })
       })
     })
 

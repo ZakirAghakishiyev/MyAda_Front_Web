@@ -396,6 +396,18 @@ export default function ClubAdminLayout() {
         title,
         message,
       })
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('club-announcement-posted', {
+            detail: {
+              clubId: clubIdParam,
+              title,
+              message,
+              createdAt: new Date().toISOString(),
+            },
+          })
+        )
+      }
     } catch (e) {
       setNotificationSubmitting(false)
       setNotificationError(e?.message || 'Could not post announcement.')

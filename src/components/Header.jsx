@@ -61,14 +61,6 @@ function getNotificationChannelTone(channel) {
   return 'push'
 }
 
-function getRealtimeStatus(connectionState) {
-  if (connectionState === 'connected') return { label: 'Live updates', tone: 'live' }
-  if (connectionState === 'connecting' || connectionState === 'reconnecting') {
-    return { label: 'Connecting', tone: 'syncing' }
-  }
-  return { label: 'API refresh mode', tone: 'fallback' }
-}
-
 const Header = () => {
   const { activeFilter, setActiveFilter } = useFilter()
   const location = useLocation()
@@ -100,18 +92,14 @@ const Header = () => {
     refreshing: notificationsRefreshing,
     error: notificationsError,
     unreadCount,
-    connectionState,
-    markAsRead,
     markAllAsRead,
-    removeNotification,
     refresh: refreshNotifications,
   } = useNotifications()
   const recentNotifications = notifications.slice(0, 6)
-  const realtimeStatus = getRealtimeStatus(connectionState)
   const [notificationPanelStyle, setNotificationPanelStyle] = useState({
     top: 60,
     left: 16,
-    width: 360,
+    width: 332,
   })
 
   const handleFilterClick = (filterName) => {
@@ -155,7 +143,7 @@ const Header = () => {
 
       const rect = button.getBoundingClientRect()
       const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
-      const panelWidth = Math.min(360, Math.max(280, viewportWidth - 16))
+      const panelWidth = Math.min(332, Math.max(272, viewportWidth - 16))
       const preferredLeft = rect.right - panelWidth
       const left = Math.max(8, Math.min(preferredLeft, viewportWidth - panelWidth - 8))
 
@@ -471,10 +459,6 @@ const Header = () => {
             </div>
 
             <div className="notification-panel-toolbar">
-              <span className={`notification-status notification-status--${realtimeStatus.tone}`}>
-                <span className="notification-status-dot" aria-hidden />
-                {realtimeStatus.label}
-              </span>
               <div className="notification-panel-actions">
                 <button
                   type="button"
@@ -528,28 +512,6 @@ const Header = () => {
                     <p className="notification-item-message">
                       {notification.message || 'New activity was added to your notification stream.'}
                     </p>
-                    <div className="notification-item-footer">
-                      {!notification.read ? (
-                        <button
-                          type="button"
-                          className="notification-item-action"
-                          onClick={() => markAsRead(notification.id)}
-                        >
-                          Mark as read
-                        </button>
-                      ) : (
-                        <span className="notification-item-read-label">Read</span>
-                      )}
-                      {notification.id && notification.removable !== false ? (
-                        <button
-                          type="button"
-                          className="notification-item-action"
-                          onClick={() => void removeNotification(notification.id)}
-                        >
-                          Delete
-                        </button>
-                      ) : null}
-                    </div>
                   </article>
                 ))
               )}

@@ -9,6 +9,7 @@ const NotificationContext = createContext(null)
 
 const POLL_INTERVAL_MS = 60 * 1000
 const DEBUG_NAMESPACE = '[notifications]'
+const CLUB_ANNOUNCEMENT_POSTED_EVENT = 'club-announcement-posted'
 
 function debugLog(level, message, details) {
   const logger = console[level] || console.log
@@ -64,6 +65,10 @@ function normalizeIdentityPart(value) {
   return String(value || '').trim().toLowerCase()
 }
 
+function localAnnouncementsStorageKey(userId) {
+  return `notification-local-announcements:${normalizeIdentityPart(userId) || 'anonymous'}`
+}
+
 function firstNonEmptyString(...values) {
   for (const value of values) {
     if (typeof value === 'string') {
@@ -94,6 +99,64 @@ function normalizeClubNotificationRecord(record, fallbackIndex = 0) {
     recipientUserId: firstNonEmptyString(record?.recipientUserId, record?.userId),
     serverRead: Boolean(record?.read ?? record?.isRead),
   }
+}
+
+function normalizeLocalAnnouncementRecord(record, fallbackIndex = 0) {
+  const title = firstNonEmptyString(record?.title) || 'Club announcement'
+  const message = firstNonEmptyString(record?.message, record?.body) || title
+  const createdAt = record?.createdAt || new Date().toISOString()
+  const rawId =
+    record?.id ??
+    `local-announcement:${firstNonEmptyString(record?.clubId, 'club')}:${createdAt}:${title}`.toLowerCase()
+
+  return {
+    id: String(rawId),
+    source: 'local-announcement',
+    sourceId: String(rawId),
+    removable: false,
+    type: 'Club Announcement',
+    title,
+    message,
+    channel: 'Club',
+    createdAt,
+    recipientUserId: firstNonEmptyString(record?.recipientUserId, record?.userId),
+    serverRead: false,
+  }
+}
+
+function buildNotificationFingerprint(item) {
+  return [
+    firstNonEmptyString(item?.type).toLowerCase(),
+    firstNonEmptyString(item?.title).toLowerCase(),
+    firstNonEmptyString(item?.message).toLowerCase(),
+  ].join('|')
+}
+
+function loadLocalAnnouncements(userId) {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(localAnnouncementsStorageKey(userId))
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function persistLocalAnnouncements(userId, items) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(localAnnouncementsStorageKey(userId), JSON.stringify(items))
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function mergeWithLocalAnnouncements(serverItems, localItems) {
+  if (!localItems.length) return serverItems
+  const serverFingerprints = new Set(serverItems.map((item) => buildNotificationFingerprint(item)))
+  const pendingLocalItems = localItems.filter((item) => !serverFingerprints.has(buildNotificationFingerprint(item)))
+  return [...serverItems, ...pendingLocalItems].sort(compareByNewest)
 }
 
 function notificationMatchesUser(item, userId) {
@@ -222,13 +285,23 @@ async function fetchCombinedNotifications(userId) {
   const clubItems = (Array.isArray(clubRows) ? clubRows : []).map((item, index) =>
     normalizeClubNotificationRecord(item, index)
   )
+  const localItems = loadLocalAnnouncements(userId).map((item, index) =>
+    normalizeLocalAnnouncementRecord(item, index)
+  )
+  const mergedItems = mergeWithLocalAnnouncements([...globalItems, ...clubItems], localItems)
+  const serverFingerprints = new Set([...globalItems, ...clubItems].map((item) => buildNotificationFingerprint(item)))
+  const stillPendingLocalAnnouncements = loadLocalAnnouncements(userId).filter(
+    (item) => !serverFingerprints.has(buildNotificationFingerprint(normalizeLocalAnnouncementRecord(item)))
+  )
+  persistLocalAnnouncements(userId, stillPendingLocalAnnouncements)
 
   return {
-    items: [...globalItems, ...clubItems].sort(compareByNewest),
+    items: mergedItems,
     diagnostics: {
       globalFetchedCount: globalResult.status === 'fulfilled' ? globalResult.value.items.length : 0,
       globalVisibleCount: globalItems.length,
       clubFetchedCount: clubItems.length,
+      localPendingCount: stillPendingLocalAnnouncements.length,
     },
   }
 }
@@ -365,6 +438,7 @@ export function NotificationProvider({ children }) {
             globalFetchedCount: data.diagnostics.globalFetchedCount,
             globalVisibleCount: data.diagnostics.globalVisibleCount,
             clubFetchedCount: data.diagnostics.clubFetchedCount,
+            localPendingCount: data.diagnostics.localPendingCount,
             visibleCount: data.items.length,
             userId: userId || null,
           })
@@ -387,10 +461,19 @@ export function NotificationProvider({ children }) {
       }
     }
 
-    const stopNotificationListener = notificationHubClient.onNotification((item) => {
+    const stopNotificationListener = notificationHubClient.onNotification((item, eventName) => {
       if (cancelled) return
+      if (!item) {
+        debugLog('info', 'Notification hub event requested a silent refresh.', {
+          eventName,
+          userId: userId || null,
+        })
+        void refreshNotifications({ silent: true })
+        return
+      }
       if (!notificationMatchesUser(item, userId)) {
         debugLog('warn', 'Notification hub event ignored because it did not match the current user.', {
+          eventName,
           currentUserId: userId || null,
           itemId: item?.id || null,
           recipientUserId: item?.recipientUserId || null,
@@ -400,6 +483,7 @@ export function NotificationProvider({ children }) {
         return
       }
       debugLog('info', 'Notification hub event accepted for current user.', {
+        eventName,
         currentUserId: userId || null,
         itemId: item?.id || null,
         type: item?.type || null,
@@ -411,6 +495,7 @@ export function NotificationProvider({ children }) {
         }
         return mergeNotifications([item], prev)
       })
+      void refreshNotifications({ silent: true })
     })
 
     const stopStateListener = notificationHubClient.onStateChange((state, connectionError) => {
@@ -439,6 +524,33 @@ export function NotificationProvider({ children }) {
       if (!cancelled) setConnectionState('unavailable')
     })
 
+    const handleAnnouncementPosted = (event) => {
+      const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {}
+      const nextLocalAnnouncement = {
+        id:
+          detail.id ||
+          `local-announcement:${firstNonEmptyString(detail.clubId, 'club')}:${new Date().toISOString()}:${firstNonEmptyString(detail.title, 'announcement')}`,
+        clubId: firstNonEmptyString(detail.clubId),
+        title: firstNonEmptyString(detail.title, 'Club announcement'),
+        message: firstNonEmptyString(detail.message, detail.body),
+        createdAt: detail.createdAt || new Date().toISOString(),
+        userId: userId || '',
+      }
+      const nextLocalAnnouncements = [
+        nextLocalAnnouncement,
+        ...loadLocalAnnouncements(userId).filter(
+          (item) => buildNotificationFingerprint(normalizeLocalAnnouncementRecord(item)) !== buildNotificationFingerprint(normalizeLocalAnnouncementRecord(nextLocalAnnouncement))
+        ),
+      ].slice(0, 20)
+      persistLocalAnnouncements(userId, nextLocalAnnouncements)
+      debugLog('info', 'Club announcement posted locally. Triggering silent notification refresh.', {
+        userId: userId || null,
+        title: nextLocalAnnouncement.title,
+      })
+      void refreshNotifications({ silent: true })
+    }
+    window.addEventListener(CLUB_ANNOUNCEMENT_POSTED_EVENT, handleAnnouncementPosted)
+
     pollTimer = window.setInterval(() => {
       void refreshNotifications({ silent: true })
     }, POLL_INTERVAL_MS)
@@ -458,6 +570,7 @@ export function NotificationProvider({ children }) {
       notificationAudioPrimedRef.current = false
       stopNotificationListener()
       stopStateListener()
+      window.removeEventListener(CLUB_ANNOUNCEMENT_POSTED_EVENT, handleAnnouncementPosted)
       notificationHubClient.release()
     }
   }, [loggedIn, userId])
