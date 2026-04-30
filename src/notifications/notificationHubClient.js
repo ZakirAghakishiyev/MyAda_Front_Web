@@ -4,6 +4,15 @@ import { normalizeNotificationRecord, resolveNotificationHubUrl } from '../api/n
 const NOTIFICATION_EVENT_NAME = 'notificationCreated'
 const DEBUG_NAMESPACE = '[notifications]'
 
+function isIntentionalStopError(error) {
+  const message = String(error?.message || error || '').toLowerCase()
+  return (
+    message.includes('stopped during negotiation') ||
+    message.includes('abort') ||
+    message.includes('connection was stopped')
+  )
+}
+
 function toDebugError(error) {
   if (!error) return null
   return {
@@ -62,12 +71,16 @@ function normalizeHubPayloads(payload) {
 }
 
 class NotificationHubClient {
+  activeConsumers = 0
   connection = null
   connectInFlight = null
+  connectInFlightGeneration = 0
   lastHubUrl = null
   lastError = null
+  lifecycleGeneration = 0
   notificationHandlers = new Set()
   stateHandlers = new Set()
+  stopTimer = null
 
   emitState(state, error = null) {
     this.lastError = error || null
@@ -155,13 +168,34 @@ class NotificationHubClient {
       this.connection?.state === signalR.HubConnectionState.Connecting ||
       this.connection?.state === signalR.HubConnectionState.Reconnecting
     ) {
+      if (this.connectInFlight && this.connectInFlightGeneration !== this.lifecycleGeneration) {
+        debugLog('info', 'Ignoring stale notification hub connect promise after lifecycle change.', {
+          lifecycleGeneration: this.lifecycleGeneration,
+          connectInFlightGeneration: this.connectInFlightGeneration,
+        })
+      } else {
+        debugLog('info', 'Notification hub connection already in progress.', {
+          state: this.connection?.state,
+          hubUrl: this.lastHubUrl,
+        })
+        return this.connectInFlight
+      }
+    }
+    if (this.connectInFlight) {
+      if (this.connectInFlightGeneration === this.lifecycleGeneration) {
+        debugLog('info', 'Notification hub connection already in progress.', {
+          state: this.connection?.state || 'pending',
+          hubUrl: this.lastHubUrl,
+        })
+        return this.connectInFlight
+      }
       debugLog('info', 'Notification hub connection already in progress.', {
-        state: this.connection?.state,
+        state: 'stale-promise',
         hubUrl: this.lastHubUrl,
       })
-      return this.connectInFlight
     }
-    if (this.connectInFlight) return this.connectInFlight
+
+    const connectGeneration = this.lifecycleGeneration
 
     this.connectInFlight = (async () => {
       const hubUrl = resolveNotificationHubUrl()
@@ -191,6 +225,14 @@ class NotificationHubClient {
           this.lastHubUrl = hubUrl
         }
         await this.connection.start()
+        if (connectGeneration !== this.lifecycleGeneration) {
+          debugLog('warn', 'Notification hub connect completed after a newer lifecycle started. Ignoring stale result.', {
+            hubUrl,
+            connectGeneration,
+            lifecycleGeneration: this.lifecycleGeneration,
+          })
+          return
+        }
         debugLog('info', 'Notification hub connected.', {
           connectionId: this.connection.connectionId || null,
           hubUrl,
@@ -198,6 +240,18 @@ class NotificationHubClient {
         this.emitState('connected', null)
         return
       } catch (error) {
+        const stoppedIntentionally =
+          connectGeneration !== this.lifecycleGeneration || isIntentionalStopError(error)
+        if (stoppedIntentionally) {
+          debugLog('warn', 'Notification hub connect was interrupted by an intentional stop.', {
+            hubUrl,
+            connectGeneration,
+            lifecycleGeneration: this.lifecycleGeneration,
+            error: toDebugError(error),
+          })
+          this.emitState('disconnected', null)
+          return
+        }
         debugLog('error', 'Notification hub connection failed.', {
           hubUrl,
           error: toDebugError(error),
@@ -206,11 +260,47 @@ class NotificationHubClient {
         this.emitState('unavailable', error || null)
         throw error instanceof Error ? error : new Error('Notification hub connection failed.')
       }
-    })().finally(() => {
-      this.connectInFlight = null
-    })
+    })()
 
-    return this.connectInFlight
+    this.connectInFlightGeneration = connectGeneration
+
+    return this.connectInFlight.finally(() => {
+      if (this.connectInFlightGeneration === connectGeneration) {
+        this.connectInFlight = null
+      }
+    })
+  }
+
+  retain() {
+    this.activeConsumers += 1
+    if (this.stopTimer) {
+      window.clearTimeout(this.stopTimer)
+      this.stopTimer = null
+      debugLog('info', 'Cancelled scheduled notification hub stop because a consumer re-subscribed.', {
+        activeConsumers: this.activeConsumers,
+      })
+    }
+  }
+
+  release() {
+    this.activeConsumers = Math.max(0, this.activeConsumers - 1)
+    debugLog('info', 'Notification hub consumer released.', {
+      activeConsumers: this.activeConsumers,
+    })
+    if (this.activeConsumers > 0) return
+    if (typeof window === 'undefined') {
+      void this.stop()
+      return
+    }
+    if (this.stopTimer) return
+
+    // Defer the actual stop slightly so React.StrictMode remounts can reattach
+    // without tearing down the shared SignalR connection mid-negotiation.
+    this.stopTimer = window.setTimeout(() => {
+      this.stopTimer = null
+      if (this.activeConsumers > 0) return
+      void this.stop()
+    }, 0)
   }
 
   onNotification(handler) {
@@ -228,6 +318,11 @@ class NotificationHubClient {
   }
 
   async stop() {
+    if (this.stopTimer) {
+      window.clearTimeout(this.stopTimer)
+      this.stopTimer = null
+    }
+    this.lifecycleGeneration += 1
     if (this.connection && this.connection.state !== signalR.HubConnectionState.Disconnected) {
       debugLog('info', 'Stopping notification hub connection.', {
         connectionId: this.connection.connectionId || null,

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { deleteNotification, fetchNotifications } from '../api/notificationApi'
-import { getAccessToken } from '../auth/tokenStorage'
+import { getAccessToken, subscribeToAuthSessionChange } from '../auth/tokenStorage'
 import { getJwtUserId } from '../auth/jwtRoles'
 import { notificationHubClient } from './notificationHubClient'
 
@@ -146,7 +146,16 @@ function persistReadState(userId, readState) {
   }
 }
 
+function readAuthSnapshot() {
+  const accessToken = getAccessToken()
+  return {
+    accessToken,
+    userId: getJwtUserId() || '',
+  }
+}
+
 export function NotificationProvider({ children }) {
+  const [authSnapshot, setAuthSnapshot] = useState(() => readAuthSnapshot())
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -157,10 +166,40 @@ export function NotificationProvider({ children }) {
   const notificationAudioPrimedRef = useRef(false)
   const lastConnectionStateRef = useRef('disconnected')
 
-  const accessToken = getAccessToken()
-  const userId = getJwtUserId() || ''
+  const accessToken = authSnapshot.accessToken
+  const userId = authSnapshot.userId
   const identityKey = normalizeIdentityPart(userId) || 'anonymous'
   const loggedIn = Boolean(accessToken)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const syncAuthSnapshot = () => {
+      const nextSnapshot = readAuthSnapshot()
+      setAuthSnapshot((prev) => {
+        if (prev.accessToken === nextSnapshot.accessToken && prev.userId === nextSnapshot.userId) {
+          return prev
+        }
+        debugLog('info', 'Notification provider auth snapshot changed.', {
+          hadAccessToken: Boolean(prev.accessToken),
+          hasAccessToken: Boolean(nextSnapshot.accessToken),
+          previousUserId: prev.userId || null,
+          nextUserId: nextSnapshot.userId || null,
+        })
+        return nextSnapshot
+      })
+    }
+
+    const unsubscribe = subscribeToAuthSessionChange(syncAuthSnapshot)
+    window.addEventListener('focus', syncAuthSnapshot, true)
+    document.addEventListener('visibilitychange', syncAuthSnapshot)
+
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', syncAuthSnapshot, true)
+      document.removeEventListener('visibilitychange', syncAuthSnapshot)
+    }
+  }, [])
 
   useEffect(() => {
     writeProviderDebugSnapshot({
@@ -226,6 +265,7 @@ export function NotificationProvider({ children }) {
     let cancelled = false
     let pollTimer = null
     lastConnectionStateRef.current = 'disconnected'
+    notificationHubClient.retain()
     debugLog('info', 'Notification provider starting listeners.', {
       identityKey,
       userId: userId || null,
@@ -338,7 +378,7 @@ export function NotificationProvider({ children }) {
       notificationAudioPrimedRef.current = false
       stopNotificationListener()
       stopStateListener()
-      void notificationHubClient.stop()
+      notificationHubClient.release()
     }
   }, [loggedIn, userId])
 
