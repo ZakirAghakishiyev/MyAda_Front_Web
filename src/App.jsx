@@ -13,6 +13,7 @@ import { CancelledRequestsProvider } from './contexts/CancelledRequestsContext'
 import { RegisteredEventsProvider } from './contexts/RegisteredEventsContext'
 import { LostAndFoundAdminProvider } from './contexts/LostAndFoundAdminContext'
 import { CallProvider } from './call/CallContext'
+import { NotificationProvider } from './notifications/NotificationContext'
 import GlobalCallUi from './call/GlobalCallUi'
 import Header from './components/Header'
 import LostAndFoundAdmin from './pages/LostAndFoundAdmin'
@@ -501,10 +502,12 @@ function App() {
           <SessionRestoreGate>
             <RegisteredEventsProvider>
               <LostAndFoundAdminProvider>
-                <CallProvider>
-                  <GlobalCallUi />
-                  <AppContent />
-                </CallProvider>
+                <NotificationProvider>
+                  <CallProvider>
+                    <GlobalCallUi />
+                    <AppContent />
+                  </CallProvider>
+                </NotificationProvider>
               </LostAndFoundAdminProvider>
             </RegisteredEventsProvider>
           </SessionRestoreGate>

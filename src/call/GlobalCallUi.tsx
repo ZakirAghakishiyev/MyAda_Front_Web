@@ -58,6 +58,7 @@ const GlobalCallUi: React.FC = () => {
   const {
     phase,
     error: hubError,
+    clearError,
     incomingCall,
     callId,
     roomId,
@@ -169,6 +170,16 @@ const GlobalCallUi: React.FC = () => {
   useEffect(() => {
     if (phase !== 'in-call') setAudioBlocked(false)
   }, [phase])
+
+  useEffect(() => {
+    if (!(hubError && phase === 'error')) return undefined
+
+    const timeout = window.setTimeout(() => {
+      clearError()
+    }, 5000)
+
+    return () => window.clearTimeout(timeout)
+  }, [clearError, hubError, phase])
 
   useEffect(() => {
     const ringtoneEl = ringtoneAudioRef.current
@@ -316,24 +327,16 @@ const GlobalCallUi: React.FC = () => {
       />
 
       {hubError && phase === 'error' && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 12,
-            right: 12,
-            zIndex: 2147482500,
-            maxWidth: 360,
-            padding: '12px 14px',
-            borderRadius: 12,
-            background: '#fef2f2',
-            color: '#991b1b',
-            fontSize: 13,
-            border: '1px solid #fecaca',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          }}
-          role="alert"
-        >
-          {hubError}
+        <div className="gc-toast gc-toast--error" role="alert">
+          <button
+            type="button"
+            className="gc-toast-close"
+            aria-label="Dismiss message"
+            onClick={clearError}
+          >
+            ×
+          </button>
+          <div className="gc-toast-message">{hubError}</div>
         </div>
       )}
 

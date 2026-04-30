@@ -121,6 +121,7 @@ const ClubAdminSuggestEvent = () => {
   const [roomId, setRoomId] = useState('')
   const [locationLoadState, setLocationLoadState] = useState({ loading: true, error: '' })
   const [posterFile, setPosterFile] = useState(null)
+  const [posterImageUrl, setPosterImageUrl] = useState('')
   const posterInputRef = useRef(null)
   const [description, setDescription] = useState('')
   const [objectives, setObjectives] = useState('')
@@ -231,6 +232,7 @@ const ClubAdminSuggestEvent = () => {
     setCatering(Boolean(draft.catering))
     setCleaning(draft.cleaning !== undefined ? Boolean(draft.cleaning) : true)
     setOtherNeeds(draft.otherNeeds || '')
+    if (draft.posterImageUrl != null) setPosterImageUrl(String(draft.posterImageUrl))
   }, [])
 
   const handleSaveDraft = () => {
@@ -252,6 +254,7 @@ const ClubAdminSuggestEvent = () => {
       catering,
       cleaning,
       otherNeeds,
+      posterImageUrl,
       savedAt: Date.now()
     }
     setDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY, payload)
@@ -260,6 +263,7 @@ const ClubAdminSuggestEvent = () => {
 
   const handleSubmit = async () => {
     try {
+      const url = posterImageUrl.trim()
       await proposeClubAdminEvent(
         clubId,
         {
@@ -279,6 +283,7 @@ const ClubAdminSuggestEvent = () => {
             cleaning,
             otherNeeds,
           },
+          ...(url ? { imageUrl: url } : {}),
         },
         posterFile
       )
@@ -464,8 +469,17 @@ const ClubAdminSuggestEvent = () => {
                 Select File
               </button>
               {posterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{posterFile.name}</div>}
-              <p style={{ margin: '12px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
-                Optional event image. The club-admin proposal API accepts an uploaded file only (do not use a URL here).
+              <div className="club-admin-field" style={{ marginTop: 14 }}>
+                <label style={{ fontSize: 12 }}>Or image URL (optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://… (upload wins if both are set)"
+                  value={posterImageUrl}
+                  onChange={(e) => setPosterImageUrl(e.target.value)}
+                />
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                Per API: you can send an upload or a public image URL. If both are provided, the uploaded file is used.
               </p>
             </div>
           </div>

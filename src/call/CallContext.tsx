@@ -26,6 +26,7 @@ import type {
 type CallContextValue = {
   phase: CallPhase
   error: string | null
+  clearError: () => void
   callId: string | null
   roomId: string | null
   incomingCall: IncomingCallPayload | null
@@ -131,6 +132,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [sessionEndReason, setSessionEndReason] = useState<string | null>(null)
 
+  const clearError = useCallback(() => setError(null), [])
   const clearSessionEndReason = useCallback(() => setSessionEndReason(null), [])
 
   const setPhaseSafely = useCallback((next: CallPhase) => {
@@ -967,6 +969,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     () => ({
       phase,
       error,
+      clearError,
       callId,
       roomId,
       incomingCall,
@@ -989,6 +992,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [
       phase,
       error,
+      clearError,
       callId,
       roomId,
       incomingCall,

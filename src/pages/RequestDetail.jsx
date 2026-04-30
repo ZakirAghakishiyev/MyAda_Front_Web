@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { cancelMemberRequest, getCurrentUserIds, getRequestDetail, getRequestTimeline } from '../api/supportApi'
+import {
+  cancelMemberRequest,
+  getCurrentUserIds,
+  getRequestDetail,
+  getRequestTimeline,
+  resolveSupportRequestAssignedStaffCallTarget,
+} from '../api/supportApi'
+import { useCallHub } from '../call/useCallHub'
 import './RequestDetail.css'
 
 const IconBack = () => (
@@ -39,9 +46,9 @@ const IconTimeline = () => (
     <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
   </svg>
 )
-const IconChat = () => (
+const IconPhone = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.89.33 1.76.62 2.6a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6.09 6.09l1.48-1.28a2 2 0 0 1 2.11-.45c.84.29 1.71.5 2.6.62A2 2 0 0 1 22 16.92z" />
   </svg>
 )
 const IconX = () => (
@@ -57,9 +64,13 @@ const RequestDetail = () => {
   const [request, setRequest] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showContactModal, setShowContactModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [resolvingStaffCall, setResolvingStaffCall] = useState(false)
+  const [callingStaff, setCallingStaff] = useState(null)
+  const [callStatusText, setCallStatusText] = useState('')
+  const { phase, error: callError, requestCall, otherParticipants } = useCallHub()
+
   const loadData = useCallback((showLoader = false) => {
     if (showLoader) setLoading(true)
     Promise.all([getRequestDetail(id), getRequestTimeline(id)])
@@ -106,6 +117,82 @@ const RequestDetail = () => {
       })
   }
 
+  useEffect(() => {
+    if (!callingStaff) return
+
+    if (callError) {
+      setCallStatusText(callError)
+      if (phase === 'error') setCallingStaff(null)
+      return
+    }
+
+    if (phase === 'connecting') {
+      setCallStatusText(`Connecting to ${callingStaff.staffName || 'assigned staff'}...`)
+      return
+    }
+
+    if (phase === 'ringing') {
+      setCallStatusText(`Calling ${callingStaff.staffName || 'assigned staff'}... waiting for answer.`)
+      return
+    }
+
+    if (phase === 'accepted') {
+      setCallStatusText(`${callingStaff.staffName || 'Assigned staff'} accepted. Joining the call...`)
+      return
+    }
+
+    if (phase === 'in-call') {
+      const peerName = otherParticipants?.[0]?.displayName || otherParticipants?.[0]?.userId || callingStaff.staffName || 'assigned staff'
+      setCallStatusText(`Connected to ${peerName}. Use the floating call panel to manage the call.`)
+      return
+    }
+
+    if (phase === 'timeout') {
+      setCallStatusText(`${callingStaff.staffName || 'Assigned staff'} did not answer before the call timed out.`)
+      setCallingStaff(null)
+      return
+    }
+
+    if (phase === 'rejected') {
+      setCallStatusText(`${callingStaff.staffName || 'Assigned staff'} declined the call request.`)
+      setCallingStaff(null)
+      return
+    }
+
+    if (phase === 'cancelled') {
+      setCallStatusText('The pending call was cancelled.')
+      setCallingStaff(null)
+      return
+    }
+
+    if (phase === 'ended') {
+      setCallingStaff(null)
+    }
+  }, [callError, callingStaff, otherParticipants, phase])
+
+  const handleCallAssignedStaff = async () => {
+    if (!request?.assignedTo || resolvingStaffCall) return
+
+    setResolvingStaffCall(true)
+    setCallStatusText('')
+
+    try {
+      const target = await resolveSupportRequestAssignedStaffCallTarget(request)
+      const activeTarget = {
+        userId: target.userId,
+        staffName: target.staffName || request.assignedTo || 'Assigned staff',
+      }
+      setCallingStaff(activeTarget)
+      setCallStatusText(`Calling ${activeTarget.staffName}...`)
+      await requestCall(target.userId)
+    } catch (err) {
+      setCallingStaff(null)
+      setCallStatusText(err?.message || 'Could not start the staff call.')
+    } finally {
+      setResolvingStaffCall(false)
+    }
+  }
+
   if (loading) {
     return <div className="rd-overlay"><div className="rd-popup">Loading request...</div></div>
   }
@@ -124,6 +211,18 @@ const RequestDetail = () => {
   const isOpen = ['New', 'Assigned', 'InProgress'].includes(request.status)
   const isCompleted = request.status === 'Completed'
   const isCancelledStatus = request.status === 'Cancelled'
+  const callRequestLocked = ['connecting', 'ringing', 'incoming', 'accepted', 'in-call'].includes(phase)
+  const callButtonLabel = resolvingStaffCall
+    ? 'Preparing...'
+    : phase === 'connecting' && callingStaff
+      ? 'Connecting...'
+      : phase === 'ringing' && callingStaff
+        ? 'Calling...'
+        : phase === 'accepted' && callingStaff
+          ? 'Joining...'
+          : phase === 'in-call' && callingStaff
+            ? 'In Call'
+            : 'Call Staff'
 
   const priorityLabel = request.priority || request.urgency || 'Standard'
 
@@ -241,13 +340,23 @@ const RequestDetail = () => {
 
             {isOpen && !isCancelledStatus && (
               <div className="rd-actions">
-                <button type="button" className="rd-btn rd-btn--contact" onClick={() => setShowContactModal(true)}>
-                  <IconChat /> Contact Staff
+                <button
+                  type="button"
+                  className="rd-btn rd-btn--contact"
+                  onClick={() => void handleCallAssignedStaff()}
+                  disabled={!request.assignedTo || resolvingStaffCall || callRequestLocked}
+                >
+                  <IconPhone /> {callButtonLabel}
                 </button>
                 <button type="button" className="rd-btn rd-btn--cancel" onClick={() => setShowCancelModal(true)}>
                   <IconX /> Cancel Ticket
                 </button>
               </div>
+            )}
+            {callStatusText && (
+              <p className="rd-call-status" role={callError ? 'alert' : 'status'}>
+                {callStatusText}
+              </p>
             )}
           </div>
         </div>
@@ -275,24 +384,6 @@ const RequestDetail = () => {
         </div>
       )}
 
-      {showContactModal && (
-        <div className="rd-contact-overlay" onClick={() => setShowContactModal(false)}>
-          <div className="rd-contact-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="rd-contact-title">Contact Support Staff</h3>
-            {request.assignedTo && <p className="rd-contact-assigned">Assigned to: {request.assignedTo}</p>}
-            <p className="rd-contact-intro">You can contact support via:</p>
-            <ul className="rd-contact-list">
-              <li>Email: support@ada.edu.az</li>
-              <li>Phone: +994 12 437 32 35</li>
-              <li>Chat: Available in app</li>
-            </ul>
-            <div className="rd-contact-btns">
-              <button type="button" className="rd-contact-btn rd-contact-btn--close" onClick={() => setShowContactModal(false)}>Close</button>
-              <a href="mailto:support@ada.edu.az" className="rd-contact-btn rd-contact-btn--email">Send Email</a>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

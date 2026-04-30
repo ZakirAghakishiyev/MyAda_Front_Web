@@ -1,5 +1,6 @@
 import { authFetch } from '../auth'
 import { getJwtUserId } from '../auth/jwtRoles'
+import { displayNameFromAuthUserDto, fetchAuthUserById } from './authUsersApi'
 import { DISPATCHER_ROLE_USER_URLS, getSupportApiBases } from './supportConfig'
 
 /** Path segment: Support API uses GUIDs in paths (SUPPORT_API_DOC.md). */
@@ -197,6 +198,16 @@ function resolveAssignedStaffName(item) {
   if (!Number.isNaN(n) && MOCK_STAFF[n]?.fullName) return MOCK_STAFF[n].fullName
   if (String(assignedId).length > 12) return `Staff ${String(assignedId).slice(0, 8)}…`
   return `Staff ${assignedId}`
+}
+
+function resolveAssignedStaffEmail(item) {
+  const label =
+    item?.assignedStaffEmail ||
+    item?.assignedToEmail ||
+    item?.assigneeEmail ||
+    item?.staffEmail
+  const value = String(label || '').trim()
+  return value || null
 }
 
 function pickCreatedByUserId(item) {
@@ -402,6 +413,52 @@ function normPersonNameKey(value) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ')
+}
+
+function looksLikeOpaqueStaffIdentifier(value) {
+  const s = String(value ?? '').trim()
+  if (!s) return false
+  if (/^staff\b/i.test(s)) return true
+  if (/^\d+$/.test(s)) return true
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return true
+  return !s.includes(' ') && !s.includes('@') && /^[0-9a-z_-]{8,}$/i.test(s)
+}
+
+function shouldResolveAssignedStaffDisplayName(request) {
+  if (!request || typeof request !== 'object') return false
+  const assignedId = String(request.assignedStaffUserId ?? '').trim()
+  if (!assignedId) return false
+  const assignedLabel = String(request.assignedTo ?? '').trim()
+  if (!assignedLabel) return true
+  if (normLookupKey(assignedLabel) === normLookupKey(assignedId)) return true
+  return looksLikeOpaqueStaffIdentifier(assignedLabel)
+}
+
+async function enrichAssignedStaffDisplayName(request) {
+  const normalized = normalizeSupportRequest(request)
+  if (!shouldResolveAssignedStaffDisplayName(normalized)) return normalized
+
+  const assignedId = String(normalized?.assignedStaffUserId ?? '').trim()
+  const authUser = assignedId ? await fetchAuthUserById(assignedId) : null
+  const authDisplayName = displayNameFromAuthUserDto(authUser)
+  if (authDisplayName) {
+    return {
+      ...normalized,
+      assignedTo: authDisplayName,
+    }
+  }
+
+  return {
+    ...normalized,
+    assignedTo: normalized.assignedTo && !looksLikeOpaqueStaffIdentifier(normalized.assignedTo)
+      ? normalized.assignedTo
+      : 'Assigned staff',
+  }
+}
+
+async function enrichAssignedStaffDisplayNames(items) {
+  if (!Array.isArray(items) || items.length === 0) return []
+  return Promise.all(items.map((item) => enrichAssignedStaffDisplayName(item)))
 }
 
 function normalizeSupportRequest(item) {
@@ -674,6 +731,23 @@ async function fetchTeacherDirectoryUsers() {
   return [...byId.values()]
 }
 
+async function fetchSupportStaffDirectoryUsers(preferredArea = '', category = '') {
+  const preferredModule = resolveStaffPickerModule(preferredArea, category)
+  const rolesToTry = preferredModule === 'FM' ? ['tech_staff', 'it_staff'] : ['it_staff', 'tech_staff']
+  const byTargetUserId = new Map()
+
+  for (const role of rolesToTry) {
+    const users = await fetchAuthUsersByRole(role)
+    for (const user of users) {
+      const key = normLookupKey(user?.targetUserId || user?.id)
+      if (!key || byTargetUserId.has(key)) continue
+      byTargetUserId.set(key, user)
+    }
+  }
+
+  return [...byTargetUserId.values()]
+}
+
 /**
  * Auth gateway: `GET /api/auth/users-by-role/{role}` (see AUTH_API_DOC.md).
  * Uses `VITE_DISPATCHER_ROLE_TOKEN` when set (admin bearer), otherwise the logged-in session via `authFetch`.
@@ -786,6 +860,97 @@ export async function resolveSupportRequestTeacherCallTarget(requestOrDetail) {
 
   const err = new Error('Only teacher-created tickets can be called from support. This ticket creator could not be verified as an instructor.')
   err.code = 'SUPPORT_TEACHER_NOT_FOUND'
+  throw err
+}
+
+/**
+ * Resolve the assigned support staff member to a callable CallService user id.
+ * Reconciles Support detail data with the Auth staff directory so request pages can
+ * call the assignee even when the ticket stores a directory id instead of JWT `sub`.
+ * @param {string | number | Record<string, unknown>} requestOrDetail
+ * @returns {Promise<{ userId: string, staffName: string | null, staffEmail: string | null }>}
+ */
+export async function resolveSupportRequestAssignedStaffCallTarget(requestOrDetail) {
+  const detail =
+    requestOrDetail && typeof requestOrDetail === 'object'
+      ? normalizeSupportRequest(requestOrDetail)
+      : await getRequestDetail(requestOrDetail)
+
+  const assignedStaffKey = String(detail?.assignedStaffUserId || '').trim()
+  const assignedStaffName = String(detail?.assignedTo || '').trim() || null
+  const assignedStaffEmail = resolveAssignedStaffEmail(detail)
+
+  if (!assignedStaffKey && !assignedStaffName && !assignedStaffEmail) {
+    const err = new Error('This request is not assigned to a staff member yet.')
+    err.code = 'SUPPORT_ASSIGNED_STAFF_MISSING'
+    throw err
+  }
+
+  const staffUsers = await fetchSupportStaffDirectoryUsers(detail?.service, detail?.category)
+
+  const directTargetMatch = assignedStaffKey
+    ? staffUsers.find((user) => normLookupKey(user.targetUserId) === normLookupKey(assignedStaffKey))
+    : null
+  if (directTargetMatch) {
+    return {
+      userId: directTargetMatch.targetUserId,
+      staffName: directTargetMatch.name || assignedStaffName,
+      staffEmail: directTargetMatch.email || assignedStaffEmail,
+    }
+  }
+
+  const directoryIdMatch = assignedStaffKey
+    ? staffUsers.find((user) => normLookupKey(user.id) === normLookupKey(assignedStaffKey))
+    : null
+  if (directoryIdMatch) {
+    return {
+      userId: directoryIdMatch.targetUserId,
+      staffName: directoryIdMatch.name || assignedStaffName,
+      staffEmail: directoryIdMatch.email || assignedStaffEmail,
+    }
+  }
+
+  const assignedStaffEmailKey = normLookupKey(assignedStaffEmail)
+  const emailMatches = assignedStaffEmailKey
+    ? staffUsers.filter((user) => normLookupKey(user.email) === assignedStaffEmailKey)
+    : []
+  if (emailMatches.length === 1) {
+    return {
+      userId: emailMatches[0].targetUserId,
+      staffName: emailMatches[0].name || assignedStaffName,
+      staffEmail: emailMatches[0].email || assignedStaffEmail,
+    }
+  }
+
+  const assignedStaffNameKey = normPersonNameKey(assignedStaffName)
+  const nameMatches = assignedStaffNameKey
+    ? staffUsers.filter((user) => normPersonNameKey(user.name) === assignedStaffNameKey)
+    : []
+  if (nameMatches.length === 1) {
+    return {
+      userId: nameMatches[0].targetUserId,
+      staffName: nameMatches[0].name || assignedStaffName,
+      staffEmail: nameMatches[0].email || assignedStaffEmail,
+    }
+  }
+
+  if (assignedStaffKey) {
+    return {
+      userId: assignedStaffKey,
+      staffName: assignedStaffName,
+      staffEmail: assignedStaffEmail,
+    }
+  }
+
+  const err = new Error(
+    nameMatches.length > 1 || emailMatches.length > 1
+      ? 'More than one staff account matches the assigned technician. Please try again after the staff directory is cleaned up.'
+      : 'Could not find a callable account for the assigned staff member yet.'
+  )
+  err.code =
+    nameMatches.length > 1 || emailMatches.length > 1
+      ? 'SUPPORT_ASSIGNED_STAFF_CALL_TARGET_AMBIGUOUS'
+      : 'SUPPORT_ASSIGNED_STAFF_CALL_TARGET_NOT_FOUND'
   throw err
 }
 
@@ -949,13 +1114,13 @@ export async function getMemberRequests(memberId) {
       ? sp(memberId)
       : sp(SUPPORT_PATH_MEMBER_PLACEHOLDER)
   const result = await request(`/SupportRequests/member/${pathId}`)
-  return Array.isArray(result) ? result.map(normalizeSupportRequest) : []
+  return Array.isArray(result) ? enrichAssignedStaffDisplayNames(result) : []
 }
 
 export async function getStaffRequests(staffId) {
   if (staffId == null || String(staffId).trim() === '') return []
   const result = await request(`/SupportRequests/staff/${sp(staffId)}`)
-  const list = Array.isArray(result) ? result.map(normalizeSupportRequest) : []
+  const list = Array.isArray(result) ? await enrichAssignedStaffDisplayNames(result) : []
   return filterStaffRequestsForSignedInUser(list, staffId)
 }
 
@@ -966,12 +1131,12 @@ export async function getAllRequests(filters = {}) {
   })
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   const result = await request(`/SupportRequests${suffix}`)
-  return Array.isArray(result) ? result.map(normalizeSupportRequest) : []
+  return Array.isArray(result) ? enrichAssignedStaffDisplayNames(result) : []
 }
 
 export async function getRequestDetail(requestId) {
   const result = await request(`/SupportRequests/${sp(requestId)}`)
-  return normalizeSupportRequest(result)
+  return enrichAssignedStaffDisplayName(result)
 }
 
 export async function getRequestTimeline(requestId) {

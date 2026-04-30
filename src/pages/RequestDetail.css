@@ -539,6 +539,22 @@
 }
 
 .rd-btn--contact:hover { background: #f9fafb; }
+.rd-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rd-btn:disabled:hover {
+  background: #ffffff;
+}
+
+.rd-call-status {
+  margin: 0 20px;
+  padding: 0 0 8px;
+  font-size: 13px;
+  color: #0f766e;
+}
+
 .rd-btn--inline {
   flex: none;
   width: auto;

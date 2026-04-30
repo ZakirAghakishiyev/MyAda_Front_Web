@@ -6,6 +6,7 @@ import { logout, changePassword } from '../auth'
 import { getAccessToken } from '../auth/tokenStorage'
 import { userHasJwtAdminRole, getJwtProfileInitial } from '../auth/jwtRoles'
 import { fetchCurrentUserEmail } from '../api/authUsersApi'
+import { useNotifications } from '../notifications/NotificationContext'
 import adaLogo from '../assets/ada-logo.png'
 import campusBanner from '../assets/campus-banner.png'
 import './Header.css'
@@ -24,11 +25,56 @@ const IconEyeOff = () => (
   </svg>
 )
 
+const IconClose = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+)
+
+function formatNotificationTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+
+  const diffMs = Date.now() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / 60000)
+  if (diffMinutes < 1) return 'Just now'
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function getNotificationChannelTone(channel) {
+  const normalized = String(channel || '').trim().toLowerCase()
+  if (normalized === 'email') return 'email'
+  if (normalized === 'sms') return 'sms'
+  return 'push'
+}
+
+function getRealtimeStatus(connectionState) {
+  if (connectionState === 'connected') return { label: 'Live updates', tone: 'live' }
+  if (connectionState === 'connecting' || connectionState === 'reconnecting') {
+    return { label: 'Connecting', tone: 'syncing' }
+  }
+  return { label: 'API refresh mode', tone: 'fallback' }
+}
+
 const Header = () => {
   const { activeFilter, setActiveFilter } = useFilter()
   const location = useLocation()
   const navigate = useNavigate()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [cpEmail, setCpEmail] = useState('')
   const [cpOld, setCpOld] = useState('')
@@ -42,9 +88,31 @@ const Header = () => {
   const [showCpNew, setShowCpNew] = useState(false)
   const [showCpConfirm, setShowCpConfirm] = useState(false)
   const profileMenuRef = useRef(null)
+  const notificationMenuRef = useRef(null)
+  const notificationPanelRef = useRef(null)
+  const notificationButtonRef = useRef(null)
   const loggedIn = Boolean(getAccessToken())
   const isHomePage = location.pathname === '/'
   const showFilterNav = !isHomePage || !getAccessToken() || userHasJwtAdminRole()
+  const {
+    items: notifications,
+    loading: notificationsLoading,
+    refreshing: notificationsRefreshing,
+    error: notificationsError,
+    unreadCount,
+    connectionState,
+    markAsRead,
+    markAllAsRead,
+    removeNotification,
+    refresh: refreshNotifications,
+  } = useNotifications()
+  const recentNotifications = notifications.slice(0, 6)
+  const realtimeStatus = getRealtimeStatus(connectionState)
+  const [notificationPanelStyle, setNotificationPanelStyle] = useState({
+    top: 60,
+    left: 16,
+    width: 360,
+  })
 
   const handleFilterClick = (filterName) => {
     setActiveFilter(filterName)
@@ -60,14 +128,53 @@ const Header = () => {
 
   useEffect(() => {
     const handleOutside = (e) => {
-      if (!profileMenuRef.current) return
-      if (!profileMenuRef.current.contains(e.target)) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
         setShowProfileMenu(false)
+      }
+      const clickedInsideBell = notificationMenuRef.current?.contains(e.target)
+      const clickedInsidePanel = notificationPanelRef.current?.contains(e.target)
+      if (!clickedInsideBell && !clickedInsidePanel) {
+        setShowNotifications(false)
       }
     }
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [])
+
+  useEffect(() => {
+    if (!showNotifications || notificationsLoading || recentNotifications.length > 0) return
+    void refreshNotifications()
+  }, [notificationsLoading, recentNotifications.length, refreshNotifications, showNotifications])
+
+  useEffect(() => {
+    if (!showNotifications) return undefined
+
+    const updateNotificationPanelPosition = () => {
+      const button = notificationButtonRef.current
+      if (!button || typeof window === 'undefined') return
+
+      const rect = button.getBoundingClientRect()
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
+      const panelWidth = Math.min(360, Math.max(280, viewportWidth - 16))
+      const preferredLeft = rect.right - panelWidth
+      const left = Math.max(8, Math.min(preferredLeft, viewportWidth - panelWidth - 8))
+
+      setNotificationPanelStyle({
+        top: Math.max(rect.bottom + 10, 8),
+        left,
+        width: panelWidth,
+      })
+    }
+
+    updateNotificationPanelPosition()
+    window.addEventListener('resize', updateNotificationPanelPosition)
+    window.addEventListener('scroll', updateNotificationPanelPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updateNotificationPanelPosition)
+      window.removeEventListener('scroll', updateNotificationPanelPosition, true)
+    }
+  }, [showNotifications])
 
   useEffect(() => {
     if (!showChangePassword) return
@@ -110,6 +217,7 @@ const Header = () => {
   const handleLogout = async () => {
     await logout()
     setShowProfileMenu(false)
+    setShowNotifications(false)
     navigate('/login', { replace: true })
   }
 
@@ -337,6 +445,120 @@ const Header = () => {
         )
       : null
 
+  const notificationPanel =
+    typeof document !== 'undefined' && showNotifications
+      ? createPortal(
+          <div
+            ref={notificationPanelRef}
+            className="notification-panel"
+            role="dialog"
+            aria-label="Notifications"
+            style={notificationPanelStyle}
+          >
+            <div className="notification-panel-header">
+              <div>
+                <p className="notification-panel-eyebrow">Notifications</p>
+                <h3 className="notification-panel-title">Inbox</h3>
+              </div>
+              <button
+                type="button"
+                className="notification-panel-close"
+                aria-label="Close notifications"
+                onClick={() => setShowNotifications(false)}
+              >
+                <IconClose />
+              </button>
+            </div>
+
+            <div className="notification-panel-toolbar">
+              <span className={`notification-status notification-status--${realtimeStatus.tone}`}>
+                <span className="notification-status-dot" aria-hidden />
+                {realtimeStatus.label}
+              </span>
+              <div className="notification-panel-actions">
+                <button
+                  type="button"
+                  className="notification-panel-action"
+                  onClick={() => void refreshNotifications()}
+                  disabled={notificationsLoading || notificationsRefreshing}
+                >
+                  {notificationsRefreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+                <button
+                  type="button"
+                  className="notification-panel-action"
+                  onClick={markAllAsRead}
+                  disabled={unreadCount === 0}
+                >
+                  Mark all read
+                </button>
+              </div>
+            </div>
+
+            {notificationsError ? (
+              <p className="notification-panel-error" role="alert">
+                {notificationsError}
+              </p>
+            ) : null}
+
+            <div className="notification-panel-list">
+              {notificationsLoading ? (
+                <p className="notification-panel-empty">Loading notifications...</p>
+              ) : recentNotifications.length === 0 ? (
+                <p className="notification-panel-empty">No notifications yet.</p>
+              ) : (
+                recentNotifications.map((notification) => (
+                  <article
+                    key={notification.id}
+                    className={`notification-item ${notification.read ? '' : 'notification-item--unread'}`}
+                  >
+                    <div className="notification-item-meta">
+                      <span
+                        className={`notification-item-channel notification-item-channel--${getNotificationChannelTone(
+                          notification.channel
+                        )}`}
+                      >
+                        {notification.channel}
+                      </span>
+                      <span className="notification-item-time">
+                        {formatNotificationTime(notification.createdAt)}
+                      </span>
+                    </div>
+                    <p className="notification-item-type">{notification.type}</p>
+                    <p className="notification-item-message">
+                      {notification.message || 'New activity was added to your notification stream.'}
+                    </p>
+                    <div className="notification-item-footer">
+                      {!notification.read ? (
+                        <button
+                          type="button"
+                          className="notification-item-action"
+                          onClick={() => markAsRead(notification.id)}
+                        >
+                          Mark as read
+                        </button>
+                      ) : (
+                        <span className="notification-item-read-label">Read</span>
+                      )}
+                      {notification.id ? (
+                        <button
+                          type="button"
+                          className="notification-item-action"
+                          onClick={() => void removeNotification(notification.id)}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body
+        )
+      : null
+
   return (
     <>
     <header className="header">
@@ -363,20 +585,39 @@ const Header = () => {
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </button>
-          <button className="icon-button notification-icon" aria-label="Notifications">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-            <span className="notification-badge"></span>
-          </button>
+          {loggedIn && (
+            <div className="notification-wrap" ref={notificationMenuRef}>
+              <button
+                type="button"
+                className={`icon-button notification-icon ${showNotifications ? 'notification-icon--open' : ''}`}
+                aria-label="Notifications"
+                aria-expanded={showNotifications}
+                ref={notificationButtonRef}
+                onClick={() => {
+                  setShowProfileMenu(false)
+                  setShowNotifications((prev) => !prev)
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                {unreadCount > 0 ? (
+                  <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                ) : null}
+              </button>
+            </div>
+          )}
           {isHomePage && loggedIn && (
             <div className="profile-wrap" ref={profileMenuRef}>
               <button
                 type="button"
                 className="profile-icon"
                 aria-label="Open profile menu"
-                onClick={() => setShowProfileMenu((prev) => !prev)}
+                onClick={() => {
+                  setShowNotifications(false)
+                  setShowProfileMenu((prev) => !prev)
+                }}
               >
                 {getJwtProfileInitial()}
               </button>
@@ -422,6 +663,7 @@ const Header = () => {
         </nav>
       )}
     </header>
+    {notificationPanel}
     {changePasswordModal}
     </>
   )

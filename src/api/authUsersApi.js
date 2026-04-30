@@ -415,7 +415,8 @@ export function clearAuthUserCache() {
 
 /**
  * Fetch auth user profile by id.
- * Primary endpoint (per AUTH_API_DOC): `GET /api/auth/users/{id}` — Bearer required; admin can fetch any user,
+ * Tries the scheduling gateway path first (`GET /scheduling/api/auth/users/{id}`),
+ * then falls back to `GET /api/auth/users/{id}`. Bearer required; admin can fetch any user,
  * everyone else can only fetch self.
  *
  * Behaviour:
@@ -428,16 +429,26 @@ export async function fetchAuthUserById(userId) {
   if (!id) return null
   if (authUserByIdCache.has(id)) return authUserByIdCache.get(id)
 
-  const url = `${AUTH_API_BASE}/api/auth/users/${encodeURIComponent(id)}`
+  const encodedId = encodeURIComponent(id)
+  const candidateUrls = Array.from(
+    new Set([
+      `${AUTH_API_BASE}/scheduling/api/auth/users/${encodedId}`,
+      `${AUTH_API_BASE}/api/auth/users/${encodedId}`,
+    ])
+  )
   let result = null
-  try {
-    const res = await authFetch(url, { method: 'GET' })
-    if (res.ok) {
+  for (const url of candidateUrls) {
+    try {
+      const res = await authFetch(url, { method: 'GET' })
+      if (!res.ok) continue
       const data = unwrapAutoWrapper(await readJsonSafe(res))
-      result = data && typeof data === 'object' ? data : null
+      if (data && typeof data === 'object') {
+        result = data
+        break
+      }
+    } catch {
+      /* try next candidate URL */
     }
-  } catch {
-    result = null
   }
   authUserByIdCache.set(id, result)
   return result

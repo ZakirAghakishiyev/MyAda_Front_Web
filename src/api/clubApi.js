@@ -224,8 +224,8 @@ export function buildEventProposalSubmitDto(form) {
 }
 
 /**
- * Multipart fields for `EventProposalSubmitDto` (student-services + shared builder).
- * @param {{ includeImageUrl?: boolean }} [options] — set `includeImageUrl: false` for club-admin proposals (that route rejects `imageUrl`).
+ * Multipart fields for `EventProposalSubmitDto` (student-services + club-admin shared builder).
+ * `imageUrl` may be included alongside `imageFile`; backend uses the uploaded file when both are sent.
  */
 function buildEventProposalFormData(dto, options = {}) {
   const includeImageUrl = options.includeImageUrl !== false
@@ -958,17 +958,15 @@ export function patchClubAdminEvent(clubId, eventId, body) {
 }
 
 /**
- * `POST /api/v1/club-admin/{clubId}/events/proposals` — **multipart/form-data only**; attach image with `imageFile`.
- * `imageUrl` is rejected on this route (CLUB_API_DOC).
+ * `POST /api/v1/club-admin/{clubId}/events/proposals` — accepts `application/json` or `multipart/form-data`.
+ * Frontend sends multipart here so optional `imageFile` and `imageUrl` can share the same flow.
  * @param {string|number} clubId
- * @param {Record<string, unknown>} formState — fields for {@link buildEventProposalSubmitDto} (do not set `imageUrl` for this route)
+ * @param {Record<string, unknown>} formState — fields for {@link buildEventProposalSubmitDto}; may include `imageUrl`
  * @param {File|null|undefined} [imageFile] — optional event poster / image
  */
 export function proposeClubAdminEvent(clubId, formState, imageFile) {
-  const built = buildEventProposalSubmitDto(formState)
-  const { imageUrl: _discarded, ...dto } = built
-  void _discarded
-  const fd = buildEventProposalFormData(dto, { includeImageUrl: false })
+  const dto = buildEventProposalSubmitDto(formState)
+  const fd = buildEventProposalFormData(dto, { includeImageUrl: true })
   if (imageFile instanceof File) {
     fd.append('imageFile', imageFile, imageFile.name)
   }
