@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createCourse, fetchCourses } from '../../api/courses'
-import { createLesson, fetchLessons } from '../../api/lessons'
+import { createLesson, fetchLessons, updateLesson } from '../../api/lessons'
 import { fetchUsersByRole, indexById } from '../../api/instructors'
 import { getBuildings, getRoomsByBuildingId } from '../../api/locationApi'
 import '../SchedulingPage.css'
@@ -49,6 +49,7 @@ const CoursePage = () => {
   const navigate = useNavigate()
   const [courses, setCourses] = useState([])
   const [lessons, setLessons] = useState([])
+  const [editingLessonId, setEditingLessonId] = useState(null)
 
   const [loadingCourses, setLoadingCourses] = useState(true)
   const [loadingLessons, setLoadingLessons] = useState(true)
@@ -236,10 +237,116 @@ const CoursePage = () => {
       const key = String(id ?? '').trim()
       if (!key) return '—'
       const row = instructorsById.get(key)
-      return row?.fullName || `Instructor #${key}`
+      return row?.fullName || ''
     },
     [instructorsById]
   )
+
+  const instructorDisplayName = useCallback(
+    (lessonRow) => {
+      const direct =
+        lessonRow?.instructorDisplayName ??
+        lessonRow?.instructor_display_name ??
+        lessonRow?.instructorName ??
+        lessonRow?.instructorFullName ??
+        lessonRow?.instructor_name ??
+        lessonRow?.instructor_full_name ??
+        lessonRow?.instructor?.fullName ??
+        lessonRow?.instructor?.name
+      const directStr = String(direct ?? '').trim()
+      if (directStr) return directStr
+      const byId = instructorNameById(lessonRow?.instructorId ?? lessonRow?.instructor_id)
+      if (byId) return byId
+      const rawId = String(lessonRow?.instructorId ?? lessonRow?.instructor_id ?? '').trim()
+      return rawId ? `Instructor ${rawId}` : '—'
+    },
+    [instructorNameById]
+  )
+
+  const resolveCourseIdForLesson = useCallback(
+    (lessonRow) => {
+      const direct = lessonRow?.courseId ?? lessonRow?.course_id ?? lessonRow?.course?.id ?? lessonRow?.course?.courseId
+      if (direct != null && String(direct).trim() !== '') return String(direct)
+
+      const lessonCode = String(lessonRow?.code ?? lessonRow?.courseCode ?? lessonRow?.course_code ?? '').trim()
+      const lessonDept = String(lessonRow?.department ?? lessonRow?.courseDepartment ?? lessonRow?.course_department ?? '').trim()
+      if (!lessonCode) return ''
+
+      const candidates = courses.filter((c) => {
+        if (String(c.code ?? '').trim() !== lessonCode) return false
+        if (!lessonDept) return true
+        return String(c.department ?? '').trim() === lessonDept
+      })
+      if (candidates.length === 1) return String(candidates[0].id)
+      if (candidates.length > 1) {
+        // If there are duplicates by code, pick the first stable-sorted by id.
+        const sorted = [...candidates].sort((a, b) => Number(a.id) - Number(b.id))
+        return sorted[0]?.id != null ? String(sorted[0].id) : ''
+      }
+      return ''
+    },
+    [courses]
+  )
+
+  function resetLessonEditor() {
+    setEditingLessonId(null)
+    setLessonForm(initialLessonForm())
+    setLessonInstructorId('')
+    setInstructorInput('')
+    setInstructorMenuOpen(false)
+  }
+
+  function onLessonRowClick(row) {
+    setLessonMessage({ type: '', text: '' })
+    setEditingLessonId(row.id)
+
+    const courseId = resolveCourseIdForLesson(row)
+    const instructorId = row.instructorId ?? row.instructor_id ?? ''
+    const academicYear = row.academicYear ?? row.academic_year ?? ''
+    const semester = formatSemester(row.semester)
+    const maxCapacity = row.maxCapacity ?? row.max_capacity ?? ''
+    const roomId = row.roomId ?? row.room_id ?? ''
+    const buildingId = row.buildingId ?? row.building_id ?? ''
+
+    setLessonForm((prev) => ({
+      ...prev,
+      courseId: courseId ? String(courseId) : prev.courseId,
+      academicYear: academicYear ? String(academicYear) : prev.academicYear,
+      semester: semester && semester !== '—' ? semester : prev.semester,
+      maxCapacity: maxCapacity !== '' && maxCapacity != null ? String(maxCapacity) : prev.maxCapacity,
+      roomAssignment: buildingId || roomId ? 'assign' : 'default',
+      buildingId: buildingId ? String(buildingId) : '',
+      roomId: roomId ? String(roomId) : '',
+    }))
+
+    if (instructorId) {
+      const id = String(instructorId)
+      setLessonInstructorId(id)
+      setInstructorInput(instructorDisplayName(row))
+      setInstructorMenuOpen(false)
+    } else {
+      setLessonInstructorId('')
+      setInstructorInput('')
+    }
+
+    if (buildingId) {
+      void loadRoomsForBuilding(buildingId)
+    } else {
+      setRooms([])
+      setRoomsError('')
+      setLoadingRooms(false)
+    }
+  }
+
+  useEffect(() => {
+    if (editingLessonId == null) return
+    if (!lessonInstructorId) return
+    // If the directory loads after a click, replace any fallback id-based label with the real name.
+    const resolved = instructorNameById(lessonInstructorId)
+    if (resolved && resolved.trim() && instructorInput !== resolved) {
+      setInstructorInput(resolved)
+    }
+  }, [editingLessonId, lessonInstructorId, instructorNameById, instructorInput])
 
   useEffect(() => {
     function onDocMouseDown(e) {
@@ -382,14 +489,17 @@ const CoursePage = () => {
 
     setSubmittingLesson(true)
     try {
-      await createLesson(payload)
-      setLessonMessage({ type: 'ok', text: 'Lesson created. CRN is assigned by the server.' })
-      setLessonForm(initialLessonForm())
-      setLessonInstructorId('')
-      setInstructorInput('')
+      if (editingLessonId != null) {
+        await updateLesson(editingLessonId, payload)
+        setLessonMessage({ type: 'ok', text: 'Lesson updated.' })
+      } else {
+        await createLesson(payload)
+        setLessonMessage({ type: 'ok', text: 'Lesson created. CRN is assigned by the server.' })
+      }
+      resetLessonEditor()
       await loadLessons()
     } catch (err) {
-      setLessonMessage({ type: 'error', text: err.message || 'Create failed.' })
+      setLessonMessage({ type: 'error', text: err.message || (editingLessonId != null ? 'Update failed.' : 'Create failed.') })
     } finally {
       setSubmittingLesson(false)
     }
@@ -522,10 +632,10 @@ const CoursePage = () => {
 
         <div className="course-lessons-row">
           <section className="course-panel" aria-labelledby="lesson-heading">
-            <h2 id="lesson-heading">Add lesson</h2>
+            <h2 id="lesson-heading">{editingLessonId != null ? `Update lesson #${editingLessonId}` : 'Add lesson'}</h2>
             <form className="course-form" onSubmit={onSubmitLesson}>
               <label className="course-field">
-                <span>courseId</span>
+                <span>Course</span>
                 <select value={lessonForm.courseId} onChange={onChangeLesson('courseId')} required>
                   <option value="">Select course…</option>
                   {sortedCourses.map((c) => (
@@ -677,9 +787,16 @@ const CoursePage = () => {
                 </p>
               ) : null}
 
-              <button type="submit" className="back-button course-submit" disabled={submittingLesson || sortedCourses.length === 0}>
-                {submittingLesson ? 'Creating…' : 'Create lesson'}
-              </button>
+              <div className="course-form-grid">
+                <button type="submit" className="back-button course-submit" disabled={submittingLesson || sortedCourses.length === 0}>
+                  {submittingLesson ? (editingLessonId != null ? 'Updating…' : 'Creating…') : editingLessonId != null ? 'Update lesson' : 'Create lesson'}
+                </button>
+                {editingLessonId != null ? (
+                  <button type="button" className="back-button scheduling-back-secondary" onClick={resetLessonEditor} disabled={submittingLesson}>
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
             </form>
           </section>
 
@@ -708,12 +825,25 @@ const CoursePage = () => {
                   </thead>
                   <tbody>
                     {lessons.map((row) => (
-                      <tr key={row.id}>
+                      <tr
+                        key={row.id}
+                        className="course-table-row-clickable"
+                        onClick={() => onLessonRowClick(row)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            onLessonRowClick(row)
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Edit lesson ${row.id}`}
+                      >
                         <td>{row.id}</td>
                         <td>{row.name}</td>
                         <td>{row.code}</td>
                         <td>{row.crn ?? row.CRN ?? '—'}</td>
-                        <td>{instructorNameById(row.instructorId)}</td>
+                        <td>{instructorDisplayName(row)}</td>
                         <td>{row.academicYear ?? '—'}</td>
                         <td>{formatSemester(row.semester)}</td>
                         <td>{row.maxCapacity}</td>
