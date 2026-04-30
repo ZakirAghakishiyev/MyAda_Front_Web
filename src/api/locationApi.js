@@ -49,12 +49,21 @@ function normalizeRoom(raw) {
   const id = raw.id ?? raw.roomId ?? raw.Id ?? raw.ID
   const name = raw.name ?? raw.roomName ?? raw.title ?? raw.Name
   const number = raw.number ?? raw.roomNumber ?? raw.roomNo ?? raw.Number
+  const capacity =
+    raw.capacity ??
+    raw.roomCapacity ??
+    raw.room_capacity ??
+    raw.maxCapacity ??
+    raw.max_capacity ??
+    raw.seats ??
+    raw.Seats
   if (id == null) return null
   return {
     ...raw,
     id: Number(id),
     name: name == null ? '' : String(name),
     number: number == null ? '' : String(number),
+    capacity: capacity == null || capacity === '' ? null : Number(capacity),
   }
 }
 
@@ -140,6 +149,20 @@ export async function getRoomsByBuildingId(buildingId) {
   const result = await requestMany(
     [`/rooms/by-building/${buildingId}`, `/locations/rooms/by-building/${buildingId}`]
   )
+  const rows = unwrapListPayload(result)
+  return rows
+    .map(normalizeRoom)
+    .filter(Boolean)
+    .sort((a, b) => {
+      const an = String(a.number || '').trim()
+      const bn = String(b.number || '').trim()
+      if (an && bn && an !== bn) return an.localeCompare(bn, undefined, { numeric: true })
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true })
+    })
+}
+
+export async function getRooms() {
+  const result = await requestMany(['/rooms', '/locations/rooms', '/rooms/all', '/locations/rooms/all'])
   const rows = unwrapListPayload(result)
   return rows
     .map(normalizeRoom)

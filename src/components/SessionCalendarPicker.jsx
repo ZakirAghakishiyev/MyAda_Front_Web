@@ -21,14 +21,25 @@ function parseDateKey(dateKey) {
   return isValidDate(parsed) ? parsed : null
 }
 
+function normalizeDateTimeForParsing(raw) {
+  const s = String(raw || '').trim()
+  if (!s) return ''
+  // If backend sends ISO without timezone (e.g. "2026-04-03T08:00:00"),
+  // treat it as UTC so it converts correctly to local time in the UI.
+  const looksIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)
+  const hasZone = /[zZ]$|[+-]\d{2}:\d{2}$/.test(s)
+  if (looksIso && !hasZone) return `${s}Z`
+  return s
+}
+
 function parseSessionStart(session) {
-  const parsed = new Date(session?.startTime || '')
+  const parsed = new Date(normalizeDateTimeForParsing(session?.startTime))
   return isValidDate(parsed) ? parsed : null
 }
 
 function formatSessionTimeRange(session) {
   const start = parseSessionStart(session)
-  const end = new Date(session?.endTime || '')
+  const end = new Date(normalizeDateTimeForParsing(session?.endTime))
   const startText = isValidDate(start)
     ? start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'Unknown'
@@ -36,6 +47,16 @@ function formatSessionTimeRange(session) {
     ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'Unknown'
   return `${startText} - ${endText}`
+}
+
+function formatSessionAttendanceSummary(session) {
+  const started = Boolean(session?.isActive) || Number(session?.roundNo || 0) > 0
+  if (!started) return ''
+  const total = Number(session?.totalCount ?? session?.totalStudents ?? session?.enrolledCount ?? NaN)
+  const registered = Number(session?.registeredCount ?? session?.presentCount ?? session?.markedCount ?? NaN)
+  if (!Number.isFinite(total) || total <= 0) return ''
+  if (!Number.isFinite(registered) || registered < 0) return ''
+  return `${registered}/${total}`
 }
 
 export default function SessionCalendarPicker({
@@ -58,7 +79,11 @@ export default function SessionCalendarPicker({
     for (const [key, list] of map.entries()) {
       map.set(
         key,
-        [...list].sort((a, b) => new Date(a?.startTime || 0).getTime() - new Date(b?.startTime || 0).getTime())
+        [...list].sort(
+          (a, b) =>
+            new Date(normalizeDateTimeForParsing(a?.startTime) || 0).getTime() -
+            new Date(normalizeDateTimeForParsing(b?.startTime) || 0).getTime()
+        )
       )
     }
     return map
@@ -218,6 +243,7 @@ export default function SessionCalendarPicker({
           <div className="ap-calendar-session-list">
             {focusedSessions.map((session) => {
               const isSelected = String(selectedSessionId) === String(session.sessionId)
+              const summary = formatSessionAttendanceSummary(session)
               return (
                 <button
                   type="button"
@@ -226,7 +252,10 @@ export default function SessionCalendarPicker({
                   onClick={() => onSelectSessionId(String(session.sessionId))}
                 >
                   <span>Session #{session.sessionId}</span>
-                  <span>{formatSessionTimeRange(session)}</span>
+                  <span>
+                    {formatSessionTimeRange(session)}
+                    {summary ? ` · ${summary}` : ''}
+                  </span>
                 </button>
               )
             })}

@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as attendanceApi from '../api/attendance'
 import SessionCalendarPicker from '../components/SessionCalendarPicker'
+import {
+  displayNameFromAuthUserDto,
+  fetchAuthAdminUserForClubRoster,
+  fetchAuthUserForClubRoster,
+  getOrganizationalIdFromAuthUser,
+} from '../api/authUsersApi'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 import './AttendanceStudents.css'
@@ -26,11 +32,76 @@ function formatAttendanceDateFromIso(iso) {
   return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function looksLikeGuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim())
+}
+
+function normalizeDateTimeForParsing(raw) {
+  const s = String(raw || '').trim()
+  if (!s) return ''
+  const looksIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)
+  const hasZone = /[zZ]$|[+-]\d{2}:\d{2}$/.test(s)
+  if (looksIso && !hasZone) return `${s}Z`
+  return s
+}
+
+function formatFirstLast(displayName) {
+  const parts = String(displayName || '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[1]}`
+}
+
+async function enrichRosterWithAuthProfiles(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  return Promise.all(
+    rows.map(async (row) => {
+      const studentGuid = String(row?.studentId ?? '').trim()
+      if (!studentGuid) return row
+
+      let user = null
+      try {
+        user = await fetchAuthAdminUserForClubRoster(studentGuid)
+      } catch {
+        user = null
+      }
+      if (!user) {
+        try {
+          user = await fetchAuthUserForClubRoster(studentGuid)
+        } catch {
+          user = null
+        }
+      }
+
+      const displayName = displayNameFromAuthUserDto(user)
+      const orgId = getOrganizationalIdFromAuthUser(user)
+
+      const bestName =
+        formatFirstLast(displayName) ||
+        (looksLikeGuid(row?.name) ? '' : String(row?.name || '').trim()) ||
+        '—'
+
+      const bestStudentId =
+        (orgId && String(orgId).trim()) ||
+        (row?.studentCode && String(row.studentCode).trim()) ||
+        ''
+
+      return {
+        ...row,
+        name: bestName,
+        organizationalId: orgId || null,
+        studentCode: bestStudentId,
+      }
+    })
+  )
+}
+
 export default function AttendanceHistory() {
   const { instructorId, lessonId } = useParams()
   const navigate = useNavigate()
   const lessonBase = `/attendance/${encodeURIComponent(instructorId || 'demo')}/lesson/${encodeURIComponent(lessonId || 'demo')}`
   const [sessions, setSessions] = useState([])
+  const [sessionSummaries, setSessionSummaries] = useState({})
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState(null)
@@ -45,6 +116,17 @@ export default function AttendanceHistory() {
     () => sessions.find((s) => String(s.sessionId) === String(selectedSessionId)) || null,
     [sessions, selectedSessionId]
   )
+
+  const startedSessionIds = useMemo(() => {
+    const started = new Set()
+    for (const s of sessions || []) {
+      const sid = s?.sessionId
+      if (sid == null) continue
+      if (s?.isActive) started.add(String(sid))
+      else if (Number(s?.roundNo || 0) > 0) started.add(String(sid))
+    }
+    return started
+  }, [sessions])
 
   useEffect(() => {
     let cancelled = false
@@ -75,6 +157,55 @@ export default function AttendanceHistory() {
 
   useEffect(() => {
     let cancelled = false
+    async function preloadSessionSummaries() {
+      const isDemo = String(instructorId || '').toLowerCase() === 'demo' || String(lessonId || '').toLowerCase() === 'demo'
+      if (isDemo) return
+      if (!Array.isArray(sessions) || sessions.length === 0) return
+
+      const missing = sessions
+        .map((s) => String(s.sessionId))
+        .filter((id) => id && startedSessionIds.has(id) && !sessionSummaries[id])
+
+      if (missing.length === 0) return
+
+      const results = await Promise.all(
+        missing.map(async (sessionId) => {
+          try {
+            const roster = await attendanceApi.getSessionAttendance({ instructorId, sessionId: Number(sessionId) })
+            const totalCount = Array.isArray(roster) ? roster.length : 0
+            const registeredCount = Array.isArray(roster)
+              ? roster.filter((r) => r?.status === 'present' || r?.status === 'late').length
+              : 0
+            return { sessionId, totalCount, registeredCount }
+          } catch {
+            return { sessionId, totalCount: 0, registeredCount: 0 }
+          }
+        })
+      )
+
+      if (cancelled) return
+      setSessionSummaries((prev) => {
+        const next = { ...prev }
+        for (const r of results) next[String(r.sessionId)] = { totalCount: r.totalCount, registeredCount: r.registeredCount }
+        return next
+      })
+    }
+    preloadSessionSummaries()
+    return () => { cancelled = true }
+  }, [instructorId, lessonId, sessions, sessionSummaries, startedSessionIds])
+
+  const sessionsWithSummaries = useMemo(() => {
+    return (sessions || []).map((s) => {
+      const sum = sessionSummaries[String(s.sessionId)]
+      const started = startedSessionIds.has(String(s.sessionId))
+      // For unstarted sessions, hide summary in UI.
+      if (!started) return s
+      return sum ? { ...s, ...sum } : s
+    })
+  }, [sessions, sessionSummaries, startedSessionIds])
+
+  useEffect(() => {
+    let cancelled = false
     async function loadStudents() {
       const isDemo = String(instructorId || '').toLowerCase() === 'demo' || String(lessonId || '').toLowerCase() === 'demo'
       if (isDemo) return
@@ -91,7 +222,9 @@ export default function AttendanceHistory() {
           sessionId: Number(selectedSessionId),
         })
         if (cancelled) return
-        setSessionStudents(roster)
+        const enriched = await enrichRosterWithAuthProfiles(roster)
+        if (cancelled) return
+        setSessionStudents(enriched)
       } catch (e) {
         if (!cancelled) {
           setSessionStudents([])
@@ -130,7 +263,8 @@ export default function AttendanceHistory() {
       })
       // Refresh roster so UI reflects backend truth.
       const roster = await attendanceApi.getSessionAttendance({ instructorId, sessionId })
-      setSessionStudents(roster)
+      const enriched = await enrichRosterWithAuthProfiles(roster)
+      setSessionStudents(enriched)
       setDraftStatuses((prev) => {
         const next = { ...prev }
         delete next[key]
@@ -178,7 +312,7 @@ export default function AttendanceHistory() {
         <div className="ap-history-card">
           <div className="ap-history-calendar-wrap">
             <SessionCalendarPicker
-              sessions={sessions}
+              sessions={sessionsWithSummaries}
               selectedSessionId={selectedSessionId}
               loading={sessionsLoading}
               onSelectSessionId={setSelectedSessionId}
@@ -190,7 +324,10 @@ export default function AttendanceHistory() {
           {selectedSession && (
             <div className="ap-history-detail">
               <h2 className="ap-history-detail-title">
-                {formatAttendanceDateFromIso(selectedSession.startTime)} · {new Date(selectedSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(selectedSession.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatAttendanceDateFromIso(selectedSession.startTime)} ·{' '}
+                {new Date(normalizeDateTimeForParsing(selectedSession.startTime)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{' '}
+                –{' '}
+                {new Date(normalizeDateTimeForParsing(selectedSession.endTime)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </h2>
               {saveMessage ? <p className="ap-status-save-message">{saveMessage}</p> : null}
               {studentsError ? <p className="ap-controls-error" role="alert">{studentsError}</p> : null}
@@ -216,7 +353,7 @@ export default function AttendanceHistory() {
                       return (
                         <tr key={String(s.studentId)}>
                           <td>{s.name || s.studentCode || '—'}</td>
-                          <td>{s.studentId}</td>
+                          <td>{s.studentCode || s.organizationalId || '—'}</td>
                           <td>
                             <div className="ap-status-editor">
                               <button

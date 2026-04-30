@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { createCourse, fetchCourses } from '../../api/courses'
 import { createLesson, fetchLessons } from '../../api/lessons'
 import { fetchUsersByRole, indexById } from '../../api/instructors'
+import { getBuildings, getRoomsByBuildingId } from '../../api/locationApi'
 import '../SchedulingPage.css'
 import './CoursePage.css'
 
@@ -31,7 +32,9 @@ const initialCatalogForm = () => ({
 
 const initialLessonForm = () => ({
   courseId: '',
-  roomId: '1',
+  roomId: '',
+  buildingId: '',
+  roomAssignment: 'default', // 'default' | 'assign'
   academicYear: String(new Date().getFullYear()),
   semester: 'Fall',
   maxCapacity: '',
@@ -61,6 +64,12 @@ const CoursePage = () => {
   const [instructors, setInstructors] = useState([])
   const [loadingInstructors, setLoadingInstructors] = useState(true)
   const [instructorsError, setInstructorsError] = useState('')
+  const [buildings, setBuildings] = useState([])
+  const [loadingBuildings, setLoadingBuildings] = useState(true)
+  const [buildingsError, setBuildingsError] = useState('')
+  const [rooms, setRooms] = useState([])
+  const [loadingRooms, setLoadingRooms] = useState(false)
+  const [roomsError, setRoomsError] = useState('')
   const addCoursePanelRef = useRef(null)
   const [existingCoursesMaxHeight, setExistingCoursesMaxHeight] = useState(null)
 
@@ -119,6 +128,72 @@ const CoursePage = () => {
   useEffect(() => {
     loadInstructors()
   }, [loadInstructors])
+
+  const loadBuildings = useCallback(async () => {
+    setBuildingsError('')
+    setLoadingBuildings(true)
+    try {
+      const list = await getBuildings()
+      setBuildings(list)
+    } catch (e) {
+      setBuildingsError(e.message || 'Could not load buildings.')
+      setBuildings([])
+    } finally {
+      setLoadingBuildings(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadBuildings()
+  }, [loadBuildings])
+
+  const roomLabel = useCallback((room) => {
+    if (!room) return '—'
+    const name = String(room.name || '').trim()
+    const num = String(room.number || '').trim()
+    const cap = room.capacity == null || Number.isNaN(Number(room.capacity)) ? null : Number(room.capacity)
+    const base = name && num && name !== num ? `${name} (${num})` : name || num || `Room #${room.id}`
+    return cap != null ? `${base} — cap ${cap}` : base
+  }, [])
+
+  const sortedRooms = useMemo(() => {
+    return [...rooms].sort((a, b) => {
+      const an = String(a.number || '').trim()
+      const bn = String(b.number || '').trim()
+      if (an && bn && an !== bn) return an.localeCompare(bn, undefined, { numeric: true })
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true })
+    })
+  }, [rooms])
+
+  const sortedBuildings = useMemo(() => {
+    return [...buildings].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+  }, [buildings])
+
+  const loadRoomsForBuilding = useCallback(async (buildingId) => {
+    const bid = toInt(buildingId)
+    if (bid == null || bid <= 0) {
+      setRooms([])
+      setRoomsError('')
+      setLoadingRooms(false)
+      return
+    }
+    setRoomsError('')
+    setLoadingRooms(true)
+    try {
+      const list = await getRoomsByBuildingId(bid)
+      setRooms(list)
+    } catch (e) {
+      setRoomsError(e.message || 'Could not load rooms.')
+      setRooms([])
+    } finally {
+      setLoadingRooms(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (lessonForm.roomAssignment !== 'assign') return
+    void loadRoomsForBuilding(lessonForm.buildingId)
+  }, [lessonForm.roomAssignment, lessonForm.buildingId, loadRoomsForBuilding])
 
   useLayoutEffect(() => {
     const el = addCoursePanelRef.current
@@ -209,7 +284,20 @@ const CoursePage = () => {
   function onChangeLesson(field) {
     return (e) => {
       const v = e.target.value
-      setLessonForm((prev) => ({ ...prev, [field]: v }))
+      setLessonForm((prev) => {
+        const next = { ...prev, [field]: v }
+        if (field === 'roomAssignment' && v !== 'assign') {
+          next.buildingId = ''
+          next.roomId = ''
+          setRooms([])
+          setRoomsError('')
+          setLoadingRooms(false)
+        }
+        if (field === 'buildingId') {
+          next.roomId = ''
+        }
+        return next
+      })
     }
   }
 
@@ -255,7 +343,8 @@ const CoursePage = () => {
 
     const courseId = toInt(lessonForm.courseId)
     const instructorId = lessonInstructorId.trim()
-    const roomId = toInt(lessonForm.roomId)
+    const roomAssignment = String(lessonForm.roomAssignment || 'default')
+    const roomId = roomAssignment === 'assign' ? toInt(lessonForm.roomId) : null
     const academicYear = toInt(lessonForm.academicYear)
     const maxCapacity = toInt(lessonForm.maxCapacity)
 
@@ -267,8 +356,8 @@ const CoursePage = () => {
       setLessonMessage({ type: 'error', text: 'Select an instructor from the list.' })
       return
     }
-    if (roomId == null || roomId <= 0) {
-      setLessonMessage({ type: 'error', text: 'roomId must be a positive integer.' })
+    if (roomAssignment === 'assign' && (roomId == null || roomId <= 0)) {
+      setLessonMessage({ type: 'error', text: 'Select a building and room, or choose Default.' })
       return
     }
     if (academicYear == null || academicYear < 2000 || academicYear > 2100) {
@@ -283,10 +372,12 @@ const CoursePage = () => {
     const payload = {
       courseId,
       instructorId,
-      roomId,
       academicYear,
       semester: lessonForm.semester,
       maxCapacity,
+    }
+    if (roomAssignment === 'assign' && roomId != null && roomId > 0) {
+      payload.roomId = roomId
     }
 
     setSubmittingLesson(true)
@@ -522,9 +613,63 @@ const CoursePage = () => {
                 <input type="number" min={0} value={lessonForm.maxCapacity} onChange={onChangeLesson('maxCapacity')} required />
               </label>
               <label className="course-field">
-                <span>roomId</span>
-                <input type="number" min={1} value={lessonForm.roomId} onChange={onChangeLesson('roomId')} required />
+                <span>Room</span>
+                <select value={lessonForm.roomAssignment} onChange={onChangeLesson('roomAssignment')} required>
+                  <option value="default">Default (unassigned)</option>
+                  <option value="assign">Assign room</option>
+                </select>
               </label>
+
+              {lessonForm.roomAssignment === 'assign' ? (
+                <div className="course-form-grid">
+                  <label className="course-field">
+                    <span>Building</span>
+                    <select
+                      value={lessonForm.buildingId}
+                      onChange={onChangeLesson('buildingId')}
+                      required
+                      disabled={loadingBuildings || Boolean(buildingsError)}
+                    >
+                      <option value="">
+                        {loadingBuildings ? 'Loading buildings…' : buildingsError ? 'Failed to load buildings' : 'Select building…'}
+                      </option>
+                      {sortedBuildings.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!loadingBuildings && buildingsError ? (
+                      <p className="course-inline-note course-form-error">{buildingsError}</p>
+                    ) : null}
+                  </label>
+                  <label className="course-field">
+                    <span>Room</span>
+                    <select
+                      value={lessonForm.roomId}
+                      onChange={onChangeLesson('roomId')}
+                      required
+                      disabled={!lessonForm.buildingId || loadingRooms || Boolean(roomsError)}
+                    >
+                      <option value="">
+                        {!lessonForm.buildingId
+                          ? 'Select building first…'
+                          : loadingRooms
+                            ? 'Loading rooms…'
+                            : roomsError
+                              ? 'Failed to load rooms'
+                              : 'Select room…'}
+                      </option>
+                      {sortedRooms.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {roomLabel(r)}
+                        </option>
+                      ))}
+                    </select>
+                    {!loadingRooms && roomsError ? <p className="course-inline-note course-form-error">{roomsError}</p> : null}
+                  </label>
+                </div>
+              ) : null}
 
               {lessonMessage.text ? (
                 <p className={lessonMessage.type === 'error' ? 'course-form-error' : 'course-form-success'} role="status">

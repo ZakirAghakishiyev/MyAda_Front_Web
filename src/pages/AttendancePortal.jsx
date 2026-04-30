@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import * as attendanceApi from '../api/attendance'
 import SessionCalendarPicker from '../components/SessionCalendarPicker'
+import { displayNameFromAuthUserDto, fetchAuthUserById } from '../api/authUsersApi'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 
 /** Short-lived JWT: refresh on this interval (see backend QrToken lifetime). */
-const QR_REFRESH_INTERVAL_MS = 15_000
+const QR_REFRESH_INTERVAL_MS = 5_000
 const QR_RETRY_DELAY_MS = 3000
 const QR_REFRESH_SECONDS = QR_REFRESH_INTERVAL_MS / 1000
 
@@ -58,11 +59,30 @@ function formatTime() {
   return d.toTimeString().slice(0, 8)
 }
 
-function toIsoFromLocal(value) {
-  if (!value) return ''
-  const d = new Date(value)
+function toUtcIsoFromLocalDateTimeInput(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  // `datetime-local` yields e.g. "2026-04-03T12:00" (no timezone). Treat as *user local time*.
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (!m) return ''
+  const year = Number(m[1])
+  const month = Number(m[2])
+  const day = Number(m[3])
+  const hour = Number(m[4])
+  const minute = Number(m[5])
+  const second = m[6] ? Number(m[6]) : 0
+  const d = new Date(year, month - 1, day, hour, minute, second, 0)
   if (Number.isNaN(d.getTime())) return ''
+  // Send in UTC (GMT) so backend stores consistent timestamps regardless of user timezone.
   return d.toISOString()
+}
+
+function addMinutesToUtcIso(utcIso, minutes) {
+  const base = new Date(String(utcIso || ''))
+  if (Number.isNaN(base.getTime())) return ''
+  const ms = Number(minutes) * 60_000
+  if (!Number.isFinite(ms) || ms <= 0) return ''
+  return new Date(base.getTime() + ms).toISOString()
 }
 
 function progressStorageKey(instructorId, lessonId, sessionId) {
@@ -76,6 +96,20 @@ const defaultCourse = {
   section: 'Section A',
   room: 'Room 302',
   instructor: 'Dr. Aliyev',
+}
+
+function formatSemesterLabel(semester, academicYear) {
+  const sem = String(semester || '').trim()
+  const yr = String(academicYear || '').trim()
+  const base = [sem ? sem.toUpperCase() : '', yr].filter(Boolean).join(' ')
+  return base || defaultCourse.semester
+}
+
+function formatCourseTitle(code, title) {
+  const c = String(code || '').trim()
+  const t = String(title || '').trim()
+  if (c && t) return `${c}: ${t}`
+  return t || c || defaultCourse.title
 }
 
 export default function AttendancePortal() {
@@ -94,7 +128,7 @@ export default function AttendancePortal() {
   const [creatingSession, setCreatingSession] = useState(false)
   const [createSessionError, setCreateSessionError] = useState('')
   const [createSessionStart, setCreateSessionStart] = useState('')
-  const [createSessionEnd, setCreateSessionEnd] = useState('')
+  const [createSessionDurationMinutes, setCreateSessionDurationMinutes] = useState('90')
   const [createSessionTopic, setCreateSessionTopic] = useState('')
   const [showCreateSession, setShowCreateSession] = useState(false)
 
@@ -131,6 +165,47 @@ export default function AttendancePortal() {
     attendanceSessionId: sessionState?.attendanceSessionId,
     roundCount: currentRound,
   }
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadLessonMeta() {
+      const isDemo = String(instructorId || '').toLowerCase() === 'demo' || String(lessonId || '').toLowerCase() === 'demo'
+      if (isDemo) {
+        setCourse(defaultCourse)
+        return
+      }
+
+      try {
+        const lessons = await attendanceApi.getInstructorLessons({ instructorId })
+        if (cancelled) return
+        const targetId = Number(lessonId)
+        const lesson = lessons.find((l) => Number(l.lessonId) === targetId) || null
+
+        // Instructor profile (self should be accessible; if not, fall back to id label).
+        let instructorName = ''
+        try {
+          const profile = await fetchAuthUserById(instructorId)
+          instructorName = displayNameFromAuthUserDto(profile)
+        } catch {
+          instructorName = ''
+        }
+        if (cancelled) return
+
+        setCourse({
+          university: defaultCourse.university,
+          semester: formatSemesterLabel(lesson?.semester, lesson?.academicYear),
+          title: formatCourseTitle(lesson?.code, lesson?.title),
+          section: String(lesson?.section || '').trim() || (lesson?.crn ? `CRN ${lesson.crn}` : defaultCourse.section),
+          room: defaultCourse.room, // not exposed by current attendance endpoints
+          instructor: instructorName || defaultCourse.instructor,
+        })
+      } catch {
+        // If lesson metadata cannot be loaded, keep the last known header instead of breaking the page.
+      }
+    }
+    loadLessonMeta()
+    return () => { cancelled = true }
+  }, [instructorId, lessonId])
 
   const addLog = useCallback((message, highlight = false) => {
     setLogEntries((prev) => [...prev, { time: formatTime(), message, highlight }])
@@ -286,14 +361,19 @@ export default function AttendancePortal() {
   }, [instructorId, lessonId, selectedSessionId, applySessionState, persistProgress, addLog])
 
   const handleCreateSession = useCallback(async () => {
-    const startIso = toIsoFromLocal(createSessionStart)
-    const endIso = toIsoFromLocal(createSessionEnd)
-    if (!startIso || !endIso) {
-      setCreateSessionError('Select valid start and end date-time values.')
+    const startIso = toUtcIsoFromLocalDateTimeInput(createSessionStart)
+    const durationMinutes = Number.parseInt(String(createSessionDurationMinutes || '').trim(), 10)
+    const endIso = addMinutesToUtcIso(startIso, durationMinutes)
+    if (!startIso) {
+      setCreateSessionError('Select a valid start date-time value.')
       return
     }
-    if (new Date(startIso) >= new Date(endIso)) {
-      setCreateSessionError('End date-time must be after start date-time.')
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      setCreateSessionError('Duration must be a valid number of minutes (> 0).')
+      return
+    }
+    if (!endIso) {
+      setCreateSessionError('Could not compute end time from duration. Please check the values.')
       return
     }
     setCreatingSession(true)
@@ -309,13 +389,22 @@ export default function AttendancePortal() {
       await loadSessionOptions()
       if (created?.sessionId != null) setSelectedSessionId(String(created.sessionId))
       setCreateSessionTopic('')
+      setCreateSessionDurationMinutes('90')
       addLog('New session created for this lesson.', true)
     } catch (e) {
       setCreateSessionError(e.message || 'Could not create session.')
     } finally {
       setCreatingSession(false)
     }
-  }, [createSessionStart, createSessionEnd, createSessionTopic, instructorId, lessonId, loadSessionOptions, addLog])
+  }, [
+    createSessionStart,
+    createSessionDurationMinutes,
+    createSessionTopic,
+    instructorId,
+    lessonId,
+    loadSessionOptions,
+    addLog,
+  ])
 
   const fetchQR = useCallback(async () => {
     if (!attendanceActive || sessionClosed) return
@@ -622,8 +711,15 @@ export default function AttendancePortal() {
                     <input type="datetime-local" value={createSessionStart} onChange={(e) => setCreateSessionStart(e.target.value)} />
                   </label>
                   <label className="ap-session-field">
-                    <span>End</span>
-                    <input type="datetime-local" value={createSessionEnd} onChange={(e) => setCreateSessionEnd(e.target.value)} />
+                    <span>Duration (minutes)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={5}
+                      value={createSessionDurationMinutes}
+                      onChange={(e) => setCreateSessionDurationMinutes(e.target.value)}
+                      placeholder="e.g. 90"
+                    />
                   </label>
                   <label className="ap-session-field ap-session-field--wide">
                     <span>Topic (optional)</span>

@@ -1,6 +1,7 @@
 /** Scheduling microservice (local Docker default). */
 export const SCHEDULING_API_BASE =
-  import.meta.env.VITE_SCHEDULING_API_BASE?.replace(/\/$/, '') || 'http://localhost:5010/api/v1'
+  import.meta.env.VITE_SCHEDULING_API_BASE?.replace(/\/+$/, '') ||
+  'https://myada.site/scheduling'
 
 /** Dev auth header expected by scheduling microservice for instructor-scoped endpoints. */
 export const SCHEDULING_DEV_USER_ID_HEADER =

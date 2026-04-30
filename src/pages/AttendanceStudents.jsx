@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as attendanceApi from '../api/attendance'
+import {
+  displayNameFromAuthUserDto,
+  fetchAuthAdminUserForClubRoster,
+  fetchAuthUserForClubRoster,
+  getOrganizationalIdFromAuthUser,
+} from '../api/authUsersApi'
 import adaLogo from '../assets/ada-logo.png'
 import './AttendancePortal.css'
 import './AttendanceStudents.css'
@@ -23,6 +29,17 @@ function formatAttendanceDateFromIso(iso) {
   return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function looksLikeGuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim())
+}
+
+function formatFirstLast(displayName) {
+  const parts = String(displayName || '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[1]}`
+}
+
 export default function AttendanceStudents() {
   const { instructorId, lessonId } = useParams()
   const navigate = useNavigate()
@@ -33,6 +50,7 @@ export default function AttendanceStudents() {
   const [error, setError] = useState('')
   const [selectedStudentId, setSelectedStudentId] = useState(null)
   const [selectedStudentHistory, setSelectedStudentHistory] = useState([])
+  const [lessonAttendanceByStudentId, setLessonAttendanceByStudentId] = useState({})
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [draftStatuses, setDraftStatuses] = useState({})
@@ -43,6 +61,62 @@ export default function AttendanceStudents() {
     () => students.find((s) => String(s.studentId) === String(selectedStudentId)) || null,
     [students, selectedStudentId]
   )
+
+  const startedSessionIds = useMemo(() => {
+    // Do not count sessions that have never started (no active round, no round history).
+    const started = new Set()
+    for (const s of sessions || []) {
+      const sid = s?.sessionId
+      if (sid == null) continue
+      if (s?.isActive) started.add(String(sid))
+      else if (Number(s?.roundNo || 0) > 0) started.add(String(sid))
+    }
+    return started
+  }, [sessions])
+
+  async function enrichStudentsWithAuthProfile(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return []
+
+    // Try admin endpoint first (when available), otherwise fall back to non-admin profile lookup rules.
+    const enriched = await Promise.all(
+      rows.map(async (row) => {
+        const studentGuid = String(row?.studentId ?? '').trim()
+        if (!studentGuid) return row
+
+        let user = null
+        try {
+          user = await fetchAuthAdminUserForClubRoster(studentGuid)
+        } catch {
+          user = null
+        }
+        if (!user) {
+          try {
+            user = await fetchAuthUserForClubRoster(studentGuid)
+          } catch {
+            user = null
+          }
+        }
+
+        const displayName = displayNameFromAuthUserDto(user)
+        const orgId = getOrganizationalIdFromAuthUser(user)
+
+        const bestName = formatFirstLast(displayName) || (looksLikeGuid(row?.name) ? '' : String(row?.name || '').trim())
+        const bestStudentId =
+          (orgId && String(orgId).trim()) ||
+          (row?.studentCode && String(row.studentCode).trim()) ||
+          (looksLikeGuid(row?.studentId) ? '' : String(row?.studentId || '').trim())
+
+        return {
+          ...row,
+          name: bestName || '—',
+          organizationalId: orgId || null,
+          studentCode: bestStudentId || '',
+        }
+      })
+    )
+
+    return enriched
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -60,14 +134,16 @@ export default function AttendanceStudents() {
         try {
           const enrollments = await attendanceApi.getLessonEnrollmentsAdmin({ lessonId })
           if (cancelled) return
-          setStudents(
-            enrollments.map((r) => ({
+          const baseRows = enrollments.map((r) => ({
               id: String(r.studentId),
               name: r.name || r.studentCode || '—',
               studentId: r.studentId,
               email: r.email || '',
+              studentCode: r.studentCode || '',
             }))
-          )
+          const enriched = await enrichStudentsWithAuthProfile(baseRows)
+          if (cancelled) return
+          setStudents(enriched)
           return
         } catch {
           // Fallback below.
@@ -81,14 +157,16 @@ export default function AttendanceStudents() {
         const roster = await attendanceApi.getSessionAttendance({ instructorId, sessionId: targetSessionId })
         if (cancelled) return
 
-        setStudents(
-          roster.map((r) => ({
+        const baseRows = roster.map((r) => ({
             id: String(r.studentId),
             name: r.name || r.studentCode || '—',
             studentId: r.studentId,
             email: '',
+            studentCode: r.studentCode || '',
           }))
-        )
+        const enriched = await enrichStudentsWithAuthProfile(baseRows)
+        if (cancelled) return
+        setStudents(enriched)
       } catch (e) {
         if (!cancelled) {
           setStudents([])
@@ -113,6 +191,14 @@ export default function AttendanceStudents() {
         setHistoryError('')
         return
       }
+      const cached = lessonAttendanceByStudentId[String(selectedStudentId)]
+      if (Array.isArray(cached)) {
+        setSelectedStudentHistory(cached)
+        setHistoryError('')
+        setHistoryLoading(false)
+        return
+      }
+
       setHistoryLoading(true)
       setHistoryError('')
       try {
@@ -122,6 +208,7 @@ export default function AttendanceStudents() {
         })
         if (cancelled) return
         setSelectedStudentHistory(rows)
+        setLessonAttendanceByStudentId((prev) => ({ ...prev, [String(selectedStudentId)]: rows }))
       } catch (e) {
         if (!cancelled) {
           setSelectedStudentHistory([])
@@ -133,19 +220,61 @@ export default function AttendanceStudents() {
     }
     loadHistory()
     return () => { cancelled = true }
-  }, [instructorId, lessonId, selectedStudentId])
+  }, [instructorId, lessonId, selectedStudentId, lessonAttendanceByStudentId])
+
+  useEffect(() => {
+    let cancelled = false
+    async function preloadAllLessonAttendance() {
+      const isDemo = String(instructorId || '').toLowerCase() === 'demo' || String(lessonId || '').toLowerCase() === 'demo'
+      if (isDemo) return
+      if (!lessonId) return
+      if (!Array.isArray(students) || students.length === 0) return
+
+      // Only fetch missing students.
+      const missing = students
+        .map((s) => String(s.studentId))
+        .filter((id) => id && !Array.isArray(lessonAttendanceByStudentId[id]))
+
+      if (missing.length === 0) return
+
+      try {
+        const results = await Promise.all(
+          missing.map(async (studentId) => {
+            try {
+              const rows = await attendanceApi.getStudentLessonAttendance({ studentId, lessonId })
+              return { studentId, rows: Array.isArray(rows) ? rows : [] }
+            } catch {
+              return { studentId, rows: [] }
+            }
+          })
+        )
+        if (cancelled) return
+        setLessonAttendanceByStudentId((prev) => {
+          const next = { ...prev }
+          for (const item of results) next[String(item.studentId)] = item.rows
+          return next
+        })
+      } catch {
+        // Ignore preload failures; the per-student click fetch still works.
+      }
+    }
+    preloadAllLessonAttendance()
+    return () => { cancelled = true }
+  }, [instructorId, lessonId, students, lessonAttendanceByStudentId])
 
   const studentStats = useMemo(() => {
     const byId = new Map()
-    for (const s of students) byId.set(String(s.studentId), { attendedCount: 0, totalSessions: sessions.length })
-    for (const row of selectedStudentHistory) {
-      const key = String(selectedStudentId)
-      const stats = byId.get(key) || { attendedCount: 0, totalSessions: sessions.length }
-      if (row.status === 'present' || row.status === 'late') stats.attendedCount += 1
-      byId.set(key, stats)
+    for (const s of students) {
+      const id = String(s.studentId)
+      const rows = lessonAttendanceByStudentId[id]
+      const attendedCount = Array.isArray(rows)
+        ? rows.filter((r) => (r?.status === 'present' || r?.status === 'late') && startedSessionIds.has(String(r?.sessionId))).length
+        : 0
+      const totalSessions = startedSessionIds.size
+      byId.set(id, { attendedCount, totalSessions })
     }
     return byId
-  }, [students, sessions.length, selectedStudentHistory, selectedStudentId])
+  }, [students, lessonAttendanceByStudentId, startedSessionIds])
 
   const cycleStatus = (sessionId, studentId, currentStatus) => {
     const nextIndex = (STATUS_ORDER.indexOf(currentStatus) + 1) % STATUS_ORDER.length
@@ -173,6 +302,7 @@ export default function AttendanceStudents() {
       // Refresh the student's lesson history and clear draft.
       const rows = await attendanceApi.getStudentLessonAttendance({ studentId, lessonId })
       setSelectedStudentHistory(rows)
+      setLessonAttendanceByStudentId((prev) => ({ ...prev, [String(studentId)]: rows }))
       setDraftStatuses((prev) => {
         const next = { ...prev }
         delete next[key]
@@ -230,7 +360,6 @@ export default function AttendanceStudents() {
                 <tr>
                   <th>Name</th>
                   <th>Student ID</th>
-                  <th>Email</th>
                   <th>Attendance rate</th>
                 </tr>
               </thead>
@@ -250,8 +379,7 @@ export default function AttendanceStudents() {
                     onKeyDown={(e) => e.key === 'Enter' && setSelectedStudentId(selectedStudentId === s.studentId ? null : s.studentId)}
                   >
                     <td>{s.name}</td>
-                    <td>{s.studentId}</td>
-                    <td>{s.email}</td>
+                    <td>{s.studentCode || s.organizationalId || '—'}</td>
                     <td>
                       <span className="ap-student-rate">
                         {attended}/{total} sessions · {rate}%
@@ -261,7 +389,7 @@ export default function AttendanceStudents() {
                   )
                 })}
                 {!loading && students.length === 0 ? (
-                  <tr><td colSpan={4}>No students found.</td></tr>
+                  <tr><td colSpan={3}>No students found.</td></tr>
                 ) : null}
               </tbody>
             </table>
