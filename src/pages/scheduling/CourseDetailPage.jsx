@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchCourse, fetchLessonsByCourseId, updateCourse } from '../../api/courses'
 import { createLesson } from '../../api/lessons'
-import { MOCK_INSTRUCTORS, instructorNameById } from '../../data/mockInstructors'
+import { fetchUsersByRole, indexById } from '../../api/instructors'
 import '../SchedulingPage.css'
 import './CoursePage.css'
 
@@ -59,6 +59,9 @@ const CourseDetailPage = () => {
   const [instructorInput, setInstructorInput] = useState('')
   const [instructorMenuOpen, setInstructorMenuOpen] = useState(false)
   const instructorComboboxRef = useRef(null)
+  const [instructors, setInstructors] = useState([])
+  const [loadingInstructors, setLoadingInstructors] = useState(true)
+  const [instructorsError, setInstructorsError] = useState('')
   const [submittingLesson, setSubmittingLesson] = useState(false)
   const [lessonMessage, setLessonMessage] = useState({ type: '', text: '' })
 
@@ -114,9 +117,27 @@ const CourseDetailPage = () => {
     loadLessons()
   }, [loadLessons])
 
+  const loadInstructors = useCallback(async () => {
+    setInstructorsError('')
+    setLoadingInstructors(true)
+    try {
+      const list = await fetchUsersByRole('Instructor')
+      setInstructors(list)
+    } catch (e) {
+      setInstructorsError(e.message || 'Could not load instructors.')
+      setInstructors([])
+    } finally {
+      setLoadingInstructors(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadInstructors()
+  }, [loadInstructors])
+
   const sortedInstructors = useMemo(
-    () => [...MOCK_INSTRUCTORS].sort((a, b) => a.fullName.localeCompare(b.fullName)),
-    []
+    () => [...instructors].sort((a, b) => a.fullName.localeCompare(b.fullName)),
+    [instructors]
   )
 
   const filteredInstructors = useMemo(() => {
@@ -124,6 +145,18 @@ const CourseDetailPage = () => {
     if (!q) return sortedInstructors
     return sortedInstructors.filter((i) => i.fullName.toLowerCase().includes(q))
   }, [instructorInput, sortedInstructors])
+
+  const instructorsById = useMemo(() => indexById(instructors), [instructors])
+
+  const instructorNameById = useCallback(
+    (id) => {
+      const key = String(id ?? '').trim()
+      if (!key) return '—'
+      const row = instructorsById.get(key)
+      return row?.fullName || `Instructor #${key}`
+    },
+    [instructorsById]
+  )
 
   useEffect(() => {
     function onDocMouseDown(e) {
@@ -347,7 +380,7 @@ const CourseDetailPage = () => {
               </div>
 
               <div className="course-field course-field-combobox" ref={instructorComboboxRef}>
-                <span id="detail-instructor-label">Instructor id (GUID)</span>
+                <span id="detail-instructor-label">Instructor</span>
                 <div className="instructor-combobox">
                   <input
                     type="text"
@@ -360,17 +393,20 @@ const CourseDetailPage = () => {
                     }}
                     onFocus={() => setInstructorMenuOpen(true)}
                     onKeyDown={(e) => e.key === 'Escape' && setInstructorMenuOpen(false)}
-                    placeholder="Search or pick an instructor…"
+                    placeholder={loadingInstructors ? 'Loading instructors…' : 'Search or pick an instructor…'}
                     autoComplete="off"
                     role="combobox"
                     aria-expanded={instructorMenuOpen}
                     aria-controls="detail-instructor-listbox"
                     aria-labelledby="detail-instructor-label"
+                    disabled={loadingInstructors}
                   />
                   {instructorMenuOpen ? (
                     <ul id="detail-instructor-listbox" className="instructor-combobox-list" role="listbox">
-                      {filteredInstructors.length === 0 ? (
-                        <li className="instructor-combobox-empty">No matches</li>
+                      {instructorsError ? (
+                        <li className="instructor-combobox-empty">{instructorsError}</li>
+                      ) : filteredInstructors.length === 0 ? (
+                        <li className="instructor-combobox-empty">{loadingInstructors ? 'Loading…' : 'No matches'}</li>
                       ) : (
                         filteredInstructors.map((i) => (
                           <li key={i.id} role="presentation">
