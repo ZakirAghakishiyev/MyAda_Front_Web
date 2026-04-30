@@ -415,6 +415,22 @@ function normPersonNameKey(value) {
     .replace(/\s+/g, ' ')
 }
 
+const authUserByIdCache = new Map()
+async function fetchAuthUserByIdCached(userId) {
+  const id = String(userId ?? '').trim()
+  if (!id) return null
+  if (authUserByIdCache.has(id)) return authUserByIdCache.get(id)
+  const pending = (async () => {
+    try {
+      return await fetchAuthUserById(id)
+    } catch {
+      return null
+    }
+  })()
+  authUserByIdCache.set(id, pending)
+  return pending
+}
+
 function looksLikeOpaqueStaffIdentifier(value) {
   const s = String(value ?? '').trim()
   if (!s) return false
@@ -439,7 +455,7 @@ async function enrichAssignedStaffDisplayName(request) {
   if (!shouldResolveAssignedStaffDisplayName(normalized)) return normalized
 
   const assignedId = String(normalized?.assignedStaffUserId ?? '').trim()
-  const authUser = assignedId ? await fetchAuthUserById(assignedId) : null
+  const authUser = assignedId ? await fetchAuthUserByIdCached(assignedId) : null
   const authDisplayName = displayNameFromAuthUserDto(authUser)
   if (authDisplayName) {
     return {
@@ -456,9 +472,45 @@ async function enrichAssignedStaffDisplayName(request) {
   }
 }
 
+function shouldResolveCreatorDisplayName(request) {
+  if (!request || typeof request !== 'object') return false
+  const createdById = String(request.createdById ?? '').trim()
+  if (!createdById) return false
+  const current = String(request.creatorName ?? '').trim()
+  if (!current) return true
+  if (normLookupKey(current) === normLookupKey(createdById)) return true
+  // Common fallback shapes we generate when no name is present.
+  if (/^user\s+[0-9a-f]{6,}\.\.\.?$/i.test(current)) return true
+  if (/^user\s+[0-9a-f]{6,}$/i.test(current)) return true
+  return looksLikeOpaqueStaffIdentifier(current)
+}
+
+async function enrichCreatorDisplayName(request) {
+  const normalized = normalizeSupportRequest(request)
+  if (!shouldResolveCreatorDisplayName(normalized)) return normalized
+
+  const creatorId = String(normalized?.createdById ?? '').trim()
+  const authUser = creatorId ? await fetchAuthUserByIdCached(creatorId) : null
+  const authDisplayName = displayNameFromAuthUserDto(authUser)
+  if (authDisplayName) {
+    const email = String(authUser?.email ?? authUser?.Email ?? '').trim() || null
+    return {
+      ...normalized,
+      creatorName: authDisplayName,
+      creatorEmail: normalized.creatorEmail || email,
+    }
+  }
+  return normalized
+}
+
+async function enrichSupportRequestPeople(request) {
+  const withAssignee = await enrichAssignedStaffDisplayName(request)
+  return enrichCreatorDisplayName(withAssignee)
+}
+
 async function enrichAssignedStaffDisplayNames(items) {
   if (!Array.isArray(items) || items.length === 0) return []
-  return Promise.all(items.map((item) => enrichAssignedStaffDisplayName(item)))
+  return Promise.all(items.map((item) => enrichSupportRequestPeople(item)))
 }
 
 function normalizeSupportRequest(item) {
@@ -1136,7 +1188,7 @@ export async function getAllRequests(filters = {}) {
 
 export async function getRequestDetail(requestId) {
   const result = await request(`/SupportRequests/${sp(requestId)}`)
-  return enrichAssignedStaffDisplayName(result)
+  return enrichSupportRequestPeople(result)
 }
 
 export async function getRequestTimeline(requestId) {
