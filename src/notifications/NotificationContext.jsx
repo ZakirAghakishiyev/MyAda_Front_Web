@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { deleteNotification, fetchNotifications } from '../api/notificationApi'
+import { fetchMyClubNotifications, markClubNotificationRead } from '../api/clubApi'
 import { getAccessToken, subscribeToAuthSessionChange } from '../auth/tokenStorage'
 import { getJwtUserId } from '../auth/jwtRoles'
 import { notificationHubClient } from './notificationHubClient'
@@ -61,6 +62,38 @@ function storageKeyForUser(userId) {
 
 function normalizeIdentityPart(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (trimmed) return trimmed
+    }
+  }
+  return ''
+}
+
+function normalizeClubNotificationRecord(record, fallbackIndex = 0) {
+  const rawId = record?.id ?? record?.notificationId ?? `club-${fallbackIndex}`
+  const createdAt = record?.createdAt || record?.created || record?.time || new Date().toISOString()
+  const title = firstNonEmptyString(record?.title, record?.subject, record?.message) || 'Club notification'
+  const message =
+    firstNonEmptyString(record?.body, record?.description, record?.message, record?.content, record?.text) || title
+
+  return {
+    id: `club:${String(rawId)}`,
+    source: 'club',
+    sourceId: String(rawId),
+    removable: false,
+    type: firstNonEmptyString(record?.type, record?.category) || 'Club Notification',
+    title,
+    message,
+    channel: firstNonEmptyString(record?.channel) || 'Club',
+    createdAt,
+    recipientUserId: firstNonEmptyString(record?.recipientUserId, record?.userId),
+    serverRead: Boolean(record?.read ?? record?.isRead),
+  }
 }
 
 function notificationMatchesUser(item, userId) {
@@ -151,6 +184,52 @@ function readAuthSnapshot() {
   return {
     accessToken,
     userId: getJwtUserId() || '',
+  }
+}
+
+async function fetchCombinedNotifications(userId) {
+  const [globalResult, clubResult] = await Promise.allSettled([
+    fetchNotifications({ limit: 20, page: 1 }),
+    fetchMyClubNotifications('all'),
+  ])
+
+  if (globalResult.status === 'rejected' && clubResult.status === 'rejected') {
+    const globalMessage = globalResult.reason?.message || 'Could not load notifications.'
+    const clubMessage = clubResult.reason?.message || 'Could not load club notifications.'
+    throw new Error(`${globalMessage} ${clubMessage}`.trim())
+  }
+
+  const globalItems =
+    globalResult.status === 'fulfilled'
+      ? globalResult.value.items
+          .filter((item) => notificationMatchesUser(item, userId))
+          .map((item) => ({
+            ...item,
+            source: 'global',
+            sourceId: item.id,
+            removable: true,
+            serverRead: Boolean(item.read),
+          }))
+      : []
+
+  const clubRows =
+    clubResult.status === 'fulfilled'
+      ? Array.isArray(clubResult.value)
+        ? clubResult.value
+        : clubResult.value?.items ?? []
+      : []
+
+  const clubItems = (Array.isArray(clubRows) ? clubRows : []).map((item, index) =>
+    normalizeClubNotificationRecord(item, index)
+  )
+
+  return {
+    items: [...globalItems, ...clubItems].sort(compareByNewest),
+    diagnostics: {
+      globalFetchedCount: globalResult.status === 'fulfilled' ? globalResult.value.items.length : 0,
+      globalVisibleCount: globalItems.length,
+      clubFetchedCount: clubItems.length,
+    },
   }
 }
 
@@ -279,20 +358,21 @@ export function NotificationProvider({ children }) {
       }
 
       try {
-        const data = await fetchNotifications({ limit: 20, page: 1 })
+        const data = await fetchCombinedNotifications(userId)
         if (!cancelled) {
-          const filtered = data.items.filter((item) => notificationMatchesUser(item, userId))
-          debugLog('info', 'Notification API refresh completed.', {
+          debugLog('info', 'Notification refresh completed.', {
             silent,
-            fetchedCount: data.items.length,
-            visibleCount: filtered.length,
+            globalFetchedCount: data.diagnostics.globalFetchedCount,
+            globalVisibleCount: data.diagnostics.globalVisibleCount,
+            clubFetchedCount: data.diagnostics.clubFetchedCount,
+            visibleCount: data.items.length,
             userId: userId || null,
           })
-          setItems(filtered.sort(compareByNewest))
+          setItems(data.items)
         }
       } catch (err) {
         if (!cancelled) {
-          debugLog('error', 'Notification API refresh failed.', {
+          debugLog('error', 'Notification refresh failed.', {
             silent,
             userId: userId || null,
             error: err?.message || String(err),
@@ -385,7 +465,7 @@ export function NotificationProvider({ children }) {
   const value = useMemo(() => {
     const decoratedItems = items.map((item) => ({
       ...item,
-      read: Boolean(readState[item.id]),
+      read: Boolean(item.serverRead || readState[item.id]),
     }))
     const unreadCount = decoratedItems.reduce((count, item) => count + (item.read ? 0 : 1), 0)
 
@@ -398,6 +478,20 @@ export function NotificationProvider({ children }) {
       connectionState,
       markAsRead: (id) => {
         if (!id) return
+        const target = items.find((item) => item.id === id)
+        if (target?.source === 'club' && target.sourceId) {
+          void markClubNotificationRead(target.sourceId)
+            .then(() => {
+              setItems((prev) =>
+                prev.map((item) =>
+                  item.id === id ? { ...item, serverRead: true, read: true, isRead: true } : item
+                )
+              )
+            })
+            .catch(() => {
+              /* ignore club read failures in header shortcut */
+            })
+        }
         setReadState((prev) => ({ ...prev, [id]: true }))
       },
       markAllAsRead: () => {
@@ -413,9 +507,8 @@ export function NotificationProvider({ children }) {
         setRefreshing(true)
         setError('')
         try {
-          const data = await fetchNotifications({ limit: 20, page: 1 })
-          const filtered = data.items.filter((item) => notificationMatchesUser(item, userId))
-          setItems(filtered.sort(compareByNewest))
+          const data = await fetchCombinedNotifications(userId)
+          setItems(data.items)
         } catch (err) {
           setError(err?.message || 'Could not load notifications.')
         } finally {
@@ -425,6 +518,8 @@ export function NotificationProvider({ children }) {
       },
       removeNotification: async (id) => {
         if (!id) return
+        const target = items.find((item) => item.id === id)
+        if (target?.source === 'club') return
         await deleteNotification(id)
         setItems((prev) => prev.filter((item) => item.id !== id))
         setReadState((prev) => {

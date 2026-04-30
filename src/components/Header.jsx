@@ -540,7 +540,7 @@ const Header = () => {
                       ) : (
                         <span className="notification-item-read-label">Read</span>
                       )}
-                      {notification.id ? (
+                      {notification.id && notification.removable !== false ? (
                         <button
                           type="button"
                           className="notification-item-action"
