@@ -59,6 +59,44 @@ export async function createLesson(payload) {
   return unwrapEnvelope(data)
 }
 
+/**
+ * Updates an existing lesson. Uses Attendance admin API: PUT /api/admin/lessons/{id}.
+ *
+ * @param {number|string} lessonId
+ * @param {object} payload same shape as createLesson() payload
+ */
+export async function updateLesson(lessonId, payload) {
+  const maxCapacity = payload.maxCapacity ?? payload.capacity
+  const normalizedPayload = {
+    courseId: payload.courseId,
+    instructorId: payload.instructorId,
+    academicYear: payload.academicYear,
+    semester: payload.semester,
+    maxCapacity,
+    ...(payload.roomId != null && Number(payload.roomId) > 0 ? { roomId: Number(payload.roomId) } : {}),
+  }
+
+  const res = await authFetch(`${LESSONS_BASE}/${encodeURIComponent(String(lessonId))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(normalizedPayload),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    const detail =
+      data?.title ||
+      data?.message ||
+      flattenValidationErrors(data?.errors) ||
+      flattenValidationDetail(data?.detail) ||
+      `Update lesson failed (${res.status})`
+    const err = new Error(detail)
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  return unwrapEnvelope(data)
+}
+
 async function parseJson(res) {
   const text = await res.text()
   if (!text) return {}
