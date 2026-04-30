@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, NavLink, Outlet } from 'react-router-dom'
 import adaLogo from '../assets/ada-logo.png'
+import { getJwtDisplayName, getJwtProfileInitial, getJwtRoleLabel } from '../auth/jwtRoles'
 import './StaffPortal.css'
 
 const IconSearch = () => (
@@ -18,14 +19,6 @@ const IconBell = () => (
 )
 
 const STAFF_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'instruction',
-    title: 'New internal instructions for Wi‑Fi ticket',
-    message: 'Dispatcher added notes: please check access points in North Wing first.',
-    time: 'Just now',
-    unread: true,
-  },
   {
     id: 2,
     type: 'assignment',
@@ -119,10 +112,10 @@ const StaffPortalLayout = () => {
             {hasUnreadNotifications && <span className="sp-badge-unread" aria-hidden="true" />}
           </button>
           <div className="sp-user">
-            <div className="sp-user-avatar">JD</div>
+            <div className="sp-user-avatar">{getJwtProfileInitial()}</div>
             <div className="sp-user-info">
-              <span className="sp-user-name">John Doe</span>
-              <span className="sp-user-role">IT Specialist</span>
+              <span className="sp-user-name">{getJwtDisplayName() || 'User'}</span>
+              <span className="sp-user-role">{getJwtRoleLabel() || 'Staff'}</span>
             </div>
           </div>
         </div>

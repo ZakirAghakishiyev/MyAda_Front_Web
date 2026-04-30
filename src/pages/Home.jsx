@@ -17,13 +17,6 @@ const SECTION_ORDER = [
   'lostFound',
   'studentLife',
   'itfm',
-  'grades',
-  'courseReg',
-  'library',
-  'studentProfile',
-  'accountSettings',
-  'workTasks',
-  'projects',
 ]
 
 /** Student: Ada Clubs before Lost&Found (user reading order) while using same section titles. */
@@ -35,13 +28,6 @@ const SECTION_META = {
   lostFound: { title: 'Lost&Found', category: 'community' },
   studentLife: { title: 'Student Life & Clubs', category: 'community' },
   itfm: { title: 'IT&FM Support', category: 'community' },
-  grades: { title: 'My Grades', category: 'academics' },
-  courseReg: { title: 'Course Registration', category: 'academics' },
-  library: { title: 'Library Services', category: 'academics' },
-  studentProfile: { title: 'Student Profile', category: 'account' },
-  accountSettings: { title: 'Account Settings', category: 'account' },
-  workTasks: { title: 'Work Tasks', category: 'work' },
-  projects: { title: 'Projects', category: 'work' },
 }
 
 function buildHomeCallCard(catalog) {
@@ -77,16 +63,6 @@ function makeCatalog(nav) {
     callContacts: { text: 'Contacts', onClick: nav('/calls/contacts', false) },
     staffPortal: { text: 'Staff Portal', onClick: nav('/staff-portal', false) },
     callHistory: { text: 'Call History', onClick: nav('/calls/history', false) },
-    viewGrades: { text: 'View My Grades', onClick: nav('/coming-soon', { title: 'View My Grades' }) },
-    viewTranscript: { text: 'View Transcript', onClick: nav('/coming-soon', { title: 'View Transcript' }) },
-    courseRegistration: { text: 'Course Registration', onClick: nav('/coming-soon', { title: 'Course Registration' }) },
-    viewSchedule: { text: 'View Schedule', onClick: nav('/coming-soon', { title: 'View Schedule' }) },
-    libraryAccount: { text: 'Library Account', onClick: nav('/coming-soon', { title: 'Library Account' }) },
-    roomReservation: { text: 'Room Reservation', onClick: nav('/coming-soon', { title: 'Room Reservation' }) },
-    personalInfo: { text: 'Personal Information', onClick: nav('/coming-soon', { title: 'Personal Information' }) },
-    accountSettingsBtn: { text: 'Account Settings', onClick: nav('/coming-soon', { title: 'Account Settings' }) },
-    viewTasks: { text: 'View Tasks', onClick: nav('/coming-soon', { title: 'View Tasks' }) },
-    createTask: { text: 'Create Task', onClick: nav('/coming-soon', { title: 'Create Task' }) },
   }
 }
 
@@ -96,13 +72,6 @@ const ADMIN_BUTTON_KEYS = {
   lostFound: ['lostFound', 'lostFoundAdmin'],
   studentLife: ['adaClubs', 'clubAdmin', 'studentServices'],
   itfm: ['itSupport', 'fmSupport', 'myRequests', 'supportDispatcher', 'staffPortal'],
-  grades: ['viewGrades', 'viewTranscript'],
-  courseReg: ['courseRegistration', 'viewSchedule'],
-  library: ['libraryAccount', 'roomReservation'],
-  studentProfile: ['personalInfo', 'accountSettingsBtn'],
-  accountSettings: ['personalInfo', 'accountSettingsBtn'],
-  workTasks: ['viewTasks', 'createTask'],
-  projects: ['viewTasks', 'createTask'],
 }
 
 /** @type {Record<string, Record<string, string[]>>} */

@@ -185,7 +185,7 @@ const ClubNotifications = () => {
 
   return (
     <div className="cn-page">
-      <ClubsAreaNav showNotificationDot />
+      <ClubsAreaNav />
 
       <div className="cn-layout">
         <section className="cn-main">

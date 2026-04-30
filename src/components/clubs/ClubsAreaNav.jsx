@@ -1,14 +1,30 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import adaLogo from '../../assets/ada-logo.png'
 import '../../pages/ClubVacancies.css'
+import { fetchStudentServicesProposalRequirements } from '../../api/clubApi'
 
-const IconBell = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-)
+function parseDeadlineToDate(deadlineRaw) {
+  const s = (deadlineRaw || '').trim()
+  if (!s) return null
+
+  // If backend sends an ISO timestamp (e.g. "2026-04-25T08:00:00Z"), Date parses it as UTC and
+  // displays it in the user's local timezone when formatting.
+  if (s.includes('T')) {
+    const d = new Date(s)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  // If backend sends an ISO date only (e.g. "2026-05-01"), treat it as end-of-day local time.
+  const endOfDay = new Date(`${s}T23:59:59.999`)
+  return Number.isNaN(endOfDay.getTime()) ? null : endOfDay
+}
+
+function isAfterDeadline(deadlineRaw) {
+  const d = parseDeadlineToDate(deadlineRaw)
+  if (!d) return false
+  return Date.now() > d.getTime()
+}
 
 /**
  * Which primary nav tab is active for the current clubs area URL.
@@ -30,13 +46,29 @@ export function clubsAreaNavActiveSection(pathname) {
 
 /**
  * Shared top bar for student clubs area: same links and actions on every page; only the active tab changes.
- * @param {{ rightSlot?: React.ReactNode; showNotificationDot?: boolean }} props
+ * @param {{ rightSlot?: React.ReactNode }} props
  */
-export default function ClubsAreaNav({ rightSlot = null, showNotificationDot = false }) {
+export default function ClubsAreaNav({ rightSlot = null }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const active = clubsAreaNavActiveSection(pathname)
-  const onNotifications = pathname.startsWith('/clubs/notifications')
+  const [policyDeadlineRaw, setPolicyDeadlineRaw] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const dto = await fetchStudentServicesProposalRequirements()
+        if (cancelled) return
+        setPolicyDeadlineRaw(dto?.deadline != null ? String(dto.deadline) : null)
+      } catch {
+        // If this fails, we keep the tab visible (fallback behavior).
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const deadlinePassed = useMemo(() => isAfterDeadline(policyDeadlineRaw), [policyDeadlineRaw])
 
   const tabClass = (key) =>
     active === key ? 'vacancies-nav-link vacancies-nav-link--active' : 'vacancies-nav-link'
@@ -67,22 +99,15 @@ export default function ClubsAreaNav({ rightSlot = null, showNotificationDot = f
             <button type="button" className={tabClass('clubs')} onClick={() => navigate('/clubs')}>
               Clubs
             </button>
-            <button type="button" className={tabClass('propose')} onClick={() => navigate('/clubs/propose')}>
-              Propose Club
-            </button>
+            {!deadlinePassed ? (
+              <button type="button" className={tabClass('propose')} onClick={() => navigate('/clubs/propose')}>
+                Propose Club
+              </button>
+            ) : null}
           </nav>
         </div>
         <div className="vacancies-nav-right">
           {rightSlot}
-          <button
-            type="button"
-            className={onNotifications ? 'vacancies-nav-icon vacancies-nav-icon--active' : 'vacancies-nav-icon'}
-            aria-label="Notifications"
-            onClick={() => navigate('/clubs/notifications')}
-          >
-            <IconBell />
-            {showNotificationDot ? <span className="cn-badge" /> : null}
-          </button>
           <button
             type="button"
             className="vacancies-nav-avatar"

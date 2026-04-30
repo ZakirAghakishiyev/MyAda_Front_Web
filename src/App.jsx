@@ -400,9 +400,15 @@ const AppContent = () => {
           />
           <Route path="/support-dispatcher/:id" element={
             <>
-              <RequireNotStudent>
-                <SupportDispatcher />
-              </RequireNotStudent>
+              {location.state?.from === 'history' ? (
+                <RequireNotStudent>
+                  <SupportDispatcherHistory />
+                </RequireNotStudent>
+              ) : (
+                <RequireNotStudent>
+                  <SupportDispatcher />
+                </RequireNotStudent>
+              )}
               <RequireNotStudent>
                 <RequestDetailDispatcher />
               </RequireNotStudent>

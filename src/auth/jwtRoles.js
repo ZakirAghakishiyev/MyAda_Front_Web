@@ -105,6 +105,60 @@ export function getJwtEmail() {
   return null
 }
 
+function pickFirstNonEmptyString(payload, keys) {
+  if (!payload || typeof payload !== 'object') return null
+  for (const k of keys) {
+    const v = payload[k]
+    if (v == null) continue
+    const s = String(v).trim()
+    if (s) return s
+  }
+  return null
+}
+
+/** Display name from access token (common claim names across IdPs). */
+export function getJwtDisplayName() {
+  const payload = decodeJwtPayload(getAccessToken())
+  if (!payload || typeof payload !== 'object') return null
+  const first = pickFirstNonEmptyString(payload, ['firstName', 'given_name', 'givenName', 'FirstName'])
+  const last = pickFirstNonEmptyString(payload, ['lastName', 'family_name', 'familyName', 'LastName', 'surname'])
+  const full = `${first || ''} ${last || ''}`.trim()
+  if (full) return full
+  return pickFirstNonEmptyString(payload, ['name', 'displayName', 'preferred_username', 'preferredUsername', 'unique_name'])
+}
+
+/**
+ * Best-effort role/job label for headers (falls back to a friendly role claim).
+ * Not used for authorization.
+ */
+export function getJwtRoleLabel() {
+  const payload = decodeJwtPayload(getAccessToken())
+  if (!payload || typeof payload !== 'object') return null
+  const title = pickFirstNonEmptyString(payload, [
+    'jobTitle',
+    'JobTitle',
+    'title',
+    'Title',
+    'position',
+    'Position',
+    'department',
+    'Department',
+    'userType',
+    'UserType',
+  ])
+  if (title) return title
+  const roles = readJwtRoleClaims(payload)
+    .map((r) => String(r || '').trim())
+    .filter(Boolean)
+  const firstRole = roles[0]
+  if (!firstRole) return null
+  // Convert common separators into a human label.
+  return firstRole
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** One or two letters for the header avatar. */
 export function getJwtProfileInitial() {
   const payload = decodeJwtPayload(getAccessToken())

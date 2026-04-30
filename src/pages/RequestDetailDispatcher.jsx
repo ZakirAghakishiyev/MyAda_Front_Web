@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import './RequestDetail.css'
 import {
   assignRequest,
@@ -65,14 +65,17 @@ const REFRESH_INTERVAL_MS = 10000
 
 const RequestDetailDispatcher = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams()
   const [request, setRequest] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [loading, setLoading] = useState(true)
   const [showContactModal, setShowContactModal] = useState(false)
   const [dispatcherAssignee, setDispatcherAssignee] = useState('')
-  const [dispatcherNotes, setDispatcherNotes] = useState('')
   const [staffOptions, setStaffOptions] = useState([])
+
+  const isReadOnlyFromHistory = Boolean(location.state?.readOnly) || location.state?.from === 'history'
+  const backPath = isReadOnlyFromHistory ? '/support-dispatcher/history' : '/support-dispatcher'
   useEffect(() => {
     const area = request?.service || 'IT'
     const category = request?.category || ''
@@ -137,13 +140,14 @@ const RequestDetailDispatcher = () => {
   }, [request, staffOptions])
 
   const handleConfirmAssignment = () => {
+    if (isReadOnlyFromHistory) return
     if (!dispatcherAssignee) return
     const { dispatcherId } = getCurrentUserIds()
     if (!dispatcherId) {
       alert('Missing dispatcher id (sign in, or set support_dispatcher_id for dev).')
       return
     }
-    assignRequest(request.id, dispatcherId, String(dispatcherAssignee), dispatcherNotes)
+    assignRequest(request.id, dispatcherId, String(dispatcherAssignee), '')
       .then(() => navigate('/support-dispatcher'))
       .catch((err) => alert(err.message || 'Failed to assign ticket'))
   }
@@ -155,7 +159,10 @@ const RequestDetailDispatcher = () => {
   if (!request) {
     return (
       <div className="rd-overlay" onClick={() => navigate('/support-dispatcher')} role="dialog">
-        <div className="rd-popup" onClick={(e) => e.stopPropagation()}>
+        <div
+          className={`rd-popup${isReadOnlyFromHistory ? ' rd-popup--wide' : ''}`}
+          onClick={(e) => e.stopPropagation()}
+        >
           <p>Request not found.</p>
           <button type="button" className="rd-btn" onClick={() => navigate('/support-dispatcher')}>Back</button>
         </div>
@@ -173,13 +180,13 @@ const RequestDetailDispatcher = () => {
     <>
       <div
         className="rd-overlay"
-        onClick={(e) => e.target === e.currentTarget && navigate('/support-dispatcher')}
+        onClick={(e) => e.target === e.currentTarget && navigate(backPath)}
         role="dialog"
         aria-modal="true"
       >
         <div className="rd-popup" onClick={(e) => e.stopPropagation()}>
           <header className="rd-header">
-            <button type="button" className="rd-back" onClick={() => navigate('/support-dispatcher')} aria-label="Back">
+            <button type="button" className="rd-back" onClick={() => navigate(backPath)} aria-label="Back">
               <IconBack />
             </button>
           </header>
@@ -271,6 +278,20 @@ const RequestDetailDispatcher = () => {
                     <span className="rd-detail-label">Reported via</span>
                     <span className="rd-detail-value">Student portal</span>
                   </div>
+                  {request.creatorName && (
+                    <div className="rd-detail-row">
+                      <IconPerson />
+                      <span className="rd-detail-label">Requester</span>
+                      <span className="rd-detail-value">{request.creatorName}</span>
+                    </div>
+                  )}
+                  {request.creatorEmail && (
+                    <div className="rd-detail-row">
+                      <IconPerson />
+                      <span className="rd-detail-label">Requester email</span>
+                      <span className="rd-detail-value">{request.creatorEmail}</span>
+                    </div>
+                  )}
                   {request.assignedTo && (
                     <div className="rd-detail-row">
                       <IconPerson />
@@ -327,51 +348,42 @@ const RequestDetailDispatcher = () => {
               </div>
 
               <aside className="rd-layout-right">
-                <section className="rd-card rd-dispatcher-card">
-                  <h2 className="rd-card-title">Dispatcher Action</h2>
-                  <div className="rd-dispatcher-field">
-                    <label className="rd-dispatcher-label">Assign Technician</label>
-                    {request.assignedTo && (
-                      <p className="rd-detail-value" style={{ margin: '0 0 8px' }}>
-                        Current assignee: {request.assignedTo}
-                      </p>
-                    )}
-                    <select
-                      className="rd-dispatcher-select"
-                      value={dispatcherAssignee}
-                      onChange={(e) => setDispatcherAssignee(e.target.value)}
-                    >
-                      <option value="">Choose staff member…</option>
-                      {staffOptions.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                {!isReadOnlyFromHistory ? (
+                  <section className="rd-card rd-dispatcher-card">
+                    <h2 className="rd-card-title">Dispatcher Action</h2>
+                    <div className="rd-dispatcher-field">
+                      <label className="rd-dispatcher-label">Assign Technician</label>
+                      {request.assignedTo && (
+                        <p className="rd-detail-value" style={{ margin: '0 0 8px' }}>
+                          Current assignee: {request.assignedTo}
+                        </p>
+                      )}
+                      <select
+                        className="rd-dispatcher-select"
+                        value={dispatcherAssignee}
+                        onChange={(e) => setDispatcherAssignee(e.target.value)}
+                      >
+                        <option value="">Choose staff member…</option>
+                        {staffOptions.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div className="rd-dispatcher-field">
-                    <label className="rd-dispatcher-label">Internal Instructions</label>
-                    <textarea
-                      className="rd-dispatcher-notes"
-                      rows={4}
-                      placeholder="Notes for the technician only..."
-                      value={dispatcherNotes}
-                      onChange={(e) => setDispatcherNotes(e.target.value)}
-                    />
-                  </div>
+                    <div className="rd-dispatcher-actions">
+                      <button
+                        type="button"
+                        className="rd-dispatcher-btn rd-dispatcher-btn--primary"
+                        onClick={handleConfirmAssignment}
+                        disabled={!dispatcherAssignee}
+                      >
+                        {request.assignedTo ? 'Update Assignment' : 'Confirm Assignment'}
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
 
-                  <div className="rd-dispatcher-actions">
-                    <button
-                      type="button"
-                      className="rd-dispatcher-btn rd-dispatcher-btn--primary"
-                      onClick={handleConfirmAssignment}
-                      disabled={!dispatcherAssignee}
-                    >
-                      {request.assignedTo ? 'Update Assignment' : 'Confirm Assignment'}
-                    </button>
-                  </div>
-                </section>
-
-                {isOpen && !isCancelledStatus && (
+                {isOpen && !isCancelledStatus && !isReadOnlyFromHistory && (
                   <section className="rd-card rd-card--compact-actions">
                     <h2 className="rd-card-title">
                       <IconChat /> Quick Actions
@@ -389,7 +401,7 @@ const RequestDetailDispatcher = () => {
         </div>
       </div>
 
-      {showContactModal && (
+      {showContactModal && !isReadOnlyFromHistory && (
         <div className="rd-contact-overlay" onClick={() => setShowContactModal(false)}>
           <div className="rd-contact-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="rd-contact-title">Contact Support Staff</h3>

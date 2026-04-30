@@ -178,7 +178,7 @@ const ClubsList = () => {
                   <div className="clubs-card-footer">
                     <span className="clubs-card-members">
                       <IconPerson />
-                      {club.members} members
+                      {Number(club.members) || 0} {Number(club.members) === 1 ? 'member' : 'members'}
                     </span>
                     <button
                       type="button"

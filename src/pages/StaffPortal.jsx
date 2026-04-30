@@ -69,8 +69,8 @@ const StaffPortal = () => {
               title: j.description,
               tag: j.urgency === 'Critical' ? 'EMERGENCY' : `${j.service || 'IT'} SUPPORT`,
               tagClass: j.urgency === 'Critical' ? 'emergency' : String(j.service || '').toLowerCase(),
-              sub: j.assignedTo || 'Assigned by dispatcher',
-              subIcon: j.assignedTo ? 'person' : null,
+              sub: j.creatorName || 'Requester',
+              subIcon: 'person',
               status: j.status === 'InProgress' ? 'in_progress' : 'pending',
               service: String(j.service || '').toLowerCase(),
             }))

@@ -169,6 +169,24 @@ function memberCountFromClubDto(dto) {
         if (Number.isFinite(n) && n >= 0) return Math.floor(n)
       }
     }
+    // Some gateways use non-standard names; detect likely member count fields.
+    for (const [k, v] of Object.entries(o)) {
+      if (v == null || Array.isArray(v)) continue
+      const key = String(k).toLowerCase()
+      if (!key.includes('member')) continue
+      if (
+        !key.includes('count') &&
+        !key.includes('total') &&
+        !key.includes('size') &&
+        !key.includes('number') &&
+        !key.includes('qty') &&
+        !key.includes('amount')
+      ) {
+        continue
+      }
+      const n = Number(v)
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+    }
     return null
   }
   const nested = [dto, dto.club, dto.result, dto.Result, dto.Club, dto.data, dto.Data].filter(

@@ -19,7 +19,7 @@ const STUDENT_ID_REGEX = /^\d{9}$/
 /** Standard UUID string (e.g. from directory / SSO user id) */
 const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const INVALID_MEMBER_ID_MSG = 'Use a 9-digit student ID or a GUID (e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890)'
+const INVALID_MEMBER_ID_MSG = 'Use a 9-digit student ID (e.g. 123456789).'
 
 function isValidProposalMemberId(raw) {
   const s = String(raw || '').trim()
@@ -661,7 +661,7 @@ const ProposeClub = () => {
                 <div className="propose-id-with-name">
                   <input
                     type="text"
-                    placeholder="e.g. 123456789 or GUID"
+                    placeholder="e.g. 123456789"
                     value={presidentId}
                     onChange={(e) => {
                       setPresidentId(e.target.value)
@@ -719,7 +719,7 @@ const ProposeClub = () => {
                   <div className="propose-id-with-name propose-id-with-name--compact">
                     <input
                       type="text"
-                      placeholder="9 digits or GUID"
+                      placeholder="9 digits"
                       value={otherMemberId}
                       onChange={(e) => {
                         setOtherMemberId(e.target.value)

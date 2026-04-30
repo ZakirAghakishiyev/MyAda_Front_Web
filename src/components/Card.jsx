@@ -3,6 +3,7 @@ import './Card.css'
 
 const Card = ({ title, children, buttons = [], centerButtons = false, subTitle }) => {
   const hasManyButtons = buttons.length > 3
+  const hasBody = Boolean(children) || Boolean(subTitle && !children)
 
   return (
     <div className="card">
@@ -16,8 +17,12 @@ const Card = ({ title, children, buttons = [], centerButtons = false, subTitle }
         </div>
       </div>
       <div className="card-content">
-        {subTitle && !children && <p className="card__group-hint">{subTitle}</p>}
-        {children}
+        {hasBody ? (
+          <div className="card-body">
+            {subTitle && !children && <p className="card__group-hint">{subTitle}</p>}
+            {children}
+          </div>
+        ) : null}
         {buttons.length > 0 && (
           <div
             className={

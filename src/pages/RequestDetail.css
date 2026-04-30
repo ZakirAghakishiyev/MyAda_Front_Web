@@ -24,6 +24,10 @@
   flex-direction: column;
 }
 
+.rd-popup--wide {
+  max-width: 1320px;
+}
+
 .rd-popup-scroll {
   flex: 1;
   min-height: 0;
@@ -177,6 +181,12 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* When opened from Dispatcher History, the right column is empty/hidden.
+   Force a single full-width column to eliminate the unused gutter. */
+.rd-popup--wide .rd-layout {
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 
 .rd-status-row {

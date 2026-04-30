@@ -179,8 +179,8 @@ const SupportDispatcherHistory = () => {
               <div
                 key={ticket.id}
                 className="sd-row"
-                onClick={() => navigate(`/support-dispatcher/${ticket.id}`)}
-                onKeyDown={(e) => e.key === 'Enter' && navigate(`/support-dispatcher/${ticket.id}`)}
+                onClick={() => navigate(`/support-dispatcher/${ticket.id}`, { state: { from: 'history', readOnly: true } })}
+                onKeyDown={(e) => e.key === 'Enter' && navigate(`/support-dispatcher/${ticket.id}`, { state: { from: 'history', readOnly: true } })}
                 role="button"
                 tabIndex={0}
               >

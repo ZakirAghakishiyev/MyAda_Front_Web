@@ -173,7 +173,6 @@ const AssignTask = () => {
   const [nonRoomLocation, setNonRoomLocation] = useState('')
   const [campusLocation, setCampusLocation] = useState('')
   const [description, setDescription] = useState('')
-  const [instructions, setInstructions] = useState('')
   const [urgency, setUrgency] = useState('standard')
   const [attachments, setAttachments] = useState([])
   const [showError, setShowError] = useState(false)
@@ -194,7 +193,6 @@ const AssignTask = () => {
     setNonRoomLocation(draft.nonRoomLocation || '')
     setCampusLocation(draft.campusLocation || '')
     setDescription(draft.description || '')
-    setInstructions(draft.instructions || '')
     setUrgency(draft.urgency === 'critical' ? 'critical' : 'standard')
   }, [])
 
@@ -220,7 +218,6 @@ const AssignTask = () => {
       nonRoomLocation,
       campusLocation,
       description,
-      instructions,
       urgency,
       savedAt: Date.now(),
     }
@@ -273,7 +270,7 @@ const AssignTask = () => {
             <section className="it-support-section">
               <h2 className="it-support-section-title">
                 <span className="it-support-section-num">0</span>
-                Assigned Staff &amp; Instructions *
+                Assigned Staff *
               </h2>
               <div className="it-support-fields">
                 <select
@@ -289,13 +286,6 @@ const AssignTask = () => {
                     </option>
                   ))}
                 </select>
-                <textarea
-                  rows={3}
-                  placeholder="Internal instructions or notes for this task (optional)"
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  className="it-support-textarea"
-                />
               </div>
             </section>
 

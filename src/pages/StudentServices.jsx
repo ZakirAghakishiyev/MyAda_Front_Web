@@ -1872,8 +1872,8 @@ const StudentServices = () => {
                     </div>
                     <div className="club-admin-popup-body">
                       <div className="club-admin-field">
-                        <label>User GUID or 9-digit student ID</label>
-                        <input type="text" placeholder="GUID or 9-digit organizational / student ID" value={addEmployeeId} onChange={(e) => setAddEmployeeId(e.target.value)} />
+                        <label>9-digit student ID</label>
+                        <input type="text" placeholder="e.g. 123456789" value={addEmployeeId} onChange={(e) => setAddEmployeeId(e.target.value)} />
                       </div>
                       <div className="club-admin-field">
                         <label>Position</label>

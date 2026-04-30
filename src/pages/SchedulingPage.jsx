@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import SchedulingUserIdBar from '../components/scheduling/SchedulingUserIdBar'
 import {
   schedulingGenerate,
   schedulingGetRun,
@@ -290,7 +289,7 @@ const SchedulingPage = () => {
     if (!uid) {
       setPublishMsg(
         userHasJwtAdminRole()
-          ? 'Sign in as an instructor or set Instructor user ID in the bar above (UUID or numeric).'
+          ? 'Sign in as an instructor so your account id can be used for publish (UUID or numeric).'
           : 'Sign in as an instructor so your account id can be used for publish (UUID or numeric).'
       )
       setPublishMsgTone('error')
@@ -415,8 +414,6 @@ const SchedulingPage = () => {
             Back to Home
           </button>
         </header>
-
-        {userHasJwtAdminRole() ? <SchedulingUserIdBar showHint={false} /> : null}
 
         {pageError ? <p className="sched-ms-error">{pageError}</p> : null}
 

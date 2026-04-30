@@ -72,10 +72,6 @@ const CallCard: React.FC = () => {
 
   return (
     <section className="cc-card-content">
-      <p className="cc-subtitle">
-        A quick communication overview with the latest entry from the server-backed call history.
-      </p>
-
       <div className="cc-history">
         <div className="cc-history-header">
           <div>
@@ -89,11 +85,7 @@ const CallCard: React.FC = () => {
 
         {historyError ? <p className="cc-error">{historyError}</p> : null}
         {loading ? <p className="cc-empty">Loading call history...</p> : null}
-        {!loading && !historyError && !latestItem ? (
-          <p className="cc-empty">
-            No calls yet. Open the Call History page when you want the full timeline of every call.
-          </p>
-        ) : null}
+        {!loading && !historyError && !latestItem ? <div className="cc-empty" /> : null}
         {!loading && latestItem ? <LastCallRow row={latestItem} /> : null}
       </div>
     </section>
