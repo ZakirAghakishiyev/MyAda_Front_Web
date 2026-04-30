@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getLostFoundAdminWorkflowPhase, itemHasEligibleClaimForOwnerNotify } from '../api/lostFoundApi'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import './LostAndFound.css'
@@ -65,9 +65,10 @@ function hasClaimToNotify(item, claims) {
 }
 
 export default function LostAndFoundAdminItemDetail() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { id } = useParams()
-  const { fetchItemDetail, notifyOwner, confirmReceipt, confirmHandover } = useLostAndFoundAdmin()
+  const { fetchItemDetail, fetchItems, notifyOwner, confirmReceipt, confirmHandover } = useLostAndFoundAdmin()
   const [item, setItem] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [claims, setClaims] = useState([])
@@ -87,6 +88,9 @@ export default function LostAndFoundAdminItemDetail() {
   const [handoverProofFile, setHandoverProofFile] = useState(null)
   const [actionError, setActionError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [workflowOverride, setWorkflowOverride] = useState(
+    String(location.state?.workflow || '').trim().toLowerCase() || '',
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -114,8 +118,58 @@ export default function LostAndFoundAdminItemDetail() {
     }
   }, [fetchItemDetail, id, reloadToken])
 
+  useEffect(() => {
+    const stateWorkflow = String(location.state?.workflow || '').trim().toLowerCase()
+    if (stateWorkflow) setWorkflowOverride(stateWorkflow)
+  }, [location.state?.workflow])
+
+  useEffect(() => {
+    let isMounted = true
+    const referenceNumber = String(item?.referenceNumber || '').trim()
+    if (!item || workflowOverride || !referenceNumber) {
+      return () => {
+        isMounted = false
+      }
+    }
+
+    const resolveWorkflow = async () => {
+      try {
+        const [pendingResult, receivedResult, deliveredResult] = await Promise.all([
+          fetchItems({ page: 1, limit: 20, adminStatus: 'pending', q: referenceNumber }),
+          fetchItems({ page: 1, limit: 20, adminStatus: 'received', q: referenceNumber }),
+          fetchItems({ page: 1, limit: 20, adminStatus: 'delivered', q: referenceNumber }),
+        ])
+        if (!isMounted) return
+        const matches = [
+          ['pending', pendingResult?.items],
+          ['received', receivedResult?.items],
+          ['delivered', deliveredResult?.items],
+        ]
+        const foundWorkflow = matches.find(([, list]) =>
+          Array.isArray(list) && list.some((candidate) => String(candidate?.id) === String(item.id)),
+        )?.[0]
+        if (foundWorkflow) {
+          setWorkflowOverride(foundWorkflow)
+          setItem((current) =>
+            current && String(current.id) === String(item.id)
+              ? { ...current, adminStatus: foundWorkflow }
+              : current,
+          )
+        }
+      } catch {
+        /* keep inferred fallback */
+      }
+    }
+
+    resolveWorkflow()
+
+    return () => {
+      isMounted = false
+    }
+  }, [fetchItems, item, workflowOverride])
+
   const displayImage = useMemo(() => item?.image || item?.images?.[0] || null, [item])
-  const workflow = getLostFoundAdminWorkflowPhase(item)
+  const workflow = workflowOverride || getLostFoundAdminWorkflowPhase(item)
   const statusLabel =
     workflow === 'pending' ? 'Newly Reported' : workflow === 'received' ? 'In Office' : 'Completed'
   const eligibleForNotify = useMemo(() => hasClaimToNotify(item, claims), [claims, item])
@@ -185,12 +239,14 @@ export default function LostAndFoundAdminItemDetail() {
     try {
       await confirmReceipt(item.id, receiptPayload)
       setVerifyModalOpen(false)
+      setWorkflowOverride('received')
       reloadDetail()
     } catch (err) {
       if (err?.status === 500) {
         if (await receiptWasPersisted(item.id)) {
           resetReceiptModalState()
           setVerifyModalOpen(false)
+          setWorkflowOverride('received')
           reloadDetail()
           return
         }
@@ -209,12 +265,14 @@ export default function LostAndFoundAdminItemDetail() {
             })
             resetReceiptModalState()
             setVerifyModalOpen(false)
+            setWorkflowOverride('received')
             reloadDetail()
             return
           } catch (retryErr) {
             if (await receiptWasPersisted(item.id)) {
               resetReceiptModalState()
               setVerifyModalOpen(false)
+              setWorkflowOverride('received')
               reloadDetail()
               return
             }
@@ -245,6 +303,7 @@ export default function LostAndFoundAdminItemDetail() {
         handoverProofFile: handoverProofFile || undefined,
       })
       setHandoverModalOpen(false)
+      setWorkflowOverride('delivered')
       reloadDetail()
     } catch (err) {
       setActionError(err?.message || 'Failed to finalize delivery.')

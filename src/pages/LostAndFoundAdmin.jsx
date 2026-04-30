@@ -37,6 +37,7 @@ const IconCamera = () => (
 )
 
 const ITEMS_PER_PAGE = 5
+const ALL_TAB_FETCH_FLOOR = 50
 const DEFAULT_FILTERS = {
   searchKeyword: '',
   categoryFilter: 'All Categories',
@@ -48,6 +49,23 @@ function getAdminStatusFilter(tab) {
   if (tab === 'In office' || tab === 'Ready') return 'received'
   if (tab === 'Completed') return 'delivered'
   return null
+}
+
+function withKnownAdminStatus(items, adminStatus) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    ...item,
+    adminStatus,
+  }))
+}
+
+function getSortableAdminTimestamp(item) {
+  const raw = item?.postedAt ?? item?.datePosted ?? item?.updatedAt ?? item?.createdAt
+  const parsed = new Date(String(raw || ''))
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+}
+
+function sortAdminItemsByRecent(a, b) {
+  return getSortableAdminTimestamp(b) - getSortableAdminTimestamp(a)
 }
 
 export default function LostAndFoundAdmin() {
@@ -160,20 +178,57 @@ export default function LostAndFoundAdmin() {
 
   useEffect(() => {
     let isMounted = true
-    const params = {
+    const baseParams = {
       page: currentPage,
       limit: ITEMS_PER_PAGE,
     }
     const q = appliedFilters.searchKeyword.trim()
-    if (q) params.q = q
+    if (q) baseParams.q = q
     const categoryId = categoryNameToId[appliedFilters.categoryFilter]
-    if (categoryId) params.categoryId = categoryId
+    if (categoryId) baseParams.categoryId = categoryId
     const adminStatus = getAdminStatusFilter(tableFilter)
-    if (adminStatus) params.adminStatus = adminStatus
 
     setIsLoading(true)
     setError('')
-    fetchItems(params)
+    const loadItems = async () => {
+      if (tableFilter === 'All') {
+        const perStatusLimit = Math.max(currentPage * ITEMS_PER_PAGE, ALL_TAB_FETCH_FLOOR)
+        const mergedParams = {
+          ...baseParams,
+          page: 1,
+          limit: perStatusLimit,
+        }
+        const [pendingResult, receivedResult, deliveredResult] = await Promise.all([
+          fetchItems({ ...mergedParams, adminStatus: 'pending' }),
+          fetchItems({ ...mergedParams, adminStatus: 'received' }),
+          fetchItems({ ...mergedParams, adminStatus: 'delivered' }),
+        ])
+        const mergedItems = [
+          ...withKnownAdminStatus(pendingResult.items, 'pending'),
+          ...withKnownAdminStatus(receivedResult.items, 'received'),
+          ...withKnownAdminStatus(deliveredResult.items, 'delivered'),
+        ].sort(sortAdminItemsByRecent)
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+        return {
+          items: mergedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE),
+          total:
+            Number(pendingResult.total || 0) +
+            Number(receivedResult.total || 0) +
+            Number(deliveredResult.total || 0),
+        }
+      }
+
+      const result = await fetchItems({
+        ...baseParams,
+        adminStatus,
+      })
+      return {
+        items: withKnownAdminStatus(result.items, adminStatus),
+        total: Number(result.total || 0),
+      }
+    }
+
+    loadItems()
       .then((result) => {
         if (!isMounted) return
         setItems(Array.isArray(result.items) ? result.items : [])
@@ -496,7 +551,11 @@ export default function LostAndFoundAdmin() {
                       <button
                         type="button"
                         className="lf-admin-cell-item lf-admin-cell-item--link"
-                        onClick={() => navigate(`/admin/lost-and-found/item/${item.id}`)}
+                        onClick={() =>
+                          navigate(`/admin/lost-and-found/item/${item.id}`, {
+                            state: { workflow: adminPhase(item) },
+                          })
+                        }
                       >
                         <div className="lf-admin-cell-thumb">
                           {item.image ? <img src={item.image} alt="" /> : <span />}
