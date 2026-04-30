@@ -11,7 +11,7 @@ import {
   schedulingPublish,
 } from '../api/schedulingMsApi'
 import { userHasJwtAdminRole } from '../auth/jwtRoles'
-import { instructorNameById } from '../data/mockInstructors'
+import { fetchUsersByRole, indexById } from '../api/instructors'
 import { getEffectiveSchedulingInstructorId } from '../utils/schedulingInstructorId'
 import './SchedulingPage.css'
 import './scheduling/schedulingMs.css'
@@ -61,11 +61,6 @@ function timeslotsForRoom(options, roomId) {
   if (roomId === '' || roomId == null) return []
   const rid = Number(roomId)
   return options.filter((o) => Number(o.room_id) === rid)
-}
-
-function instructorDisplayName(instructorUserId) {
-  if (instructorUserId == null || instructorUserId === '') return '—'
-  return instructorNameById(instructorUserId)
 }
 
 /**
@@ -133,6 +128,10 @@ function defaultPublishFromTo() {
 const SchedulingPage = () => {
   const navigate = useNavigate()
 
+  const [instructors, setInstructors] = useState([])
+  const [loadingInstructors, setLoadingInstructors] = useState(true)
+  const [instructorsError, setInstructorsError] = useState('')
+
   const [genYear, setGenYear] = useState(String(new Date().getFullYear()))
   const [genSemester, setGenSemester] = useState('Fall')
   const [generating, setGenerating] = useState(false)
@@ -166,6 +165,36 @@ const SchedulingPage = () => {
   const [patchLoading, setPatchLoading] = useState(false)
   const [modalError, setModalError] = useState('')
   const [modalSuccess, setModalSuccess] = useState('')
+
+  const loadInstructors = useCallback(async () => {
+    setInstructorsError('')
+    setLoadingInstructors(true)
+    try {
+      const list = await fetchUsersByRole('Instructor')
+      setInstructors(list)
+    } catch (e) {
+      setInstructorsError(e.message || 'Could not load instructors.')
+      setInstructors([])
+    } finally {
+      setLoadingInstructors(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadInstructors()
+  }, [loadInstructors])
+
+  const instructorsById = useMemo(() => indexById(instructors), [instructors])
+
+  const instructorDisplayName = useCallback(
+    (instructorUserId) => {
+      if (instructorUserId == null || instructorUserId === '') return '—'
+      const key = String(instructorUserId).trim()
+      const row = instructorsById.get(key)
+      return row?.fullName || `Instructor #${key}`
+    },
+    [instructorsById]
+  )
 
   const refreshRunOnly = useCallback(async (runId) => {
     const rid = Number(runId)

@@ -1,11 +1,20 @@
-import { authFetch } from '../auth/authClient'
-import { ADMIN_API_BASE } from './adminConfig'
+import { AUTH_API_BASE, authFetch } from '../auth'
 
-const USERS_BASE = `${ADMIN_API_BASE}/users`
+const AUTH_USERS_BY_ROLE_BASE = `${AUTH_API_BASE}/auth/api/auth/users-by-role`
 
 function unwrapEnvelope(data) {
   if (data && typeof data === 'object' && data.result !== undefined) return data.result
   return data
+}
+
+function unwrapUsersByRoleResponse(data) {
+  const unwrapped = unwrapEnvelope(data)
+  if (unwrapped && typeof unwrapped === 'object') {
+    if (Array.isArray(unwrapped.users)) return unwrapped.users
+    if (Array.isArray(unwrapped.result?.users)) return unwrapped.result.users
+    if (Array.isArray(unwrapped.data?.users)) return unwrapped.data.users
+  }
+  return Array.isArray(unwrapped) ? unwrapped : []
 }
 
 async function parseJson(res) {
@@ -20,6 +29,12 @@ async function parseJson(res) {
 
 function normalizeInstructorName(row, fallbackId) {
   if (!row || typeof row !== 'object') return String(fallbackId || '').trim() || 'Instructor'
+  const first = String(row.firstName ?? row.first_name ?? '').trim()
+  const last = String(row.lastName ?? row.last_name ?? '').trim()
+  if (first && last) return `${first} ${last}`
+  if (first) return first
+  if (last) return last
+
   const direct =
     row.fullName ??
     row.full_name ??
@@ -30,12 +45,6 @@ function normalizeInstructorName(row, fallbackId) {
     row.username ??
     row.email
   if (typeof direct === 'string' && direct.trim()) return direct.trim()
-
-  const first = String(row.firstName ?? row.first_name ?? '').trim()
-  const last = String(row.lastName ?? row.last_name ?? '').trim()
-  if (first && last) return `${last}, ${first}`
-  if (first) return first
-  if (last) return last
 
   return String(fallbackId || '').trim() || 'Instructor'
 }
@@ -57,31 +66,37 @@ function normalizeInstructorId(row) {
 
 /**
  * Fetch synced users by role from Attendance service (Admin API).
- * Doc: GET /attendance/api/admin/users/roles/{role}
+ * Auth endpoint: GET /auth/api/auth/users-by-role/{role}
  *
  * @param {string} role e.g. "Instructor"
  * @returns {Promise<Array<{id: string, fullName: string, raw: any}>>}
  */
 export async function fetchUsersByRole(role) {
-  const encodedRole = encodeURIComponent(String(role || '').trim() || 'Instructor')
-  const res = await authFetch(`${USERS_BASE}/roles/${encodedRole}`, { method: 'GET' })
+  const encodedRole = encodeURIComponent(String(role || '').trim().toLowerCase() || 'instructor')
+  const res = await authFetch(`${AUTH_USERS_BY_ROLE_BASE}/${encodedRole}`, { method: 'GET' })
   const data = await parseJson(res)
   if (!res.ok) {
-    const err = new Error(data?.message || `Failed to load users (${res.status})`)
+    const err = new Error(data?.message || `Failed to load instructors (${res.status})`)
     err.status = res.status
     err.body = data
     throw err
   }
-  const raw = unwrapEnvelope(data)
-  const list = Array.isArray(raw) ? raw : []
+  const list = unwrapUsersByRoleResponse(data)
 
-  return list
-    .map((row) => {
-      const id = normalizeInstructorId(row)
-      if (!id) return null
-      return { id, fullName: normalizeInstructorName(row, id), raw: row }
-    })
-    .filter(Boolean)
+  const byId = new Map()
+  const seenNames = new Set()
+  for (const row of list) {
+    const id = normalizeInstructorId(row)
+    if (!id) continue
+    if (byId.has(id)) continue
+    const fullName = normalizeInstructorName(row, id)
+    const nameKey = String(fullName || '').trim().toLowerCase()
+    if (nameKey && seenNames.has(nameKey)) continue
+    if (nameKey) seenNames.add(nameKey)
+    byId.set(id, { id, fullName, raw: row })
+  }
+
+  return Array.from(byId.values())
 }
 
 export function indexById(instructors = []) {
