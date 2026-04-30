@@ -7,6 +7,29 @@ import { notificationHubClient } from './notificationHubClient'
 const NotificationContext = createContext(null)
 
 const POLL_INTERVAL_MS = 60 * 1000
+const DEBUG_NAMESPACE = '[notifications]'
+
+function debugLog(level, message, details) {
+  const logger = console[level] || console.log
+  if (details === undefined) {
+    logger(`${DEBUG_NAMESPACE} ${message}`)
+    return
+  }
+  logger(`${DEBUG_NAMESPACE} ${message}`, details)
+}
+
+function writeProviderDebugSnapshot(patch) {
+  if (typeof window === 'undefined') return
+  const current = window.__notificationDebug || {}
+  window.__notificationDebug = {
+    ...current,
+    provider: {
+      ...(current.provider || {}),
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    },
+  }
+}
 
 function compareByNewest(a, b) {
   const aTime = new Date(a?.createdAt || 0).getTime()
@@ -16,12 +39,20 @@ function compareByNewest(a, b) {
 
 function mergeNotifications(nextItems, previousItems = []) {
   const merged = new Map()
-  ;[...nextItems, ...previousItems].forEach((item) => {
+  const orderedItems = [...nextItems, ...previousItems]
+
+  orderedItems.forEach((item) => {
     if (!item?.id) return
+    if (!merged.has(item.id)) {
+      merged.set(item.id, item)
+      return
+    }
+
     const existing = merged.get(item.id)
-    merged.set(item.id, existing ? { ...existing, ...item } : item)
+    merged.set(item.id, { ...existing, ...item })
   })
-  return [...merged.values()].sort(compareByNewest)
+
+  return [...merged.values()]
 }
 
 function storageKeyForUser(userId) {
@@ -132,6 +163,21 @@ export function NotificationProvider({ children }) {
   const loggedIn = Boolean(accessToken)
 
   useEffect(() => {
+    writeProviderDebugSnapshot({
+      loggedIn,
+      identityKey,
+      userId: userId || null,
+      accessTokenPresent: loggedIn,
+    })
+    debugLog('info', 'Notification provider identity resolved.', {
+      loggedIn,
+      identityKey,
+      userId: userId || null,
+      accessTokenPresent: loggedIn,
+    })
+  }, [identityKey, loggedIn, userId])
+
+  useEffect(() => {
     setItems([])
     setError('')
     setLoading(false)
@@ -160,7 +206,15 @@ export function NotificationProvider({ children }) {
   }, [loggedIn])
 
   useEffect(() => {
+    writeProviderDebugSnapshot({
+      connectionState,
+      notificationCount: items.length,
+    })
+  }, [connectionState, items.length])
+
+  useEffect(() => {
     if (!loggedIn) {
+      debugLog('warn', 'Notification provider disabled because the user is not logged in.')
       setItems([])
       setLoading(false)
       setRefreshing(false)
@@ -172,6 +226,10 @@ export function NotificationProvider({ children }) {
     let cancelled = false
     let pollTimer = null
     lastConnectionStateRef.current = 'disconnected'
+    debugLog('info', 'Notification provider starting listeners.', {
+      identityKey,
+      userId: userId || null,
+    })
 
     const refreshNotifications = async ({ silent = false } = {}) => {
       if (!cancelled) {
@@ -184,10 +242,21 @@ export function NotificationProvider({ children }) {
         const data = await fetchNotifications({ limit: 20, page: 1 })
         if (!cancelled) {
           const filtered = data.items.filter((item) => notificationMatchesUser(item, userId))
+          debugLog('info', 'Notification API refresh completed.', {
+            silent,
+            fetchedCount: data.items.length,
+            visibleCount: filtered.length,
+            userId: userId || null,
+          })
           setItems(filtered.sort(compareByNewest))
         }
       } catch (err) {
         if (!cancelled) {
+          debugLog('error', 'Notification API refresh failed.', {
+            silent,
+            userId: userId || null,
+            error: err?.message || String(err),
+          })
           setError(err?.message || 'Could not load notifications.')
         }
       } finally {
@@ -200,7 +269,21 @@ export function NotificationProvider({ children }) {
 
     const stopNotificationListener = notificationHubClient.onNotification((item) => {
       if (cancelled) return
-      if (!notificationMatchesUser(item, userId)) return
+      if (!notificationMatchesUser(item, userId)) {
+        debugLog('warn', 'Notification hub event ignored because it did not match the current user.', {
+          currentUserId: userId || null,
+          itemId: item?.id || null,
+          recipientUserId: item?.recipientUserId || null,
+          recipientUserIds: item?.recipientUserIds || [],
+          audience: item?.audience || null,
+        })
+        return
+      }
+      debugLog('info', 'Notification hub event accepted for current user.', {
+        currentUserId: userId || null,
+        itemId: item?.id || null,
+        type: item?.type || null,
+      })
       setItems((prev) => {
         const isNewNotification = !prev.some((existing) => existing.id === item.id)
         if (isNewNotification) {
@@ -210,10 +293,16 @@ export function NotificationProvider({ children }) {
       })
     })
 
-    const stopStateListener = notificationHubClient.onStateChange((state) => {
+    const stopStateListener = notificationHubClient.onStateChange((state, connectionError) => {
       if (cancelled) return
       const previousState = lastConnectionStateRef.current
       lastConnectionStateRef.current = state
+      debugLog(connectionError ? 'warn' : 'info', 'Notification hub state changed.', {
+        previousState,
+        state,
+        userId: userId || null,
+        error: connectionError?.message || null,
+      })
       setConnectionState(state)
       if (state === 'connected' && previousState && previousState !== 'connecting') {
         void refreshNotifications({ silent: true })
@@ -222,7 +311,11 @@ export function NotificationProvider({ children }) {
 
     void refreshNotifications()
 
-    void notificationHubClient.connect(() => getAccessToken()).catch(() => {
+    void notificationHubClient.connect(() => getAccessToken()).catch((err) => {
+      debugLog('error', 'Notification hub connect call failed.', {
+        userId: userId || null,
+        error: err?.message || String(err),
+      })
       if (!cancelled) setConnectionState('unavailable')
     })
 
@@ -232,6 +325,10 @@ export function NotificationProvider({ children }) {
 
     return () => {
       cancelled = true
+      debugLog('info', 'Notification provider cleaning up listeners.', {
+        identityKey,
+        userId: userId || null,
+      })
       if (pollTimer) window.clearInterval(pollTimer)
       const audio = notificationAudioRef.current
       if (audio) {

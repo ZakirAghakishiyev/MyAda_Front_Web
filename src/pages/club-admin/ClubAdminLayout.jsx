@@ -223,6 +223,8 @@ export default function ClubAdminLayout() {
   const [showNotificationModal, setShowNotificationModal] = useState(false)
   const [notificationTitle, setNotificationTitle] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
+  const [notificationError, setNotificationError] = useState('')
+  const [notificationSubmitting, setNotificationSubmitting] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [access, setAccess] = useState('loading')
   const [accessError, setAccessError] = useState('')
@@ -365,24 +367,41 @@ export default function ClubAdminLayout() {
   const openNotificationModal = () => {
     setNotificationTitle('')
     setNotificationMessage('')
+    setNotificationError('')
     setShowNotificationModal(true)
   }
 
   const closeNotificationModal = () => {
+    if (notificationSubmitting) return
+    setNotificationError('')
     setShowNotificationModal(false)
   }
 
   const handleSendNotification = async () => {
-    if (!notificationTitle.trim() || !clubIdParam) return
-    try {
-      await postClubAdminAnnouncement(clubIdParam, {
-        title: notificationTitle.trim(),
-        message: notificationMessage.trim(),
-      })
-    } catch (e) {
-      alert(e?.message || 'Could not post announcement.')
+    if (!clubIdParam) return
+    const title = notificationTitle.trim()
+    const message = notificationMessage.trim()
+    if (!title) {
+      setNotificationError('Title is required.')
       return
     }
+    if (!message) {
+      setNotificationError('Message is required.')
+      return
+    }
+    setNotificationSubmitting(true)
+    setNotificationError('')
+    try {
+      await postClubAdminAnnouncement(clubIdParam, {
+        title,
+        message,
+      })
+    } catch (e) {
+      setNotificationSubmitting(false)
+      setNotificationError(e?.message || 'Could not post announcement.')
+      return
+    }
+    setNotificationSubmitting(false)
     closeNotificationModal()
   }
 
@@ -547,11 +566,19 @@ export default function ClubAdminLayout() {
                     rows={4}
                   />
                 </div>
+                {notificationError ? (
+                  <p style={{ margin: '8px 0 0', color: '#b91c1c', fontSize: 14 }}>{notificationError}</p>
+                ) : null}
               </div>
               <div className="club-admin-popup-footer">
-                <button type="button" className="club-admin-btn-secondary" onClick={closeNotificationModal}>Cancel</button>
-                <button type="button" className="club-admin-btn-primary" onClick={handleSendNotification} disabled={!notificationTitle.trim()}>
-                  Send as notification
+                <button type="button" className="club-admin-btn-secondary" onClick={closeNotificationModal} disabled={notificationSubmitting}>Cancel</button>
+                <button
+                  type="button"
+                  className="club-admin-btn-primary"
+                  onClick={handleSendNotification}
+                  disabled={notificationSubmitting || !notificationTitle.trim() || !notificationMessage.trim()}
+                >
+                  {notificationSubmitting ? 'Sending…' : 'Send as notification'}
                 </button>
               </div>
             </div>

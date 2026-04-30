@@ -5,10 +5,6 @@ function trimTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '')
 }
 
-function unique(values) {
-  return [...new Set(values.filter(Boolean))]
-}
-
 function firstNonEmptyString(...values) {
   for (const value of values) {
     if (typeof value === 'string') {
@@ -52,6 +48,13 @@ async function parseResponse(res) {
 }
 
 export function resolveNotificationApiBase() {
+  const explicitBase =
+    import.meta.env.VITE_NOTIFICATION_API_BASE_URL || import.meta.env.VITE_NOTIFICATION_API_BASE
+
+  if (explicitBase) {
+    return trimTrailingSlash(explicitBase)
+  }
+
   return `${trimTrailingSlash(API_BASE)}/notification`
 }
 
@@ -60,23 +63,10 @@ function buildNotificationApiUrl(path) {
   return `${resolveNotificationApiBase()}/${normalizedPath}`
 }
 
-export function buildNotificationHubUrlCandidates() {
-  const explicit = String(import.meta.env.VITE_NOTIFICATION_HUB_URL || '')
-    .split(',')
-    .map((value) => trimTrailingSlash(value.trim()))
-    .filter(Boolean)
-  if (explicit.length > 0) return unique(explicit)
-
-  const base = trimTrailingSlash(API_BASE)
-  return unique([
-    `${base}/notification/hub`,
-    `${base}/notification/hubs/notification`,
-    `${base}/notification/hubs/notifications`,
-    `${base}/notificationHub`,
-    `${base}/notification/notificationHub`,
-    `${base}/hubs/notification`,
-    `${base}/hubs/notifications`,
-  ])
+export function resolveNotificationHubUrl() {
+  const explicit = trimTrailingSlash(import.meta.env.VITE_NOTIFICATION_HUB_URL || '')
+  if (explicit) return explicit
+  return `${resolveNotificationApiBase()}/hubs/notifications`
 }
 
 function clampNotificationLimit(limit) {
@@ -202,7 +192,7 @@ export async function sendEmailNotification(payload = {}) {
     message: payload.message,
   }
 
-  const res = await fetch(buildNotificationApiUrl('api/v1/notifications/email'), {
+  const res = await authFetch(buildNotificationApiUrl('api/v1/notifications/email'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

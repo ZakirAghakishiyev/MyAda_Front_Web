@@ -282,7 +282,11 @@ export function mapClubFromApi(dto) {
         )
       : [],
     officers: Array.isArray(dto.officers) ? dto.officers : [],
-    announcements: Array.isArray(dto.announcements) ? dto.announcements : [],
+    announcements: Array.isArray(dto.announcements)
+      ? dto.announcements
+      : Array.isArray(dto.Announcements)
+        ? dto.Announcements
+        : [],
     memberProfiles: Array.isArray(dto.memberProfiles) ? dto.memberProfiles : [],
     socialLinks,
     resources: (() => {

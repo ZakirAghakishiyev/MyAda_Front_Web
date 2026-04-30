@@ -446,7 +446,13 @@ const ClubDetail = () => {
   }, [club])
 
   const announcementsDisplay = useMemo(() => {
-    const raw = club?.announcements
+    const raw = Array.isArray(club?.announcements)
+      ? club.announcements
+      : Array.isArray(club?.raw?.announcements)
+        ? club.raw.announcements
+        : Array.isArray(club?.raw?.Announcements)
+          ? club.raw.Announcements
+          : []
     if (!Array.isArray(raw)) return []
     return raw.map((a, index) => {
       if (!a || typeof a !== 'object') {
@@ -651,31 +657,24 @@ const ClubDetail = () => {
 
           {activeTab === 'announcements' && (
             <div className="club-detail-content">
-              {isClubMember ? (
-                <section className="club-detail-section">
-                  <h2 className="club-detail-section-title">Club Announcements</h2>
-                  {announcementsDisplay.length > 0 ? (
-                    <ul className="club-detail-announcements-list">
-                      {announcementsDisplay.map((announcement) => (
-                        <li key={announcement.key} className="club-detail-announcement-item">
-                          {announcement.date ? (
-                            <span className="club-detail-announcement-date">{announcement.date}</span>
-                          ) : null}
-                          <h3 className="club-detail-announcement-title">{announcement.title}</h3>
-                          <p className="club-detail-announcement-text">{announcement.message}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="club-detail-placeholder">No announcements yet.</p>
-                  )}
-                </section>
-              ) : (
-                <section className="club-detail-section">
-                  <h2 className="club-detail-section-title">Club Announcements</h2>
-                  <p className="club-detail-placeholder">Announcements are visible only to club members.</p>
-                </section>
-              )}
+              <section className="club-detail-section">
+                <h2 className="club-detail-section-title">Club Announcements</h2>
+                {announcementsDisplay.length > 0 ? (
+                  <ul className="club-detail-announcements-list">
+                    {announcementsDisplay.map((announcement) => (
+                      <li key={announcement.key} className="club-detail-announcement-item">
+                        {announcement.date ? (
+                          <span className="club-detail-announcement-date">{announcement.date}</span>
+                        ) : null}
+                        <h3 className="club-detail-announcement-title">{announcement.title}</h3>
+                        <p className="club-detail-announcement-text">{announcement.message}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="club-detail-placeholder">No announcements yet.</p>
+                )}
+              </section>
             </div>
           )}
 
