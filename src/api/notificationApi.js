@@ -9,6 +9,21 @@ function unique(values) {
   return [...new Set(values.filter(Boolean))]
 }
 
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (trimmed) return trimmed
+    }
+  }
+  return ''
+}
+
+function normalizeAudience(value) {
+  const normalized = String(value || '').trim()
+  return normalized || ''
+}
+
 function parseNotificationResponseBody(text) {
   if (!text) return null
   try {
@@ -46,12 +61,21 @@ function buildNotificationApiUrl(path) {
 }
 
 export function buildNotificationHubUrlCandidates() {
-  const explicit = trimTrailingSlash(import.meta.env.VITE_NOTIFICATION_HUB_URL)
-  if (explicit) return [explicit]
+  const explicit = String(import.meta.env.VITE_NOTIFICATION_HUB_URL || '')
+    .split(',')
+    .map((value) => trimTrailingSlash(value.trim()))
+    .filter(Boolean)
+  if (explicit.length > 0) return unique(explicit)
 
   const base = trimTrailingSlash(API_BASE)
   return unique([
     `${base}/notification/hub`,
+    `${base}/notification/hubs/notification`,
+    `${base}/notification/hubs/notifications`,
+    `${base}/notificationHub`,
+    `${base}/notification/notificationHub`,
+    `${base}/hubs/notification`,
+    `${base}/hubs/notifications`,
   ])
 }
 
@@ -74,7 +98,12 @@ function buildQuery(params = {}) {
 }
 
 export function normalizeNotificationRecord(record, fallbackIndex = 0) {
+  const receiver = record?.receiver && typeof record.receiver === 'object' ? record.receiver : null
+  const receivers = Array.isArray(record?.receivers) ? record.receivers : []
   const createdAt = record?.createdAt || record?.created || new Date().toISOString()
+  const body =
+    firstNonEmptyString(record?.message, record?.body, record?.content, record?.text, record?.description) ||
+    firstNonEmptyString(record?.title, record?.subject)
   const rawId =
     record?.id ??
     record?.notificationId ??
@@ -91,12 +120,23 @@ export function normalizeNotificationRecord(record, fallbackIndex = 0) {
 
   return {
     id: rawId ? String(rawId) : fallbackId,
-    type: String(record?.type || 'Notification').trim() || 'Notification',
-    message: String(record?.message || '').trim(),
-    channel: String(record?.channel || record?.notificationType || 'Push').trim() || 'Push',
+    type: firstNonEmptyString(record?.type, record?.notificationType, record?.category) || 'Notification',
+    title: firstNonEmptyString(record?.title, record?.subject, record?.type) || 'Notification',
+    message: body,
+    channel: firstNonEmptyString(record?.channel, record?.notificationType) || 'Push',
     createdAt,
-    recipientUserId: record?.recipientUserId ? String(record.recipientUserId).trim() : '',
-    recipientEmail: record?.recipientEmail ? String(record.recipientEmail).trim().toLowerCase() : '',
+    recipientUserId: firstNonEmptyString(
+      record?.recipientUserId,
+      receiver?.userId,
+      receiver?.id,
+      record?.userId
+    ),
+    recipientUserIds: receivers
+      .map((item) => firstNonEmptyString(item?.userId, item?.id, item))
+      .filter(Boolean),
+    recipientEmail: firstNonEmptyString(record?.recipientEmail, receiver?.email).toLowerCase(),
+    audience: normalizeAudience(record?.audience || record?.audienceType || receiver?.audience),
+    actionUrl: firstNonEmptyString(record?.actionUrl, record?.deepLink, record?.url, record?.link),
   }
 }
 

@@ -35,64 +35,64 @@ function normalizeIdentityPart(value) {
 function notificationMatchesUser(item, userId) {
   const targetUserId = normalizeIdentityPart(userId)
   const itemUserId = normalizeIdentityPart(item?.recipientUserId)
+  const itemUserIds = Array.isArray(item?.recipientUserIds)
+    ? item.recipientUserIds.map((value) => normalizeIdentityPart(value)).filter(Boolean)
+    : []
+  const audience = normalizeIdentityPart(item?.audience)
 
   if (!targetUserId) return true
-  if (!itemUserId) return false
-  return itemUserId === targetUserId
+  if (itemUserId) return itemUserId === targetUserId
+  if (itemUserIds.length > 0) return itemUserIds.includes(targetUserId)
+  if (['all', 'all_users', 'broadcast', 'everyone', 'public'].includes(audience)) return true
+  return true
 }
 
-function ensureAudioContext(audioContextRef) {
+function ensureNotificationAudio(audioRef) {
   if (typeof window === 'undefined') return null
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext
-  if (!AudioContextCtor) return null
-  if (!audioContextRef.current) {
-    audioContextRef.current = new AudioContextCtor()
+  if (!audioRef.current) {
+    const audio = new Audio('/audio/notification-sound.mp3')
+    audio.preload = 'auto'
+    audio.playsInline = true
+    audioRef.current = audio
   }
-  return audioContextRef.current
+  return audioRef.current
 }
 
-async function primeNotificationAudio(audioContextRef) {
-  const context = ensureAudioContext(audioContextRef)
-  if (!context) return false
-  if (context.state === 'suspended') {
-    try {
-      await context.resume()
-    } catch {
-      return false
-    }
+async function primeNotificationAudio(audioRef, primedRef) {
+  const audio = ensureNotificationAudio(audioRef)
+  if (!audio) return false
+  if (primedRef.current) return true
+
+  try {
+    audio.muted = true
+    audio.currentTime = 0
+    await audio.play()
+    audio.pause()
+    audio.currentTime = 0
+    audio.muted = false
+    primedRef.current = true
+    return true
+  } catch {
+    audio.muted = false
+    return false
   }
-  return context.state === 'running'
 }
 
-async function playNotificationChime(audioContextRef) {
-  const ready = await primeNotificationAudio(audioContextRef)
+async function playNotificationSound(audioRef, primedRef) {
+  const audio = ensureNotificationAudio(audioRef)
+  if (!audio) return
+
+  const ready = await primeNotificationAudio(audioRef, primedRef)
   if (!ready) return
 
-  const context = audioContextRef.current
-  if (!context) return
-
-  const now = context.currentTime
-  const gain = context.createGain()
-  gain.gain.setValueAtTime(0.0001, now)
-  gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02)
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32)
-  gain.connect(context.destination)
-
-  const first = context.createOscillator()
-  first.type = 'sine'
-  first.frequency.setValueAtTime(784, now)
-  first.frequency.exponentialRampToValueAtTime(1046.5, now + 0.18)
-  first.connect(gain)
-  first.start(now)
-  first.stop(now + 0.2)
-
-  const second = context.createOscillator()
-  second.type = 'triangle'
-  second.frequency.setValueAtTime(1174.66, now + 0.08)
-  second.frequency.exponentialRampToValueAtTime(1318.51, now + 0.24)
-  second.connect(gain)
-  second.start(now + 0.08)
-  second.stop(now + 0.32)
+  try {
+    audio.pause()
+    audio.currentTime = 0
+    audio.muted = false
+    await audio.play()
+  } catch {
+    primedRef.current = false
+  }
 }
 
 function loadReadState(userId) {
@@ -122,7 +122,8 @@ export function NotificationProvider({ children }) {
   const [error, setError] = useState('')
   const [connectionState, setConnectionState] = useState('disconnected')
   const [readState, setReadState] = useState({})
-  const audioContextRef = useRef(null)
+  const notificationAudioRef = useRef(null)
+  const notificationAudioPrimedRef = useRef(false)
   const lastConnectionStateRef = useRef('disconnected')
 
   const accessToken = getAccessToken()
@@ -146,7 +147,7 @@ export function NotificationProvider({ children }) {
     if (!loggedIn || typeof window === 'undefined') return undefined
 
     const unlockAudio = () => {
-      void primeNotificationAudio(audioContextRef)
+      void primeNotificationAudio(notificationAudioRef, notificationAudioPrimedRef)
     }
 
     window.addEventListener('pointerdown', unlockAudio)
@@ -203,7 +204,7 @@ export function NotificationProvider({ children }) {
       setItems((prev) => {
         const isNewNotification = !prev.some((existing) => existing.id === item.id)
         if (isNewNotification) {
-          void playNotificationChime(audioContextRef)
+          void playNotificationSound(notificationAudioRef, notificationAudioPrimedRef)
         }
         return mergeNotifications([item], prev)
       })
@@ -232,6 +233,12 @@ export function NotificationProvider({ children }) {
     return () => {
       cancelled = true
       if (pollTimer) window.clearInterval(pollTimer)
+      const audio = notificationAudioRef.current
+      if (audio) {
+        audio.pause()
+        audio.currentTime = 0
+      }
+      notificationAudioPrimedRef.current = false
       stopNotificationListener()
       stopStateListener()
       void notificationHubClient.stop()

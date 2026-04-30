@@ -133,6 +133,7 @@ const StudentServicesSuggestEvent = () => {
   const [catering, setCatering] = useState(false)
   const [cleaning, setCleaning] = useState(true)
   const [otherNeeds, setOtherNeeds] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -256,8 +257,9 @@ const StudentServicesSuggestEvent = () => {
   }
 
   const handleSubmit = async () => {
+    if (submitting) return
+    setSubmitting(true)
     try {
-      const url = posterImageUrl.trim()
       await submitStudentServicesEventProposal(
         {
           name: eventName.trim() || 'Event proposal',
@@ -277,12 +279,12 @@ const StudentServicesSuggestEvent = () => {
             otherNeeds,
           },
           submittedByOrganization: 'Student Services',
-          ...(url ? { imageUrl: url } : {}),
         },
         posterFile
       )
     } catch (err) {
       alert(err?.message || 'Could not submit event proposal.')
+      setSubmitting(false)
       return
     }
     clearDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY)
@@ -462,16 +464,17 @@ const StudentServicesSuggestEvent = () => {
               </button>
               {posterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{posterFile.name}</div>}
               <div className="club-admin-field" style={{ marginTop: 14 }}>
-                <label style={{ fontSize: 12 }}>Or image URL (optional)</label>
+                <label style={{ fontSize: 12 }}>Image URL (not used)</label>
                 <input
                   type="url"
                   placeholder="https://… (used if you do not upload a file; upload wins if both are set)"
                   value={posterImageUrl}
                   onChange={(e) => setPosterImageUrl(e.target.value)}
+                  disabled
                 />
               </div>
               <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
-                Per API: use an upload or a public image URL. If both are provided, the uploaded file is used.
+                This form only sends the uploaded file. Event images are attached through `imageFile`, not `imageUrl`.
               </p>
             </div>
           </div>
@@ -665,7 +668,7 @@ const StudentServicesSuggestEvent = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '20px 24px 32px' }} className="club-admin-suggest-event-actions">
-          <button type="button" className="club-admin-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
+          <button type="button" className="club-admin-btn-secondary" onClick={handleSaveDraft} disabled={submitting}>Save Draft</button>
           <button type="button" className="club-admin-btn-primary" onClick={handleSubmit}>Submit for Approval →</button>
         </div>
       </div>

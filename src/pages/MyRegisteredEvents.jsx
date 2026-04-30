@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRegisteredEvents } from '../contexts/RegisteredEventsContext'
-import { fetchEvent, fetchMyEventRegistrations } from '../api/clubApi'
+import { fetchEvent, fetchMyEventRegistrations, unregisterFromEvent } from '../api/clubApi'
 import { mapEventFromApi } from '../api/clubMappers'
 import ClubsAreaNav from '../components/clubs/ClubsAreaNav'
 import './MyRegisteredEvents.css'
@@ -92,9 +92,10 @@ const TABS = [
 
 const MyRegisteredEvents = () => {
   const navigate = useNavigate()
-  const { getRegisteredIds } = useRegisteredEvents()
+  const { getRegisteredIds, unregisterEvent } = useRegisteredEvents()
   const [activeTab, setActiveTab] = useState('upcoming')
   const [apiEvents, setApiEvents] = useState([])
+  const [removingEventId, setRemovingEventId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -176,6 +177,22 @@ const MyRegisteredEvents = () => {
     e.stopPropagation()
     navigate(`/clubs/events/${eventId}/ticket`)
   }
+  const handleCancelRegistration = async (e, eventId) => {
+    e.stopPropagation()
+    if (removingEventId != null) return
+    const ok = window.confirm('Cancel this event registration?')
+    if (!ok) return
+    setRemovingEventId(String(eventId))
+    try {
+      await unregisterFromEvent(eventId)
+      unregisterEvent(eventId)
+      setApiEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
+    } catch (error) {
+      alert(error?.message || 'Could not cancel registration.')
+    } finally {
+      setRemovingEventId(null)
+    }
+  }
 
   return (
     <div className="mre-page">
@@ -237,14 +254,15 @@ const MyRegisteredEvents = () => {
                 <div className="mre-card-footer">
                   <span className="mre-card-attendees">{attendeesLabelFor(event)}</span>
                   <div className="mre-card-actions">
-                    <button
-                      type="button"
-                      className="mre-icon-btn"
-                      onClick={(e) => { e.stopPropagation() }}
-                      aria-label="Cancel registration"
-                    >
-                      <IconX />
-                    </button>
+                      <button
+                        type="button"
+                        className="mre-icon-btn"
+                        onClick={(e) => handleCancelRegistration(e, event.id)}
+                        aria-label="Cancel registration"
+                        disabled={removingEventId === String(event.id)}
+                      >
+                        <IconX />
+                      </button>
                     <button
                       type="button"
                       className="mre-btn mre-btn--primary"

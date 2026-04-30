@@ -3,32 +3,46 @@ import { buildNotificationHubUrlCandidates, normalizeNotificationRecord } from '
 
 const NOTIFICATION_EVENT_NAMES = [
   'ReceiveNotification',
+  'ReceiveNotifications',
   'receiveNotification',
+  'receiveNotifications',
   'NotificationReceived',
+  'NotificationsReceived',
   'NewNotification',
+  'Notification',
   'notificationReceived',
+  'notificationsReceived',
   'newNotification',
+  'notification',
+  'ReceiveUserNotification',
+  'receiveUserNotification',
 ]
 
-function normalizeHubPayload(payload) {
+function normalizeHubPayloads(payload) {
   if (!payload) return null
   if (Array.isArray(payload)) {
-    return payload.length > 0 ? normalizeNotificationRecord(payload[0]) : null
+    return payload.map((item, index) => normalizeNotificationRecord(item, index)).filter(Boolean)
   }
   if (typeof payload === 'object') {
+    if (Array.isArray(payload.notifications)) {
+      return payload.notifications.map((item, index) => normalizeNotificationRecord(item, index)).filter(Boolean)
+    }
+    if (Array.isArray(payload.data)) {
+      return payload.data.map((item, index) => normalizeNotificationRecord(item, index)).filter(Boolean)
+    }
     if (payload.notification && typeof payload.notification === 'object') {
-      return normalizeNotificationRecord(payload.notification)
+      return [normalizeNotificationRecord(payload.notification)]
     }
     if (payload.data && typeof payload.data === 'object') {
-      return normalizeNotificationRecord(payload.data)
+      return [normalizeNotificationRecord(payload.data)]
     }
-    return normalizeNotificationRecord(payload)
+    return [normalizeNotificationRecord(payload)]
   }
-  return normalizeNotificationRecord({
+  return [normalizeNotificationRecord({
     type: 'Notification',
     message: String(payload),
     channel: 'Push',
-  })
+  })]
 }
 
 class NotificationHubClient {
@@ -45,9 +59,11 @@ class NotificationHubClient {
   bindConnectionEvents(connection) {
     NOTIFICATION_EVENT_NAMES.forEach((eventName) => {
       connection.on(eventName, (payload) => {
-        const normalized = normalizeHubPayload(payload)
-        if (!normalized) return
-        this.notificationHandlers.forEach((handler) => handler(normalized, eventName))
+        const normalizedItems = normalizeHubPayloads(payload)
+        if (!normalizedItems?.length) return
+        normalizedItems.forEach((normalized) => {
+          this.notificationHandlers.forEach((handler) => handler(normalized, eventName))
+        })
       })
     })
 
@@ -70,6 +86,7 @@ class NotificationHubClient {
         accessTokenFactory: () => getAccessToken?.() || '',
         withCredentials: false,
       })
+      .configureLogging(signalR.LogLevel.None)
       .withAutomaticReconnect([0, 2000, 5000, 10000])
       .build()
 
@@ -78,9 +95,21 @@ class NotificationHubClient {
   }
 
   async connect(getAccessToken) {
+    const accessToken = getAccessToken?.()?.trim() || ''
+    if (!accessToken) {
+      this.emitState('disconnected', null)
+      throw new Error('Notification hub connection skipped: missing access token.')
+    }
+
     if (this.connection?.state === signalR.HubConnectionState.Connected) {
       this.emitState('connected', null)
       return
+    }
+    if (
+      this.connection?.state === signalR.HubConnectionState.Connecting ||
+      this.connection?.state === signalR.HubConnectionState.Reconnecting
+    ) {
+      return this.connectInFlight
     }
     if (this.connectInFlight) return this.connectInFlight
 

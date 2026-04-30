@@ -16,10 +16,20 @@ export function RegisteredEventsProvider({ children }) {
     return id ? registeredIds.has(id) : false
   }
 
+  const unregisterEvent = (eventId) => {
+    const id = eventId != null ? String(eventId) : ''
+    if (!id) return
+    setRegisteredIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
   const getRegisteredIds = () => Array.from(registeredIds)
 
   return (
-    <RegisteredEventsContext.Provider value={{ registerEvent, isRegistered, getRegisteredIds }}>
+    <RegisteredEventsContext.Provider value={{ registerEvent, unregisterEvent, isRegistered, getRegisteredIds }}>
       {children}
     </RegisteredEventsContext.Provider>
   )
@@ -30,6 +40,7 @@ export function useRegisteredEvents() {
   if (!ctx) {
     return {
       registerEvent: () => {},
+      unregisterEvent: () => {},
       isRegistered: () => false,
       getRegisteredIds: () => []
     }

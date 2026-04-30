@@ -2,6 +2,7 @@ import { authFetch } from '../auth/authClient'
 import { getAccessToken } from '../auth/tokenStorage'
 import { getJwtUserId } from '../auth/jwtRoles'
 import { fetchCurrentUserOrganizationalId } from './authUsersApi'
+import { API_BASE } from './apiBase'
 import { clubUrl } from './clubConfig'
 import { CLUB_POSITION_CATEGORIES, positionCategoryOptionsFromApi } from '../data/clubAdminData'
 
@@ -135,6 +136,55 @@ export async function clubAuthJson(path, init = {}) {
   return unwrapApiResponse(data)
 }
 
+function clubEventsApiUrl(path) {
+  const p = String(path || '').replace(/^\//, '')
+  return `${API_BASE}/club/api/v1/${p}`
+}
+
+async function rootAuthFetch(path, init = {}) {
+  if (!getAccessToken()) {
+    const err = new Error('Authentication required.')
+    err.status = 401
+    err.code = 'CLUB_AUTH_REQUIRED'
+    throw err
+  }
+  return authFetch(clubEventsApiUrl(path), init)
+}
+
+async function rootAuthJson(path, init = {}) {
+  const res = await rootAuthFetch(path, init)
+  const data = await readJsonSafe(res)
+  if (!res.ok) {
+    const msg =
+      typeof data === 'object' && data != null
+        ? data.message || data.title || data.detail || `Request failed (${res.status})`
+        : typeof data === 'string' && data
+          ? data
+          : `Request failed (${res.status})`
+    const err = new Error(String(msg))
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  return unwrapApiResponse(data)
+}
+
+async function rootAuthDeleteExpectOk(path) {
+  const res = await rootAuthFetch(path, { method: 'DELETE' })
+  if (res.ok) return
+  const data = await readJsonSafe(res)
+  const msg =
+    typeof data === 'object' && data != null
+      ? data.message || data.title || data.detail || `Request failed (${res.status})`
+      : typeof data === 'string' && data
+        ? data
+        : `Request failed (${res.status})`
+  const err = new Error(String(msg))
+  err.status = res.status
+  err.body = data
+  throw err
+}
+
 /** DELETE with empty or JSON error body; success is usually 204 No Content. */
 async function clubAuthDeleteExpectOk(path) {
   const res = await clubAuthFetch(path, { method: 'DELETE' })
@@ -169,6 +219,140 @@ async function clubAuthJsonPrimaryOrFallback(primaryPath, fallbackPath, init = {
  * @see CLUB_API_DOC / FRONTEND_CLUB_API_GUIDE — `dateTime` local `YYYY-MM-DDTHH:mm:ss` (no Z);
  * JSON uses nested `subEvents` + `logistics`; multipart uses `subEventsJson` + `logisticsJson` strings.
  */
+const EVENT_PROPOSAL_LOCAL_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/
+
+function throwEventProposalValidationError(message) {
+  const err = new Error(message)
+  err.status = 400
+  err.code = 'EVENT_PROPOSAL_VALIDATION'
+  throw err
+}
+
+function isPositiveNumberLike(value) {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0
+}
+
+function requireNonEmptyEventField(value, label) {
+  const text = value != null ? String(value).trim() : ''
+  if (!text) {
+    const err = new Error(`${label} is required.`)
+    err.status = 400
+    err.code = 'EVENT_PAYLOAD_VALIDATION'
+    throw err
+  }
+  return text
+}
+
+function buildEventsControllerFormData(body, options = {}) {
+  const b = body && typeof body === 'object' ? body : {}
+  if ('imageUrl' in b || 'imgUrl' in b) {
+    const err = new Error('EventsController only accepts image uploads via imageFile.')
+    err.status = 400
+    err.code = 'EVENT_PAYLOAD_VALIDATION'
+    throw err
+  }
+
+  const includeClubId = options.includeClubId === true
+  const includeStatus = options.includeStatus === true
+  const fd = new FormData()
+
+  if (includeClubId) {
+    fd.append('clubId', requireNonEmptyEventField(b.clubId, 'Club id'))
+  }
+
+  fd.append('name', requireNonEmptyEventField(b.name, 'Event name'))
+  fd.append('description', String(b.description ?? ''))
+  fd.append('startTime', requireNonEmptyEventField(b.startTime, 'Start time'))
+  fd.append('endTime', requireNonEmptyEventField(b.endTime, 'End time'))
+  fd.append('location', requireNonEmptyEventField(b.location, 'Location'))
+
+  const hasBuilding = b.buildingId != null && String(b.buildingId).trim() !== ''
+  const hasRoom = b.roomId != null && String(b.roomId).trim() !== ''
+  if (hasBuilding !== hasRoom) {
+    const err = new Error('Building and room must be sent together.')
+    err.status = 400
+    err.code = 'EVENT_PAYLOAD_VALIDATION'
+    throw err
+  }
+  if (hasBuilding && hasRoom) {
+    fd.append('buildingId', String(b.buildingId).trim())
+    fd.append('roomId', String(b.roomId).trim())
+  }
+
+  if (!isPositiveNumberLike(b.seatLimit)) {
+    const err = new Error('Seat limit must be a positive number.')
+    err.status = 400
+    err.code = 'EVENT_PAYLOAD_VALIDATION'
+    throw err
+  }
+  fd.append('seatLimit', String(Math.floor(Number(b.seatLimit))))
+  fd.append('requirements', String(b.requirements ?? ''))
+  fd.append('prerequisites', String(b.prerequisites ?? ''))
+  fd.append('notes', String(b.notes ?? ''))
+
+  if (includeStatus) {
+    fd.append('status', requireNonEmptyEventField(b.status, 'Status'))
+  }
+
+  if (typeof File !== 'undefined' && b.imageFile instanceof File) {
+    fd.append('imageFile', b.imageFile, b.imageFile.name)
+  }
+
+  return fd
+}
+
+function validateEventProposalSubmitDto(dto) {
+  if (!dto || typeof dto !== 'object') {
+    throwEventProposalValidationError('Event proposal payload is missing.')
+  }
+  if (!String(dto.name ?? '').trim()) {
+    throwEventProposalValidationError('Event name is required.')
+  }
+  if (!EVENT_PROPOSAL_LOCAL_DATETIME_RE.test(String(dto.dateTime ?? '').trim())) {
+    throwEventProposalValidationError('Event date and time are required in local YYYY-MM-DDTHH:mm:ss format.')
+  }
+  if (!isPositiveNumberLike(dto.duration)) {
+    throwEventProposalValidationError('Duration must be a positive number of hours.')
+  }
+  if (!isPositiveNumberLike(dto.attendance)) {
+    throwEventProposalValidationError('Estimated attendance must be a positive number.')
+  }
+
+  const hasBuilding = dto.buildingId != null && String(dto.buildingId).trim?.() !== ''
+  const hasRoom = dto.roomId != null && String(dto.roomId).trim?.() !== ''
+  if (hasBuilding !== hasRoom) {
+    throwEventProposalValidationError('Building and room must be provided together.')
+  }
+
+  if (dto.imageUrl) {
+    try {
+      const url = new URL(String(dto.imageUrl))
+      if (!/^https?:$/i.test(url.protocol)) {
+        throw new Error('unsupported-protocol')
+      }
+    } catch {
+      throwEventProposalValidationError('Image URL must be a valid http or https URL.')
+    }
+  }
+
+  const subEvents = Array.isArray(dto.subEvents) ? dto.subEvents : []
+  subEvents.forEach((subEvent, index) => {
+    const label = `Sub-event ${index + 1}`
+    if (!String(subEvent?.title ?? '').trim()) {
+      throwEventProposalValidationError(`${label} title is required.`)
+    }
+    if (!isPositiveNumberLike(subEvent?.capacity)) {
+      throwEventProposalValidationError(`${label} capacity must be a positive number.`)
+    }
+    if (!String(subEvent?.start ?? '').trim() || !String(subEvent?.end ?? '').trim()) {
+      throwEventProposalValidationError(`${label} start and end time are required.`)
+    }
+  })
+
+  return dto
+}
+
 export function buildEventProposalSubmitDto(form) {
   const f = form && typeof form === 'object' ? form : {}
   const subEvents = Array.isArray(f.subEvents) ? f.subEvents : []
@@ -220,12 +404,12 @@ export function buildEventProposalSubmitDto(form) {
   if (so) out.submittedByOrganization = so
   const iu = f.imageUrl != null ? String(f.imageUrl).trim() : ''
   if (iu) out.imageUrl = iu
-  return out
+  return validateEventProposalSubmitDto(out)
 }
 
 /**
  * Multipart fields for `EventProposalSubmitDto` (student-services + club-admin shared builder).
- * `imageUrl` may be included alongside `imageFile`; backend uses the uploaded file when both are sent.
+ * Event images should be attached as `imageFile`; URL image fields are intentionally omitted.
  */
 function buildEventProposalFormData(dto, options = {}) {
   const includeImageUrl = options.includeImageUrl !== false
@@ -246,10 +430,10 @@ function buildEventProposalFormData(dto, options = {}) {
   return fd
 }
 
-/** Student Services POST /student-services/events/proposals: `application/json` or `multipart/form-data` with `imageFile` / optional `imageUrl` (file wins if both). */
+/** Student Services POST /student-services/events/proposals with optional multipart `imageFile`. */
 function postEventProposalResolvingPath(pathPrimary, pathFallback, dto, imageFile) {
   if (imageFile instanceof File) {
-    const fd = buildEventProposalFormData(dto, { includeImageUrl: true })
+    const fd = buildEventProposalFormData(dto, { includeImageUrl: false })
     fd.append('imageFile', imageFile, imageFile.name)
     const doPost = (p) => clubAuthJson(p, { method: 'POST', body: fd })
     return (async () => {
@@ -316,15 +500,15 @@ export function fetchEvents(params = {}) {
   q.set('page', String(params.page ?? 1))
   q.set('limit', String(params.limit ?? 12))
   const qs = q.toString()
-  return clubAuthJson(`events${qs ? `?${qs}` : ''}`, { method: 'GET' })
+  return rootAuthJson(`events${qs ? `?${qs}` : ''}`, { method: 'GET' })
 }
 
 export function fetchEvent(eventId) {
-  return clubAuthJson(`events/${encodeURIComponent(eventId)}`, { method: 'GET' })
+  return rootAuthJson(`events/${encodeURIComponent(eventId)}`, { method: 'GET' })
 }
 
 export function registerForEvent(eventId) {
-  return clubAuthJson(`events/${encodeURIComponent(eventId)}/registrations`, {
+  return rootAuthJson(`events/${encodeURIComponent(eventId)}/registrations`, {
     method: 'POST',
   })
 }
@@ -371,13 +555,39 @@ function toFiniteIntNonNegative(v) {
 }
 
 export function unregisterFromEvent(eventId) {
-  return clubAuthFetch(`events/${encodeURIComponent(eventId)}/registrations`, {
-    method: 'DELETE',
-  })
+  return rootAuthDeleteExpectOk(`events/${encodeURIComponent(eventId)}/registrations`)
 }
 
 export function fetchEventTicket(eventId) {
-  return clubAuthJson(`events/${encodeURIComponent(eventId)}/ticket`, { method: 'GET' })
+  return rootAuthJson(`events/${encodeURIComponent(eventId)}/ticket`, { method: 'GET' })
+}
+
+export function checkInEvent(eventId, jwt) {
+  return rootAuthJson(`events/${encodeURIComponent(eventId)}/check-in`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jwt }),
+  })
+}
+
+export function createEvent(body) {
+  const fd = buildEventsControllerFormData(body, { includeClubId: true })
+  return rootAuthJson('events', {
+    method: 'POST',
+    body: fd,
+  })
+}
+
+export function updateEvent(eventId, body) {
+  const fd = buildEventsControllerFormData(body, { includeStatus: true })
+  return rootAuthJson(`events/${encodeURIComponent(eventId)}`, {
+    method: 'PATCH',
+    body: fd,
+  })
+}
+
+export function deleteEvent(eventId) {
+  return rootAuthDeleteExpectOk(`events/${encodeURIComponent(eventId)}`)
 }
 
 /* --- Vacancies --- */
@@ -940,37 +1150,41 @@ export function deleteClubAdminEmployee(clubId, employeeId) {
 }
 
 export function fetchClubAdminEvents(clubId, params = {}) {
-  const q = new URLSearchParams()
-  if (params.status) q.set('status', String(params.status))
-  if (params.search) q.set('search', String(params.search))
-  q.set('page', String(params.page ?? 1))
-  q.set('limit', String(params.limit ?? 24))
-  const qs = q.toString()
-  return clubAuthJson(clubAdminPath(clubId, `events${qs ? `?${qs}` : ''}`), { method: 'GET' })
-}
-
-export function patchClubAdminEvent(clubId, eventId, body) {
-  return clubAuthJson(clubAdminPath(clubId, `events/${encodeURIComponent(eventId)}`), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+  return fetchEvents({
+    clubId,
+    search: params.search,
+    page: params.page ?? 1,
+    limit: params.limit ?? 24,
   })
 }
 
+export function patchClubAdminEvent(clubId, eventId, body) {
+  void clubId
+  return updateEvent(eventId, body)
+}
+
 /**
- * `POST /api/v1/club-admin/{clubId}/events/proposals` — accepts `application/json` or `multipart/form-data`.
- * Frontend sends multipart here so optional `imageFile` and `imageUrl` can share the same flow.
+ * Club admin event proposals go through `POST /club/api/v1/club-admin/{clubId}/events/proposals`.
  * @param {string|number} clubId
- * @param {Record<string, unknown>} formState — fields for {@link buildEventProposalSubmitDto}; may include `imageUrl`
- * @param {File|null|undefined} [imageFile] — optional event poster / image
+ * @param {Record<string, unknown>} formState — EventsController fields except `clubId`
+ * @param {File|null|undefined} [imageFile] — optional event poster / image upload
  */
 export function proposeClubAdminEvent(clubId, formState, imageFile) {
-  const dto = buildEventProposalSubmitDto(formState)
-  const fd = buildEventProposalFormData(dto, { includeImageUrl: true })
-  if (imageFile instanceof File) {
-    fd.append('imageFile', imageFile, imageFile.name)
+  const clubKey = String(clubId ?? '').trim()
+  if (!clubKey) {
+    const err = new Error('Club id is required to submit an event proposal.')
+    err.status = 400
+    throw err
   }
-  return clubAuthJson(clubAdminPath(clubId, 'events/proposals'), { method: 'POST', body: fd })
+  const dto = buildEventProposalSubmitDto(
+    formState && typeof formState === 'object' ? formState : {}
+  )
+  return postEventProposalResolvingPath(
+    clubAdminPath(clubKey, 'events/proposals'),
+    null,
+    dto,
+    imageFile
+  )
 }
 
 export function fetchClubAdminEventAttendees(clubId, eventId) {
@@ -1182,13 +1396,19 @@ export function fetchStudentServicesEventProposals(params = {}) {
 }
 
 /**
- * `POST /api/v1/student-services/events/proposals` — `application/json` or `multipart/form-data`;
- * optional `imageUrl` + `imageFile` (upload wins if both; CLUB_API_DOC).
- * @param {Record<string, unknown>} formState — include `imageUrl` when using a pre-hosted URL
+ * `POST /api/v1/student-services/events/proposals`.
+ * Event images must be sent as `imageFile`; `imageUrl`/`imgUrl` are intentionally stripped.
+ * @param {Record<string, unknown>} formState
  * @param {File|null|undefined} [imageFile]
  */
 export function submitStudentServicesEventProposal(formState, imageFile) {
-  const dto = buildEventProposalSubmitDto(formState)
+  const safeFormState =
+    formState && typeof formState === 'object'
+      ? Object.fromEntries(
+          Object.entries(formState).filter(([key]) => key !== 'imageUrl' && key !== 'imgUrl')
+        )
+      : {}
+  const dto = buildEventProposalSubmitDto(safeFormState)
   return postEventProposalResolvingPath('student-services/events/proposals', null, dto, imageFile)
 }
 

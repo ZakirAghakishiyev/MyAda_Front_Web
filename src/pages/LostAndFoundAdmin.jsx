@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { itemHasEligibleClaimForOwnerNotify, getLostFoundAdminWorkflowPhase } from '../api/lostFoundApi'
+import { getLostFoundCategories, itemHasEligibleClaimForOwnerNotify, getLostFoundAdminWorkflowPhase } from '../api/lostFoundApi'
 import { useLostAndFoundAdmin } from '../contexts/LostAndFoundAdminContext'
 import AdminSidebar from '../components/AdminSidebar'
 import './LostAndFoundAdmin.css'
@@ -36,13 +36,35 @@ const IconCamera = () => (
   </svg>
 )
 
+const ITEMS_PER_PAGE = 5
+const DEFAULT_FILTERS = {
+  searchKeyword: '',
+  categoryFilter: 'All Categories',
+  locationFilter: 'Main Campus',
+}
+
+function getAdminStatusFilter(tab) {
+  if (tab === 'Pending') return 'pending'
+  if (tab === 'In office' || tab === 'Ready') return 'received'
+  if (tab === 'Completed') return 'delivered'
+  return null
+}
+
 export default function LostAndFoundAdmin() {
   const navigate = useNavigate()
-  const { items, isLoading, error, notifyOwner, confirmReceipt, confirmHandover } = useLostAndFoundAdmin()
-  const [searchKeyword, setSearchKeyword] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('All Categories')
-  const [locationFilter, setLocationFilter] = useState('Main Campus')
-  const [tableFilter, setTableFilter] = useState('All') // All | Pending | In office | Completed
+  const { fetchItems, fetchStatusTotals, fetchItemDetail, notifyOwner, confirmReceipt, confirmHandover } = useLostAndFoundAdmin()
+
+  const [searchKeyword, setSearchKeyword] = useState(DEFAULT_FILTERS.searchKeyword)
+  const [categoryFilter, setCategoryFilter] = useState(DEFAULT_FILTERS.categoryFilter)
+  const [locationFilter, setLocationFilter] = useState(DEFAULT_FILTERS.locationFilter)
+  const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS)
+  const [tableFilter, setTableFilter] = useState('All')
+  const [items, setItems] = useState([])
+  const [totalItems, setTotalItems] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState([{ id: '', name: 'All Categories' }])
+  const [kpis, setKpis] = useState({ pending: 0, received: 0, delivered: 0 })
   const [verifyModalItem, setVerifyModalItem] = useState(null)
   const [handoverItem, setHandoverItem] = useState(null)
   const [receiptStorageBin, setReceiptStorageBin] = useState('')
@@ -57,15 +79,34 @@ export default function LostAndFoundAdmin() {
   const [actionError, setActionError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
-  const manualEntryRef = useRef(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 5
-  const adminPhase = (item) => getLostFoundAdminWorkflowPhase(item)
+  const [reloadToken, setReloadToken] = useState(0)
+  const manualEntryRef = useRef(null)
+
+  const categoryNames = useMemo(
+    () => categoryOptions.map((option) => option.name),
+    [categoryOptions],
+  )
+
+  const categoryNameToId = useMemo(() => {
+    return Object.fromEntries(
+      categoryOptions
+        .filter((option) => option.id)
+        .map((option) => [option.name, option.id]),
+    )
+  }, [categoryOptions])
+
+  const pageNumbers = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
+    const start = Math.max(1, Math.min(currentPage - 1, totalPages - 2))
+    const end = Math.min(totalPages, start + 2)
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+  }, [currentPage, totalItems])
 
   useEffect(() => {
     if (!manualEntryOpen) return
-    const handleClickOutside = (e) => {
-      if (manualEntryRef.current && !manualEntryRef.current.contains(e.target)) {
+    const handleClickOutside = (event) => {
+      if (manualEntryRef.current && !manualEntryRef.current.contains(event.target)) {
         setManualEntryOpen(false)
       }
     }
@@ -73,90 +114,194 @@ export default function LostAndFoundAdmin() {
     return () => document.removeEventListener('click', handleClickOutside)
   }, [manualEntryOpen])
 
-  const categories = useMemo(() => {
-    const set = new Set(items.map((i) => i.category))
-    return ['All Categories', ...Array.from(set).sort()]
-  }, [items])
-
-  const filteredItems = useMemo(() => {
-    let list = items
-    if (searchKeyword.trim()) {
-      const q = searchKeyword.trim().toLowerCase()
-      list = list.filter(
-        (i) =>
-          i.title.toLowerCase().includes(q) ||
-          i.referenceNumber?.toLowerCase().includes(q) ||
-          i.category?.toLowerCase().includes(q)
-      )
+  useEffect(() => {
+    let isMounted = true
+    getLostFoundCategories()
+      .then((result) => {
+        if (!isMounted) return
+        const nextOptions = [{ id: '', name: 'All Categories' }]
+        for (const category of Array.isArray(result) ? result : []) {
+          const name = String(category?.name || '').trim()
+          if (!name) continue
+          const id = category?.id == null ? '' : String(category.id)
+          if (nextOptions.some((option) => option.name === name)) continue
+          nextOptions.push({ id, name })
+        }
+        setCategoryOptions(nextOptions)
+      })
+      .catch(() => {
+        if (isMounted) setCategoryOptions([{ id: '', name: 'All Categories' }])
+      })
+    return () => {
+      isMounted = false
     }
-    if (categoryFilter !== 'All Categories') list = list.filter((i) => i.category === categoryFilter)
-    if (tableFilter === 'Pending') list = list.filter((i) => adminPhase(i) === 'pending')
-    if (tableFilter === 'In office' || tableFilter === 'Ready') list = list.filter((i) => adminPhase(i) === 'received')
-    if (tableFilter === 'Completed') list = list.filter((i) => adminPhase(i) === 'delivered')
-    return list
-  }, [items, searchKeyword, categoryFilter, tableFilter])
+  }, [])
 
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / itemsPerPage))
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
-    return filteredItems.slice(start, start + itemsPerPage)
-  }, [filteredItems, currentPage])
-
-  const kpis = useMemo(() => {
-    const pending = items.filter((i) => adminPhase(i) === 'pending').length
-    const received = items.filter((i) => adminPhase(i) === 'received').length
-    const delivered = items.filter((i) => adminPhase(i) === 'delivered').length
-    return {
-      newlyReported: pending,
-      inOffice: received,
-      awaitingPickup: received,
-      claimedToday: delivered
+  useEffect(() => {
+    let isMounted = true
+    setError('')
+    fetchStatusTotals()
+      .then((totals) => {
+        if (!isMounted) return
+        setKpis({
+          pending: Number(totals?.pending || 0),
+          received: Number(totals?.received || 0),
+          delivered: Number(totals?.delivered || 0),
+        })
+      })
+      .catch((err) => {
+        if (!isMounted) return
+        setError(err?.message || 'Failed to load admin dashboard counts.')
+      })
+    return () => {
+      isMounted = false
     }
-  }, [items])
+  }, [fetchStatusTotals, reloadToken])
+
+  useEffect(() => {
+    let isMounted = true
+    const params = {
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+    }
+    const q = appliedFilters.searchKeyword.trim()
+    if (q) params.q = q
+    const categoryId = categoryNameToId[appliedFilters.categoryFilter]
+    if (categoryId) params.categoryId = categoryId
+    const adminStatus = getAdminStatusFilter(tableFilter)
+    if (adminStatus) params.adminStatus = adminStatus
+
+    setIsLoading(true)
+    setError('')
+    fetchItems(params)
+      .then((result) => {
+        if (!isMounted) return
+        setItems(Array.isArray(result.items) ? result.items : [])
+        setTotalItems(Number(result.total || 0))
+      })
+      .catch((err) => {
+        if (!isMounted) return
+        setItems([])
+        setTotalItems(0)
+        setError(err?.message || 'Failed to load admin items.')
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [appliedFilters, categoryNameToId, currentPage, fetchItems, reloadToken, tableFilter])
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
+  const adminPhase = (item) => getLostFoundAdminWorkflowPhase(item)
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   const handleApplyFilters = () => {
     setCurrentPage(1)
+    setAppliedFilters({
+      searchKeyword,
+      categoryFilter,
+      locationFilter,
+    })
   }
 
-  const handleConfirmReceipt = (item) => {
+  const handleTableFilterChange = (nextFilter) => {
+    setCurrentPage(1)
+    setTableFilter(nextFilter)
+  }
+
+  const triggerReload = () => {
+    setReloadToken((current) => current + 1)
+  }
+
+  const receiptWasPersisted = async (itemId) => {
+    try {
+      const detail = await fetchItemDetail(itemId)
+      return getLostFoundAdminWorkflowPhase(detail?.item) === 'received'
+    } catch {
+      return false
+    }
+  }
+
+  const resetReceiptModalState = () => {
     setActionError('')
     setReceiptStorageBin('')
     setReceiptCondition('')
     setReceiptNotes('')
     setReceiptVerified(false)
     setReceiptIntakeFile(null)
+  }
+
+  const handleConfirmReceipt = (item) => {
+    resetReceiptModalState()
     setVerifyModalItem(item)
   }
+
   const handleVerifyApprove = async () => {
     if (!verifyModalItem || isSubmitting) return
-    if (!receiptStorageBin.trim()) {
-      setActionError('Office Storage Bin / ID is required.')
-      return
-    }
     if (!receiptCondition) {
       setActionError('Verified condition is required.')
       return
     }
-    if (!receiptVerified) {
-      setActionError('Please confirm data accuracy before approval.')
-      return
-    }
     setActionError('')
     setIsSubmitting(true)
+    const trimmedStorageBinId = receiptStorageBin.trim()
+    const trimmedAdminNotes = receiptNotes.trim()
+    const receiptPayload = {
+      storageBinId: trimmedStorageBinId,
+      condition: receiptCondition,
+      confirmAccuracy: receiptVerified,
+      adminNotes: trimmedAdminNotes,
+      intakePhotoFile: receiptIntakeFile || undefined,
+    }
     try {
-      await confirmReceipt(verifyModalItem.id, {
-        storageBinId: receiptStorageBin.trim(),
-        condition: receiptCondition,
-        confirmAccuracy: receiptVerified,
-        adminNotes: receiptNotes.trim(),
-        intakePhotoFile: receiptIntakeFile || undefined,
-      })
-      await notifyOwner(
-        verifyModalItem.id,
-        `Your ${verifyModalItem.title || 'item'} has been verified and is ready for pickup at the Lost & Found office.`
-      )
+      await confirmReceipt(verifyModalItem.id, receiptPayload)
       setVerifyModalItem(null)
+      triggerReload()
     } catch (err) {
+      if (err?.status === 500) {
+        if (await receiptWasPersisted(verifyModalItem.id)) {
+          resetReceiptModalState()
+          setVerifyModalItem(null)
+          triggerReload()
+          return
+        }
+
+        const hasOptionalReceiptFields = Boolean(
+          trimmedStorageBinId ||
+          trimmedAdminNotes ||
+          receiptVerified,
+        )
+
+        if (hasOptionalReceiptFields) {
+          try {
+            await confirmReceipt(verifyModalItem.id, {
+              condition: receiptCondition,
+              intakePhotoFile: receiptIntakeFile || undefined,
+            })
+            resetReceiptModalState()
+            setVerifyModalItem(null)
+            triggerReload()
+            return
+          } catch (retryErr) {
+            if (await receiptWasPersisted(verifyModalItem.id)) {
+              resetReceiptModalState()
+              setVerifyModalItem(null)
+              triggerReload()
+              return
+            }
+            setActionError(retryErr?.message || err?.message || 'Failed to confirm receipt.')
+            return
+          }
+        }
+      }
       setActionError(err?.message || 'Failed to confirm receipt.')
     } finally {
       setIsSubmitting(false)
@@ -171,6 +316,7 @@ export default function LostAndFoundAdmin() {
     setHandoverProofFile(null)
     setHandoverItem(item)
   }
+
   const handleFinalizeDelivery = async () => {
     if (!handoverItem || isSubmitting) return
     if (!handoverStudentName.trim()) {
@@ -195,6 +341,7 @@ export default function LostAndFoundAdmin() {
         handoverProofFile: handoverProofFile || undefined,
       })
       setHandoverItem(null)
+      triggerReload()
     } catch (err) {
       setActionError(err?.message || 'Failed to finalize delivery.')
     } finally {
@@ -209,8 +356,9 @@ export default function LostAndFoundAdmin() {
     try {
       await notifyOwner(
         item.id,
-        `An update is available for your ${item.title || 'item'} report. Please check your Lost & Found dashboard.`
+        `An update is available for your ${item.title || 'item'} report. Please check your Lost & Found dashboard.`,
       )
+      triggerReload()
     } catch (err) {
       setActionError(err?.message || 'Failed to notify owner.')
     } finally {
@@ -222,6 +370,7 @@ export default function LostAndFoundAdmin() {
     setManualEntryOpen(false)
     navigate('/lost-and-found-2', { state: { from: 'admin', openReport: 'lost' } })
   }
+
   const handleManualEntryFound = () => {
     setManualEntryOpen(false)
     navigate('/lost-and-found-2', { state: { from: 'admin', openReport: 'found' } })
@@ -237,7 +386,7 @@ export default function LostAndFoundAdmin() {
         locationFilter={locationFilter}
         setLocationFilter={setLocationFilter}
         onApplyFilters={handleApplyFilters}
-        categories={categories}
+        categories={categoryNames}
       />
 
       <main className="lf-admin-main">
@@ -254,7 +403,7 @@ export default function LostAndFoundAdmin() {
               <button
                 type="button"
                 className="lf-admin-btn-primary"
-                onClick={() => setManualEntryOpen((v) => !v)}
+                onClick={() => setManualEntryOpen((value) => !value)}
                 aria-expanded={manualEntryOpen}
                 aria-haspopup="true"
               >
@@ -278,30 +427,30 @@ export default function LostAndFoundAdmin() {
           <div className="lf-admin-kpi">
             <div className="lf-admin-kpi-icon lf-admin-kpi-icon--blue"><IconInfo /></div>
             <div className="lf-admin-kpi-content">
-              <span className="lf-admin-kpi-value">{kpis.newlyReported}</span>
+              <span className="lf-admin-kpi-value">{kpis.pending}</span>
               <span className="lf-admin-kpi-label">Newly Reported</span>
             </div>
           </div>
           <div className="lf-admin-kpi">
             <div className="lf-admin-kpi-icon lf-admin-kpi-icon--purple"><IconBox /></div>
             <div className="lf-admin-kpi-content">
-              <span className="lf-admin-kpi-value">{kpis.inOffice}</span>
+              <span className="lf-admin-kpi-value">{kpis.received}</span>
               <span className="lf-admin-kpi-label">In Office (Received)</span>
             </div>
           </div>
           <div className="lf-admin-kpi">
             <div className="lf-admin-kpi-icon lf-admin-kpi-icon--orange"><IconClock /></div>
             <div className="lf-admin-kpi-content">
-              <span className="lf-admin-kpi-value">{kpis.awaitingPickup}</span>
+              <span className="lf-admin-kpi-value">{kpis.received}</span>
               <span className="lf-admin-kpi-label">Awaiting Pickup</span>
             </div>
           </div>
           <div className="lf-admin-kpi">
             <div className="lf-admin-kpi-icon lf-admin-kpi-icon--green"><IconCheck /></div>
             <div className="lf-admin-kpi-content">
-              <span className="lf-admin-kpi-value">{kpis.claimedToday}</span>
+              <span className="lf-admin-kpi-value">{kpis.delivered}</span>
               <span className="lf-admin-kpi-label">Claimed Today</span>
-              </div>
+            </div>
           </div>
         </div>
 
@@ -316,7 +465,7 @@ export default function LostAndFoundAdmin() {
                   className={`lf-admin-tab ${
                     tableFilter === tab || (tab === 'In office' && tableFilter === 'Ready') ? 'lf-admin-tab--active' : ''
                   }`}
-                  onClick={() => setTableFilter(tab)}
+                  onClick={() => handleTableFilterChange(tab)}
                 >
                   {tab}
                 </button>
@@ -341,7 +490,7 @@ export default function LostAndFoundAdmin() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedItems.map((item) => (
+                {items.map((item) => (
                   <tr key={item.id}>
                     <td>
                       <button
@@ -408,7 +557,7 @@ export default function LostAndFoundAdmin() {
                     <td colSpan="5">Loading...</td>
                   </tr>
                 )}
-                {!isLoading && !paginatedItems.length && (
+                {!isLoading && !items.length && (
                   <tr>
                     <td colSpan="5">{error || 'No items found.'}</td>
                   </tr>
@@ -418,40 +567,40 @@ export default function LostAndFoundAdmin() {
           </div>
 
           <footer className="lf-admin-table-footer">
-            <span>Showing {paginatedItems.length} of {filteredItems.length} active items</span>
+            <span>Showing {items.length} of {totalItems} active items</span>
             <div className="lf-admin-pagination">
               <button
                 type="button"
                 className="lf-admin-page-btn"
                 disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
+                onClick={() => setCurrentPage((page) => page - 1)}
               >
-                ‹
+                &lt;
               </button>
-              {Array.from({ length: Math.min(3, totalPages) }, (_, i) => i + 1).map((p) => (
+              {pageNumbers.map((page) => (
                 <button
-                  key={p}
+                  key={page}
                   type="button"
-                  className={`lf-admin-page-btn ${currentPage === p ? 'lf-admin-page-btn--active' : ''}`}
-                  onClick={() => setCurrentPage(p)}
+                  className={`lf-admin-page-btn ${currentPage === page ? 'lf-admin-page-btn--active' : ''}`}
+                  onClick={() => setCurrentPage(page)}
                 >
-                  {p}
+                  {page}
                 </button>
               ))}
               <button
                 type="button"
                 className="lf-admin-page-btn"
                 disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
+                onClick={() => setCurrentPage((page) => page + 1)}
               >
-                ›
+                &gt;
               </button>
             </div>
           </footer>
         </section>
 
         <footer className="lf-admin-footer">
-          <span>© 2023 University Inventory Systems. All rights reserved.</span>
+          <span>Copyright 2023 University Inventory Systems. All rights reserved.</span>
           <div>
             <a href="#privacy">Privacy Policy</a>
             <a href="#status">System Status</a>
@@ -460,11 +609,13 @@ export default function LostAndFoundAdmin() {
         </footer>
       </main>
 
-      {/* Verify Item Receipt modal (Pending → Received) */}
       {verifyModalItem && (
         <div
           className="lf-admin-modal-overlay"
-          onClick={() => setVerifyModalItem(null)}
+          onClick={() => {
+            resetReceiptModalState()
+            setVerifyModalItem(null)
+          }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="verify-receipt-title"
@@ -474,8 +625,16 @@ export default function LostAndFoundAdmin() {
               <h2 id="verify-receipt-title">Verify Item Receipt</h2>
               <span className="lf-admin-modal-badge lf-admin-modal-badge--pending">PENDING VERIFICATION</span>
               <span className="lf-admin-modal-tracking">Tracking ID: #{verifyModalItem.referenceNumber?.replace('LF-', '') || verifyModalItem.id}</span>
-              <button type="button" className="lf-admin-modal-close" onClick={() => setVerifyModalItem(null)} aria-label="Close">
-                ×
+              <button
+                type="button"
+                className="lf-admin-modal-close"
+                onClick={() => {
+                  resetReceiptModalState()
+                  setVerifyModalItem(null)
+                }}
+                aria-label="Close"
+              >
+                x
               </button>
             </div>
             <div className="lf-admin-verify-grid">
@@ -488,11 +647,11 @@ export default function LostAndFoundAdmin() {
                   <dt>ITEM CATEGORY</dt>
                   <dd>{verifyModalItem.category}</dd>
                   <dt>REPORTED COLOR</dt>
-                  <dd>—</dd>
+                  <dd>-</dd>
                   <dt>BRAND/MODEL</dt>
                   <dd>{verifyModalItem.title}</dd>
                   <dt>DATE FOUND</dt>
-                  <dd>{verifyModalItem.datePosted}</dd>
+                  <dd>{verifyModalItem.datePosted || (verifyModalItem.postedAt ? new Date(verifyModalItem.postedAt).toLocaleDateString() : '-')}</dd>
                 </dl>
                 <div className="lf-admin-verify-desc">
                   <strong>Student Description</strong>
@@ -510,10 +669,10 @@ export default function LostAndFoundAdmin() {
                   />
                   <IconCamera />
                   <span>Click to upload photo</span>
-                  <span className="lf-admin-upload-hint">PNG or JPG — optional intake photo</span>
+                  <span className="lf-admin-upload-hint">PNG or JPG - optional intake photo</span>
                 </label>
                 <label className="lf-admin-field">
-                  <span>Office Storage Bin / ID *</span>
+                  <span>Office Storage Bin / ID</span>
                   <input type="text" placeholder="e.g. BIN-402-A" value={receiptStorageBin} onChange={(e) => setReceiptStorageBin(e.target.value)} />
                 </label>
                 <label className="lf-admin-field">
@@ -531,23 +690,31 @@ export default function LostAndFoundAdmin() {
                 </label>
                 <label className="lf-admin-checkbox">
                   <input type="checkbox" checked={receiptVerified} onChange={(e) => setReceiptVerified(e.target.checked)} />
-                  <span>Confirm Data Accuracy — I have physically verified the item matches the student report and is now in secure storage.</span>
+                  <span>Confirm Data Accuracy - Optional. Leave unchecked if you are recording intake without this confirmation.</span>
                 </label>
               </div>
             </div>
             <div className="lf-admin-modal-footer">
               {actionError ? <p className="lf-admin-modal-info">{actionError}</p> : null}
-              <p className="lf-admin-modal-info"><IconInfo /> Approving this item will automatically notify the student via the university mobile app and email.</p>
+              <p className="lf-admin-modal-info"><IconInfo /> Confirming receipt records intake with the backend. Lost-item reports may trigger an automatic poster notification; use Notify Owner separately when you want to contact a claimant from the admin flow.</p>
               <div>
-                <button type="button" className="lf-admin-btn-secondary" onClick={() => setVerifyModalItem(null)}>Cancel</button>
-                <button type="button" className="lf-admin-btn-primary" onClick={handleVerifyApprove} disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Approve & Notify Student'}</button>
+                <button
+                  type="button"
+                  className="lf-admin-btn-secondary"
+                  onClick={() => {
+                    resetReceiptModalState()
+                    setVerifyModalItem(null)
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="lf-admin-btn-primary" onClick={handleVerifyApprove} disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Confirm Receipt'}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Handover / Finalize Delivery modal (Received → Delivered) */}
       {handoverItem && (
         <div
           className="lf-admin-modal-overlay"
@@ -560,9 +727,9 @@ export default function LostAndFoundAdmin() {
             <div className="lf-admin-modal-header">
               <h2 id="handover-title">Handover: {handoverItem.title}</h2>
               <span className="lf-admin-modal-badge lf-admin-modal-badge--ready">Ready for Pickup</span>
-              <span className="lf-admin-modal-tracking">Found {handoverItem.datePosted} · ID: {handoverItem.referenceNumber}</span>
+              <span className="lf-admin-modal-tracking">Found {handoverItem.datePosted} - ID: {handoverItem.referenceNumber}</span>
               <button type="button" className="lf-admin-modal-close" onClick={() => setHandoverItem(null)} aria-label="Close">
-                ×
+                x
               </button>
             </div>
             <div className="lf-admin-verify-grid">
@@ -591,7 +758,7 @@ export default function LostAndFoundAdmin() {
                 </label>
                 <label className="lf-admin-checkbox">
                   <input type="checkbox" checked={handoverVerified} onChange={(e) => setHandoverVerified(e.target.checked)} />
-                  <span>Student ID Verified Manually — I confirm that I have inspected the physical ID card and the photo matches the claimant.</span>
+                  <span>Student ID Verified Manually - I confirm that I have inspected the physical ID card and the photo matches the claimant.</span>
                 </label>
                 <div className="lf-admin-signature-zone">
                   <span>Signature area (use mouse or touch)</span>
@@ -607,7 +774,7 @@ export default function LostAndFoundAdmin() {
                   />
                   <IconCamera />
                   <span>Click to upload or drag and drop</span>
-                  <span className="lf-admin-upload-hint">PNG or JPG — optional handover proof</span>
+                  <span className="lf-admin-upload-hint">PNG or JPG - optional handover proof</span>
                 </label>
               </div>
             </div>

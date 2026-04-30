@@ -137,6 +137,7 @@ const ClubAdminSuggestEvent = () => {
   const [catering, setCatering] = useState(false)
   const [cleaning, setCleaning] = useState(true)
   const [otherNeeds, setOtherNeeds] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -232,7 +233,7 @@ const ClubAdminSuggestEvent = () => {
     setCatering(Boolean(draft.catering))
     setCleaning(draft.cleaning !== undefined ? Boolean(draft.cleaning) : true)
     setOtherNeeds(draft.otherNeeds || '')
-    if (draft.posterImageUrl != null) setPosterImageUrl(String(draft.posterImageUrl))
+    setPosterImageUrl(draft.posterImageUrl || '')
   }, [])
 
   const handleSaveDraft = () => {
@@ -262,13 +263,15 @@ const ClubAdminSuggestEvent = () => {
   }
 
   const handleSubmit = async () => {
+    if (submitting) return
+    setSubmitting(true)
     try {
-      const url = posterImageUrl.trim()
+      const startTime = composeProposalStartDateTime(eventDate, eventTime)
       await proposeClubAdminEvent(
         clubId,
         {
           name: eventName.trim() || 'Event proposal',
-          dateTime: composeProposalStartDateTime(eventDate, eventTime),
+          dateTime: startTime,
           duration,
           attendance,
           venue: venue || 'TBD',
@@ -283,12 +286,14 @@ const ClubAdminSuggestEvent = () => {
             cleaning,
             otherNeeds,
           },
-          ...(url ? { imageUrl: url } : {}),
+          submittedByOrganization: 'Club Administration',
+          ...(posterImageUrl.trim() ? { imageUrl: posterImageUrl.trim() } : {}),
         },
         posterFile
       )
     } catch (err) {
       alert(err?.message || 'Could not submit event proposal.')
+      setSubmitting(false)
       return
     }
     clearDraftCookie(SUGGEST_EVENT_DRAFT_COOKIE_KEY)
@@ -470,7 +475,7 @@ const ClubAdminSuggestEvent = () => {
               </button>
               {posterFile && <div style={{ marginTop: 8, fontSize: 12, color: '#2563eb' }}>{posterFile.name}</div>}
               <div className="club-admin-field" style={{ marginTop: 14 }}>
-                <label style={{ fontSize: 12 }}>Or image URL (optional)</label>
+                <label style={{ fontSize: 12 }}>Image URL (optional)</label>
                 <input
                   type="url"
                   placeholder="https://… (upload wins if both are set)"
@@ -479,7 +484,7 @@ const ClubAdminSuggestEvent = () => {
                 />
               </div>
               <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
-                Per API: you can send an upload or a public image URL. If both are provided, the uploaded file is used.
+                Submit either an uploaded poster or an image URL. If both are set, the uploaded file is sent.
               </p>
             </div>
           </div>
@@ -673,8 +678,10 @@ const ClubAdminSuggestEvent = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, padding: '20px 24px 32px' }} className="club-admin-suggest-event-actions">
-          <button type="button" className="club-admin-btn-secondary" onClick={handleSaveDraft}>Save Draft</button>
-          <button type="button" className="club-admin-btn-primary" onClick={handleSubmit}>Submit for Approval →</button>
+          <button type="button" className="club-admin-btn-secondary" onClick={handleSaveDraft} disabled={submitting}>Save Draft</button>
+          <button type="button" className="club-admin-btn-primary" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Submitting...' : 'Submit for Approval →'}
+          </button>
         </div>
       </div>
     </>

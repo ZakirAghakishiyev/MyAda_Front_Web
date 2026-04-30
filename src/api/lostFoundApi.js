@@ -1,13 +1,30 @@
 import { authFetch } from '../auth'
 import { API_BASE } from './apiBase'
 
-// Gateway base (override with VITE_LOST_FOUND_HOST).
-const LOST_FOUND_HOST = (import.meta.env.VITE_LOST_FOUND_HOST ?? API_BASE).replace(
-  /\/+$/,
-  '',
-)
-const LOST_FOUND_API_BASE = `${LOST_FOUND_HOST}/lostfound/api/lost-and-found`
-const LOST_FOUND_CATEGORIES_URL = `${LOST_FOUND_HOST}/lostfound/api/v1/categories`
+function resolveLostFoundBases() {
+  const raw = String(import.meta.env.VITE_LOST_FOUND_HOST || API_BASE || '').trim().replace(/\/+$/, '')
+  const normalized = raw.replace(/\/api\/lost-and-found$/i, '').replace(/\/api$/i, '')
+  const origin = normalized.replace(/\/lostfound$/i, '')
+  const gatewayBase = /\/lostfound$/i.test(normalized)
+    ? normalized
+    : `${origin}/lostfound`
+
+  return {
+    origin,
+    gatewayBase,
+    apiBase: `${gatewayBase}/api/lost-and-found`,
+  }
+}
+
+// Gateway base (override with VITE_LOST_FOUND_HOST). Accepts:
+// `https://myada.site`, `https://myada.site/lostfound`,
+// `https://myada.site/lostfound/api`, or the full lost-found API base.
+const {
+  origin: LOST_FOUND_ORIGIN,
+  gatewayBase: LOST_FOUND_GATEWAY_BASE,
+  apiBase: LOST_FOUND_API_BASE,
+} = resolveLostFoundBases()
+const LOST_FOUND_CATEGORIES_URL = `${LOST_FOUND_GATEWAY_BASE}/api/v1/categories`
 
 function normalizeCategoryId(value) {
   if (value === undefined || value === null) return null
@@ -40,14 +57,14 @@ function normalizeMediaUrl(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
   if (raw.startsWith('data:')) return raw
-  if (raw.startsWith('/')) return `${LOST_FOUND_HOST}${raw}`
+  if (raw.startsWith('/')) return `${LOST_FOUND_ORIGIN}${raw}`
   if (/^https?:\/\//i.test(raw)) return raw
   if (/^[a-z0-9-]+:\d+\//i.test(raw)) {
     const slashAt = raw.indexOf('/')
     const pathOnly = slashAt >= 0 ? raw.slice(slashAt) : ''
-    return `${LOST_FOUND_HOST}${pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`}`
+    return `${LOST_FOUND_ORIGIN}${pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`}`
   }
-  if (raw.startsWith('uploads/')) return `${LOST_FOUND_HOST}/${raw}`
+  if (raw.startsWith('uploads/')) return `${LOST_FOUND_ORIGIN}/${raw}`
   return raw
 }
 
@@ -384,6 +401,10 @@ export function getLostFoundStatusBadgeVariant(statusLabel) {
   return 'pending'
 }
 
+function isLostFoundPubliclyActive(rawStatus) {
+  return formatPublicStatusForDisplay(rawStatus) === 'Active'
+}
+
 /**
  * `status` = public catalog label (Active | Pending verification).
  * `adminStatus` = staff workflow (Pending | Received | Delivered), inferred when the API omits it.
@@ -442,6 +463,13 @@ function formatErrorMessage(data, status) {
     if (parts.length) message = `${message} — ${parts.join('; ')}`
   }
   return String(message)
+}
+
+function createRequestValidationError(message) {
+  const err = new Error(message)
+  err.status = 400
+  err.code = 'client_validation'
+  return err
 }
 
 async function parseResponse(res) {
@@ -593,25 +621,27 @@ export async function createFoundReport(fields, files = []) {
 export async function getLostFoundItems(params = {}) {
   /**
    * `adminListingMode: true` — do not client-filter; admin/leader need all workflow states.
-   * `false` — public board: from the raw response, show everything except **handover complete**
-   * (`adminStatus` phase `delivered`), so items **in office** (`received`) stay discoverable
-   * for pickup. (Gateway §1.2 may still omit `received`/`delivered` for non–role callers; that is server-side.)
+   * `false` — public board: normal users should only see publicly active items.
+   * We request `status=active` unless the caller explicitly asks for a status or `postedBy=me`,
+   * then re-filter client-side as a safety net in case the gateway ignores the status query.
    */
   const adminListingMode = params.adminListingMode === true
+  const ownAnnouncementsMode = String(params.postedBy || '').trim().toLowerCase() === 'me'
+  const publicActiveOnly = !adminListingMode && !ownAnnouncementsMode
   const qs = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
     if (key === 'adminListingMode') return
     if (value === undefined || value === null || String(value).trim() === '') return
     qs.set(key, String(value))
   })
+  if (publicActiveOnly && !qs.has('status')) {
+    qs.set('status', 'active')
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   const result = await request(`/items${suffix}`)
   let rawItems = Array.isArray(result?.items) ? result.items : []
-  if (!adminListingMode) {
-    rawItems = rawItems.filter((i) => {
-      const ph = getLostFoundAdminWorkflowPhase(i)
-      return ph !== 'delivered'
-    })
+  if (publicActiveOnly) {
+    rawItems = rawItems.filter((i) => isLostFoundPubliclyActive(i?.status ?? i?.Status))
   }
   const items = rawItems.map(normalizeLostFoundItem)
   return {
@@ -673,16 +703,40 @@ export async function notifyLostFoundOwner(id, payload) {
  */
 export async function confirmLostFoundReceipt(id, payload = {}) {
   const form = new FormData()
-  const storageBinId = payload.storageBinId
-  const condition = payload.condition || payload.verifiedCondition
-  if (storageBinId) form.append('storageBinId', String(storageBinId).trim())
-  if (condition) form.append('condition', String(condition).trim())
+  const storageBinId = String(payload.storageBinId ?? '').trim()
+  const condition = String(payload.condition || payload.verifiedCondition || '')
+    .trim()
+    .toLowerCase()
+  const adminNotes = String(payload.adminNotes ?? '').trim()
+  const intakePhotoFile = payload.intakePhotoFile
+
+  if (!condition) {
+    throw createRequestValidationError('Condition is required.')
+  }
+  if (!['good', 'fair', 'damaged'].includes(condition)) {
+    throw createRequestValidationError('Condition must be good, fair, or damaged.')
+  }
+  if (storageBinId.length > 100) {
+    throw createRequestValidationError('Storage bin ID must be 100 characters or fewer.')
+  }
+  if (adminNotes.length > 1000) {
+    throw createRequestValidationError('Admin notes must be 1000 characters or fewer.')
+  }
+  if (
+    intakePhotoFile instanceof File &&
+    !['image/png', 'image/jpeg', 'image/jpg'].includes(String(intakePhotoFile.type || '').toLowerCase())
+  ) {
+    throw createRequestValidationError('Intake photo must be a PNG or JPG file.')
+  }
+
+  if (storageBinId) form.append('storageBinId', storageBinId)
+  form.append('condition', condition)
   const confirmAccuracy = payload.confirmAccuracy ?? payload.receiptVerified
   if (confirmAccuracy !== undefined && confirmAccuracy !== null) {
     form.append('confirmAccuracy', confirmAccuracy ? 'true' : 'false')
   }
-  if (payload.adminNotes) form.append('adminNotes', String(payload.adminNotes).trim())
-  if (payload.intakePhotoFile instanceof File) form.append('intakePhotoFile', payload.intakePhotoFile)
+  if (adminNotes) form.append('adminNotes', adminNotes)
+  if (intakePhotoFile instanceof File) form.append('intakePhotoFile', intakePhotoFile)
   return request(`/items/${id}/confirm-receipt`, { method: 'POST', body: form })
 }
 

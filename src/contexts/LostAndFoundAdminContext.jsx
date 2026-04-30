@@ -1,96 +1,91 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import React, { createContext, useCallback, useContext } from 'react'
 import {
   completeLostFoundDelivery,
   confirmLostFoundReceipt,
+  getLostFoundClaims,
   getLostFoundItemById,
   getLostFoundItems,
+  getLostFoundTimeline,
   notifyLostFoundOwner,
   patchLostFoundItem,
 } from '../api/lostFoundApi'
 
 const LostAndFoundAdminContext = createContext(null)
 
-export function LostAndFoundAdminProvider({ children }) {
-  const [items, setItems] = useState([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+function normalizeItemsResult(result) {
+  return {
+    items: Array.isArray(result?.items) ? result.items : [],
+    total: Number(result?.total || 0),
+  }
+}
 
-  const refreshItems = useCallback(async () => {
-    setIsLoading(true)
-    setError('')
-    try {
-      const result = await getLostFoundItems({ page: 1, limit: 200, adminListingMode: true })
-      setItems(Array.isArray(result.items) ? result.items : [])
-    } catch (err) {
-      setError(err?.message || 'Failed to load admin items.')
-      setItems([])
-    } finally {
-      setIsLoading(false)
+export function LostAndFoundAdminProvider({ children }) {
+  const fetchItems = useCallback(async (params = {}) => {
+    const result = await getLostFoundItems({
+      ...params,
+      adminListingMode: true,
+    })
+    return normalizeItemsResult(result)
+  }, [])
+
+  const fetchStatusTotals = useCallback(async () => {
+    const baseParams = { page: 1, limit: 1 }
+    const [pending, received, delivered] = await Promise.all([
+      fetchItems({ ...baseParams, adminStatus: 'pending' }),
+      fetchItems({ ...baseParams, adminStatus: 'received' }),
+      fetchItems({ ...baseParams, adminStatus: 'delivered' }),
+    ])
+    return {
+      pending: pending.total,
+      received: received.total,
+      delivered: delivered.total,
+    }
+  }, [fetchItems])
+
+  const fetchItemDetail = useCallback(async (itemId) => {
+    const [item, timeline, claims] = await Promise.all([
+      getLostFoundItemById(itemId),
+      getLostFoundTimeline(itemId),
+      getLostFoundClaims(itemId),
+    ])
+    return {
+      item,
+      timeline: Array.isArray(timeline) ? timeline : [],
+      claims: Array.isArray(claims) ? claims : [],
     }
   }, [])
 
-  useEffect(() => {
-    refreshItems()
-  }, [refreshItems])
-
   const setItemStatus = useCallback((itemId, adminStatus) => {
-    return patchLostFoundItem(itemId, { adminStatus }).then(() => refreshItems())
-  }, [refreshItems])
+    return patchLostFoundItem(itemId, { adminStatus })
+  }, [])
+
+  const updateItem = useCallback((itemId, updates) => {
+    return patchLostFoundItem(itemId, updates)
+  }, [])
 
   const notifyOwner = useCallback((itemId, message = '') => {
     return notifyLostFoundOwner(itemId, { channel: 'email', message })
   }, [])
 
-  const confirmReceipt = useCallback(async (itemId, payload = {}) => {
-    try {
-      await confirmLostFoundReceipt(itemId, payload)
-    } catch (err) {
-      // Some backend builds validate strict DTOs for confirm endpoints.
-      // Fallback to status patch so admin flow remains operational.
-      if (err?.status === 400 || err?.status === 404 || err?.status === 405) {
-        await patchLostFoundItem(itemId, { adminStatus: 'received' })
-      } else {
-        throw err
-      }
-    }
-    await refreshItems()
-  }, [refreshItems])
+  const confirmReceipt = useCallback((itemId, payload = {}) => {
+    return confirmLostFoundReceipt(itemId, payload)
+  }, [])
 
-  const confirmHandover = useCallback(async (itemId, payload = {}) => {
-    try {
-      await completeLostFoundDelivery(itemId, payload)
-    } catch (err) {
-      if (err?.status === 400 || err?.status === 404 || err?.status === 405) {
-        await patchLostFoundItem(itemId, { adminStatus: 'delivered' })
-      } else {
-        throw err
-      }
-    }
-    await refreshItems()
-  }, [refreshItems])
-
-  const updateItem = useCallback((itemId, updates) => {
-    return patchLostFoundItem(itemId, updates).then(() => refreshItems())
-  }, [refreshItems])
-
-  const getItem = useCallback(async (itemId) => {
-    const local = items.find((it) => String(it.id) === String(itemId))
-    if (local) return local
-    return getLostFoundItemById(itemId)
-  }, [items])
+  const confirmHandover = useCallback((itemId, payload = {}) => {
+    return completeLostFoundDelivery(itemId, payload)
+  }, [])
 
   const value = {
-    items,
-    isLoading,
-    error,
+    fetchItems,
+    fetchStatusTotals,
+    fetchItemDetail,
     setItemStatus,
     updateItem,
     notifyOwner,
     confirmReceipt,
     confirmHandover,
-    getItem,
-    refreshItems
   }
+
   return (
     <LostAndFoundAdminContext.Provider value={value}>
       {children}
@@ -100,6 +95,8 @@ export function LostAndFoundAdminProvider({ children }) {
 
 export function useLostAndFoundAdmin() {
   const ctx = useContext(LostAndFoundAdminContext)
-  if (!ctx) throw new Error('useLostAndFoundAdmin must be used within LostAndFoundAdminProvider')
+  if (!ctx) {
+    throw new Error('useLostAndFoundAdmin must be used within LostAndFoundAdminProvider')
+  }
   return ctx
 }

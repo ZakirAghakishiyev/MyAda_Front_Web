@@ -77,6 +77,67 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const formatLocalDateTime = (dateValue, timeValue) => {
+  const date = String(dateValue ?? '').trim()
+  if (!date) return ''
+  const rawTime = String(timeValue ?? '').trim() || '00:00'
+  const normalizedTime =
+    rawTime.length === 5 ? `${rawTime}:00` : rawTime.length === 8 ? rawTime : `${rawTime}:00`
+  return `${date}T${normalizedTime}`
+}
+
+const calculateDurationHours = (startTime, endTime) => {
+  const start = String(startTime ?? '').trim()
+  const end = String(endTime ?? '').trim()
+  if (!start || !end) return ''
+  const base = '2026-01-01'
+  const startDate = new Date(`${base}T${start.length === 5 ? `${start}:00` : start}`)
+  const endDate = new Date(`${base}T${end.length === 5 ? `${end}:00` : end}`)
+  const diffMs = endDate.getTime() - startDate.getTime()
+  if (!Number.isFinite(diffMs) || diffMs <= 0) return ''
+  const hours = diffMs / (60 * 60 * 1000)
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1)
+}
+
+const addHoursToLocalDateTime = (dateValue, startTime, durationHours, fallbackEndTime) => {
+  const startDateTime = formatLocalDateTime(dateValue, startTime)
+  if (!startDateTime) return ''
+  const [datePart, timePart = '00:00:00'] = startDateTime.split('T')
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hours, minutes, seconds] = timePart.split(':').map(Number)
+  const baseDate = new Date(year, (month || 1) - 1, day || 1, hours || 0, minutes || 0, seconds || 0)
+  const parsedHours = Number(durationHours)
+  if (Number.isFinite(parsedHours) && parsedHours > 0) {
+    const result = new Date(baseDate.getTime() + parsedHours * 60 * 60 * 1000)
+    const yyyy = result.getFullYear()
+    const mm = String(result.getMonth() + 1).padStart(2, '0')
+    const dd = String(result.getDate()).padStart(2, '0')
+    const hh = String(result.getHours()).padStart(2, '0')
+    const min = String(result.getMinutes()).padStart(2, '0')
+    const ss = String(result.getSeconds()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`
+  }
+  return formatLocalDateTime(dateValue, fallbackEndTime || startTime)
+}
+
+const getEventStatusForUpdate = (event) =>
+  String(
+    event?.status ??
+      event?.raw?.status ??
+      event?.raw?.Status ??
+      'Approved'
+  ).trim() || 'Approved'
+
+const getEventLocationPair = (event) => {
+  const raw = event?.raw && typeof event.raw === 'object' ? event.raw : {}
+  const buildingId = raw.buildingId ?? raw.BuildingId
+  const roomId = raw.roomId ?? raw.RoomId
+  if (buildingId == null || roomId == null || String(buildingId).trim() === '' || String(roomId).trim() === '') {
+    return {}
+  }
+  return { buildingId, roomId }
+}
+
 /** @returns {number | null} Positive seat limit, or `null` if the API did not publish one. */
 const getEventSeatLimit = (event) => {
   if (!event) return null
@@ -171,8 +232,8 @@ const ClubAdminEvents = () => {
     setTitle(event.title || '')
     setDate(event.date || '')
     setTime(event.time || '')
-    setDuration('')
-    setCapacity('')
+    setDuration(calculateDurationHours(event.time, event.endTime))
+    setCapacity(getEventSeatLimit(event) != null ? String(getEventSeatLimit(event)) : '')
     setLocationField(event.location || '')
     setDescription(event.description || '')
     setSubEvents([])
@@ -238,58 +299,34 @@ const ClubAdminEvents = () => {
     if (!editingEvent) return
     setIsSubmitting(true)
 
-    const payload = {
-      eventId: editingEvent.id,
-      clubId: editingEvent.clubId,
-      clubName: editingEvent.clubName,
-      title: title || editingEvent.title,
-      date: date || editingEvent.date,
-      time: time || editingEvent.time,
-      duration,
-      capacity,
-      location: locationField || editingEvent.location,
-      description: description || editingEvent.description,
-      subEvents,
-      posterFileName: posterFile?.name || null
-    }
-
     try {
+      const nextTitle = title || editingEvent.title
+      const nextDate = date || editingEvent.date
+      const nextTime = time || editingEvent.time
+      const nextLocation = locationField || editingEvent.location || 'TBD'
+      const nextDescription = description || editingEvent.description || ''
+      const nextSeatLimit = capacity ? Number(capacity) : getEventSeatLimit(editingEvent) ?? 1
       await patchClubAdminEvent(clubIdParam, editingEvent.id, {
-        name: payload.title,
-        description: payload.description,
-        startTime: payload.date && payload.time ? `${payload.date}T${payload.time}:00` : undefined,
-        endTime: payload.date && payload.time && payload.duration
-          ? (() => {
-              const start = new Date(`${payload.date}T${payload.time}:00`)
-              const hours = Number(payload.duration) || 1
-              return new Date(start.getTime() + hours * 3600 * 1000).toISOString()
-            })()
-          : undefined,
-        location: payload.location,
-        seatLimit: payload.capacity ? Number(payload.capacity) : undefined,
+        name: nextTitle,
+        description: nextDescription,
+        startTime: formatLocalDateTime(nextDate, nextTime),
+        endTime: addHoursToLocalDateTime(nextDate, nextTime, duration, editingEvent.endTime),
+        location: nextLocation,
+        ...getEventLocationPair(editingEvent),
+        seatLimit: nextSeatLimit,
+        requirements: editingEvent.requirements || 'None',
+        prerequisites: editingEvent.prerequisites || 'None',
+        notes: editingEvent.notes || 'No additional notes.',
+        status: getEventStatusForUpdate(editingEvent),
+        imageFile: posterFile || undefined,
       })
+      await loadEvents()
+      cancelEdit()
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to send event edit request', error)
+      alert(error?.message || 'Could not update event.')
     } finally {
       setIsSubmitting(false)
     }
-
-    setEvents((prev) =>
-      prev.map((ev) =>
-        ev.id === editingEvent.id
-          ? {
-              ...ev,
-              title: payload.title,
-              date: payload.date,
-              time: payload.time,
-              location: payload.location,
-              description: payload.description
-            }
-          : ev
-      )
-    )
-    cancelEdit()
   }
 
   const attendeesEvent = attendeesEventId != null
