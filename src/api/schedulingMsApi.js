@@ -1,5 +1,31 @@
 import { SCHEDULING_API_BASE, SCHEDULING_DEV_USER_ID_HEADER } from './schedulingConfig'
+import { getAccessToken } from '../auth/tokenStorage'
 import { getEffectiveSchedulingInstructorId } from '../utils/schedulingInstructorId'
+
+/** Optional Bearer from portal login — Scheduling backend reuses it for Auth/Attendance when env tokens are unset. */
+function bearerHeaderFromSession() {
+  const t = getAccessToken()?.trim()
+  if (!t) return {}
+  return {
+    Authorization: t.toLowerCase().startsWith('bearer ') ? t : `Bearer ${t}`,
+  }
+}
+
+/** Avoid exposing upstream ops copy on the Scheduling UI (generate). */
+function userFacingScheduleGenerateError(raw) {
+  const s = String(raw ?? '').trim()
+  if (
+    s.includes('AUTH_SERVICE_ACCESS_TOKEN') ||
+    s.includes('users-by-role/Instructor') ||
+    s.includes('admin-protected')
+  ) {
+    return 'Schedule generation could not reach directory services with your sign-in. Use an account allowed to run scheduling, then try again.'
+  }
+  if (/auth service error:\s*401/i.test(s)) {
+    return 'Schedule generation could not reach directory services with your sign-in. Use an account allowed to run scheduling, then try again.'
+  }
+  return s || 'Schedule generation failed.'
+}
 
 async function parseJson(res) {
   const text = await res.text()
@@ -54,7 +80,7 @@ function headersUserOnly() {
 function assertSchedulingUserIdHeader() {
   if (getEffectiveSchedulingInstructorId() != null) return
   const err = new Error(
-    `Sign in as an instructor (JWT with a valid ${SCHEDULING_DEV_USER_ID_HEADER}), or set Instructor user ID on the Scheduling page — UUID or numeric string per API.`
+    `Sign in as an instructor (JWT with a valid ${SCHEDULING_DEV_USER_ID_HEADER}), or use the Instructor user ID field (admins: Scheduling / Preferences pages) — UUID or legacy numeric string per API.`
   )
   err.status = 400
   throw err
@@ -85,17 +111,18 @@ export function normalizeScheduleGenerateBody(input) {
   return { academic_year, semester }
 }
 
-/** POST /schedules/generate — no X-User-Id required */
+/** POST /schedules/generate — no X-User-Id required; sends portal JWT when present (see FRONTEND_API.md). */
 export async function schedulingGenerate(body) {
   const payload = normalizeScheduleGenerateBody(body)
   const res = await fetch(`${SCHEDULING_API_BASE}/schedules/generate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...bearerHeaderFromSession() },
     body: JSON.stringify(payload),
   })
   const data = await parseJson(res)
   if (!res.ok) {
-    const err = new Error(detailMessage(data, res))
+    const raw = detailMessage(data, res)
+    const err = new Error(userFacingScheduleGenerateError(raw))
     err.status = res.status
     err.body = data
     throw err

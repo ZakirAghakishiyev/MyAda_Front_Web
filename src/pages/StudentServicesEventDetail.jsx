@@ -77,7 +77,6 @@ const StudentServicesEventDetail = () => {
   const [event, setEvent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [hostClub, setHostClub] = useState(null)
-  const [hostClubLoading, setHostClubLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -125,7 +124,6 @@ const StudentServicesEventDetail = () => {
       return
     }
     let cancelled = false
-    setHostClubLoading(true)
     ;(async () => {
       try {
         const rawClub = await fetchClub(clubId)
@@ -133,8 +131,6 @@ const StudentServicesEventDetail = () => {
         setHostClub(mapClubFromApi(rawClub))
       } catch {
         if (!cancelled) setHostClub(null)
-      } finally {
-        if (!cancelled) setHostClubLoading(false)
       }
     })()
     return () => {
@@ -276,20 +272,6 @@ const StudentServicesEventDetail = () => {
               </div>
               <div>
                 <strong>{hostClub?.name || event.clubName || event.club || '—'}</strong>
-                <span>
-                  {hostClubLoading
-                    ? 'Loading club…'
-                    : hostClub
-                      ? `${Number(hostClub.members) || 0} members`
-                      : '—'}
-                </span>
-                <span>
-                  {hostClub?.establishedYear
-                    ? `Established ${hostClub.establishedYear}`
-                    : hostClub?.raw?.foundedAt
-                      ? `Established ${String(hostClub.raw.foundedAt).slice(0, 4)}`
-                      : '—'}
-                </span>
               </div>
             </div>
           </div>

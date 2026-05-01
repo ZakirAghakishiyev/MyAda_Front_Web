@@ -1093,21 +1093,11 @@ const StudentServices = () => {
     setEditEventTime(ev.time || '')
     setEditEventVenue(ev.venue || '')
     setEditEventImage(ev.image || '')
-    // Try to infer building/room from existing venue
-    let foundBuilding = ''
-    let foundRoom = ''
-    if (ev.venue) {
-      Object.entries(SUB_EVENT_LOCATIONS).forEach(([building, rooms]) => {
-        rooms.forEach((room) => {
-          if (!foundRoom && (ev.venue === room || ev.venue.includes(room))) {
-            foundBuilding = building
-            foundRoom = room
-          }
-        })
-      })
-    }
-    setEditEventBuilding(foundBuilding)
-    setEditEventRoom(foundRoom)
+    const buildingId =
+      ev.buildingId ?? ev.building_id ?? ev.requestedBuildingId ?? ev.requested_building_id ?? ev.raw?.buildingId ?? ev.raw?.requestedBuildingId
+    const roomId = ev.roomId ?? ev.room_id ?? ev.requestedRoomId ?? ev.requested_room_id ?? ev.raw?.roomId ?? ev.raw?.requestedRoomId
+    setEditEventBuilding(buildingId != null ? String(buildingId) : '')
+    setEditEventRoom(roomId != null ? String(roomId) : '')
     setEditEventDuration(String(ev.durationHours ?? ''))
     setEditEventCapacity(String(ev.capacity ?? ''))
     setEditEventDescription(ev.description || '')
@@ -1121,6 +1111,38 @@ const StudentServices = () => {
     setEditSubBuilding('')
     setEditSubRoom('')
   }
+
+  useEffect(() => {
+    if (!editingApprovedEvent) return
+    if (!editEventBuilding) return
+    void ensureRoomsLoaded(editEventBuilding)
+  }, [editingApprovedEvent, editEventBuilding, ensureRoomsLoaded])
+
+  useEffect(() => {
+    if (!editingApprovedEvent) return
+    if (!editEventBuilding) return
+    if (editEventRoom) return
+    const rooms = locRoomsByBuildingId[String(editEventBuilding)] || []
+    if (rooms.length > 0 && rooms[0]?.id != null) {
+      setEditEventRoom(String(rooms[0].id))
+    }
+  }, [editingApprovedEvent, editEventBuilding, editEventRoom, locRoomsByBuildingId])
+
+  useEffect(() => {
+    if (!editingApprovedEvent) return
+    if (!editSubBuilding) return
+    void ensureRoomsLoaded(editSubBuilding)
+  }, [editingApprovedEvent, editSubBuilding, ensureRoomsLoaded])
+
+  useEffect(() => {
+    if (!editingApprovedEvent) return
+    if (!editSubBuilding) return
+    if (editSubRoom) return
+    const rooms = locRoomsByBuildingId[String(editSubBuilding)] || []
+    if (rooms.length > 0 && rooms[0]?.id != null) {
+      setEditSubRoom(String(rooms[0].id))
+    }
+  }, [editingApprovedEvent, editSubBuilding, editSubRoom, locRoomsByBuildingId])
 
   const cancelEditApprovedEvent = () => {
     setEditingApprovedEvent(null)
@@ -1181,6 +1203,13 @@ const StudentServices = () => {
   const confirmEditApprovedEvent = (e) => {
     e.preventDefault()
     if (!editingApprovedEvent) return
+    const building = locBuildings.find((b) => String(b?.id) === String(editEventBuilding))
+    const roomsForBuilding = editEventBuilding ? locRoomsByBuildingId[String(editEventBuilding)] || [] : []
+    const room = roomsForBuilding.find((r) => String(r?.id) === String(editEventRoom))
+    const venueFromIds =
+      editEventBuilding && editEventRoom
+        ? `${buildingNameFor(building) || `Building ${editEventBuilding}`} — ${roomNameFor(room) || `Room ${editEventRoom}`}`
+        : ''
     setApprovedEvents((prev) =>
       prev.map((ev) =>
         ev.id === editingApprovedEvent.id
@@ -1190,9 +1219,11 @@ const StudentServices = () => {
               date: editEventDate || ev.date,
               time: editEventTime || ev.time,
               venue:
-                (editEventBuilding && editEventRoom && `${editEventBuilding} – ${editEventRoom}`) ||
+                venueFromIds ||
                 editEventVenue ||
                 ev.venue,
+              buildingId: editEventBuilding || ev.buildingId,
+              roomId: editEventRoom || ev.roomId,
               durationHours:
                 editEventDuration !== '' ? Number(editEventDuration) || ev.durationHours : ev.durationHours,
               capacity:
@@ -3520,10 +3551,13 @@ const StudentServices = () => {
                       setEditEventBuilding(ev.target.value)
                       setEditEventRoom('')
                     }}
+                    disabled={locLoadState.loading || Boolean(locLoadState.error)}
                   >
                     <option value="">Select building</option>
-                    {Object.keys(SUB_EVENT_LOCATIONS).map((b) => (
-                      <option key={b} value={b}>{b}</option>
+                    {locBuildings.map((b) => (
+                      <option key={String(b.id)} value={String(b.id)}>
+                        {buildingNameFor(b) || `Building ${b.id}`}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -3532,13 +3566,14 @@ const StudentServices = () => {
                   <select
                     value={editEventRoom}
                     onChange={(ev) => setEditEventRoom(ev.target.value)}
-                    disabled={!editEventBuilding}
+                    disabled={!editEventBuilding || locLoadState.loading || Boolean(locLoadState.error)}
                   >
                     <option value="">{editEventBuilding ? 'Select room' : 'Select building first'}</option>
-                    {editEventBuilding &&
-                      (SUB_EVENT_LOCATIONS[editEventBuilding] || []).map((room) => (
-                        <option key={room} value={room}>{room}</option>
-                      ))}
+                    {(locRoomsByBuildingId[String(editEventBuilding)] || []).map((r) => (
+                      <option key={String(r.id)} value={String(r.id)}>
+                        {roomNameFor(r) || `Room ${r.id}`}{roomCapacityLabel(r)}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3666,10 +3701,13 @@ const StudentServices = () => {
                         setEditSubRoom('')
                         if (editSubError) setEditSubError('')
                       }}
+                      disabled={locLoadState.loading || Boolean(locLoadState.error)}
                     >
                       <option value="">Select building</option>
-                      {Object.keys(SUB_EVENT_LOCATIONS).map((b) => (
-                        <option key={b} value={b}>{b}</option>
+                      {locBuildings.map((b) => (
+                        <option key={String(b.id)} value={String(b.id)}>
+                          {buildingNameFor(b) || `Building ${b.id}`}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -3681,13 +3719,14 @@ const StudentServices = () => {
                         setEditSubRoom(ev.target.value)
                         if (editSubError) setEditSubError('')
                       }}
-                      disabled={!editSubBuilding}
+                      disabled={!editSubBuilding || locLoadState.loading || Boolean(locLoadState.error)}
                     >
                       <option value="">{editSubBuilding ? 'Select room' : 'Select building first'}</option>
-                      {editSubBuilding &&
-                        (SUB_EVENT_LOCATIONS[editSubBuilding] || []).map((room) => (
-                          <option key={room} value={room}>{room}</option>
-                        ))}
+                      {(locRoomsByBuildingId[String(editSubBuilding)] || []).map((r) => (
+                        <option key={String(r.id)} value={String(r.id)}>
+                          {roomNameFor(r) || `Room ${r.id}`}{roomCapacityLabel(r)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

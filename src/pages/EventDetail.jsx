@@ -87,7 +87,6 @@ const EventDetail = () => {
   const [apiRegistered, setApiRegistered] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [hostClub, setHostClub] = useState(null)
-  const [hostClubLoading, setHostClubLoading] = useState(false)
   const [registeredCountOverride, setRegisteredCountOverride] = useState(null)
 
   useEffect(() => {
@@ -176,7 +175,6 @@ const EventDetail = () => {
       return
     }
     let cancelled = false
-    setHostClubLoading(true)
     ;(async () => {
       try {
         const rawClub = await fetchClub(clubId)
@@ -184,8 +182,6 @@ const EventDetail = () => {
         setHostClub(mapClubFromApi(rawClub))
       } catch {
         if (!cancelled) setHostClub(null)
-      } finally {
-        if (!cancelled) setHostClubLoading(false)
       }
     })()
     return () => {
@@ -445,20 +441,6 @@ const EventDetail = () => {
               </div>
               <div>
                 <strong>{hostClub?.name || event.clubName || 'Club'}</strong>
-                <span>
-                  {hostClubLoading
-                    ? 'Loading club…'
-                    : hostClub
-                      ? `${Number(hostClub.members) || 0} members`
-                      : '—'}
-                </span>
-                <span>
-                  {hostClub?.establishedYear
-                    ? `Established ${hostClub.establishedYear}`
-                    : hostClub?.raw?.foundedAt
-                      ? `Established ${String(hostClub.raw.foundedAt).slice(0, 4)}`
-                      : '—'}
-                </span>
               </div>
             </div>
           </div>

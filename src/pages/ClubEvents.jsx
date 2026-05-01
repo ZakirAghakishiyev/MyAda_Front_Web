@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { fetchEvents, fetchMyClubMemberships } from '../api/clubApi'
 import { mapEventFromApi } from '../api/clubMappers'
@@ -80,6 +80,18 @@ function isOngoingOrFutureEvent(ev, now = new Date()) {
   return start.getTime() >= now.getTime()
 }
 
+const EVENTS_PAGE_SIZE = 48
+
+function eventsResponseHasMore(evRes, page, limit) {
+  const items = evRes?.items ?? []
+  const totalRaw = evRes?.total ?? evRes?.Total ?? evRes?.totalCount ?? evRes?.TotalCount
+  const total = Number(totalRaw)
+  if (Number.isFinite(total) && total >= 0) {
+    return page * limit < total
+  }
+  return items.length >= limit
+}
+
 const ClubEvents = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -90,36 +102,73 @@ const ClubEvents = () => {
   const selectedClubParam = searchParams.get('club')
   const [events, setEvents] = useState([])
   const [listLoading, setListLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
   const [myClubIds, setMyClubIds] = useState(() => new Set())
 
-  const loadEvents = useCallback(async () => {
-    setListLoading(true)
-    try {
-      const [evRes, memRes] = await Promise.all([
-        fetchEvents({ search: search.trim() || undefined, limit: 48 }),
-        fetchMyClubMemberships().catch(() => ({ items: [] })),
-      ])
-      const items = evRes?.items ?? []
-      setEvents(items.map((row) => mapEventFromApi(row)).filter(Boolean))
-      const memItems = memRes?.items ?? memRes ?? []
-      const ids = new Set()
-      if (Array.isArray(memItems)) {
-        memItems.forEach((m) => {
-          const cid = m.clubId ?? m.club?.id
-          if (cid != null) ids.add(String(cid))
-        })
-      }
-      setMyClubIds(ids)
-    } catch {
-      setEvents([])
-    } finally {
-      setListLoading(false)
-    }
-  }, [search])
-
   useEffect(() => {
-    loadEvents()
-  }, [loadEvents])
+    let cancelled = false
+    const isFirstPage = page === 1
+    if (isFirstPage) setListLoading(true)
+    else setLoadingMore(true)
+    ;(async () => {
+      try {
+        const evRes = await fetchEvents({
+          search: search.trim() || undefined,
+          limit: EVENTS_PAGE_SIZE,
+          page,
+        })
+        if (cancelled) return
+        const items = evRes?.items ?? []
+        const mapped = items.map((row) => mapEventFromApi(row)).filter(Boolean)
+        setHasMore(eventsResponseHasMore(evRes, page, EVENTS_PAGE_SIZE))
+
+        if (isFirstPage) {
+          const memRes = await fetchMyClubMemberships().catch(() => ({ items: [] }))
+          if (cancelled) return
+          setEvents(mapped)
+          const memItems = memRes?.items ?? memRes ?? []
+          const ids = new Set()
+          if (Array.isArray(memItems)) {
+            memItems.forEach((m) => {
+              const cid = m.clubId ?? m.club?.id
+              if (cid != null) ids.add(String(cid))
+            })
+          }
+          setMyClubIds(ids)
+        } else {
+          setEvents((prev) => {
+            const seen = new Set(prev.map((e) => String(e.id)))
+            const next = [...prev]
+            for (const e of mapped) {
+              const id = String(e.id)
+              if (!seen.has(id)) {
+                seen.add(id)
+                next.push(e)
+              }
+            }
+            return next
+          })
+        }
+      } catch {
+        if (cancelled) return
+        if (page === 1) {
+          setEvents([])
+          setMyClubIds(new Set())
+        }
+        setHasMore(false)
+      } finally {
+        if (!cancelled) {
+          if (isFirstPage) setListLoading(false)
+          else setLoadingMore(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [page, search])
 
   const filteredEvents = useMemo(() => {
     const now = new Date()
@@ -171,7 +220,10 @@ const ClubEvents = () => {
                 className="ce-search-input"
                 placeholder="Find an event..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
                 aria-label="Search events"
               />
             </div>
@@ -268,10 +320,15 @@ const ClubEvents = () => {
         ))}
         </div>
 
-        {filteredEvents.length > 0 && (
+        {hasMore && filteredEvents.length > 0 && (
           <div className="ce-load-more-wrap">
-            <button type="button" className="ce-load-more">
-              <span>Load More Events</span>
+            <button
+              type="button"
+              className="ce-load-more"
+              disabled={listLoading || loadingMore}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              <span>{loadingMore ? 'Loading…' : 'Load More Events'}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </button>
           </div>
