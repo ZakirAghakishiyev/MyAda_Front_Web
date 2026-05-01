@@ -452,9 +452,6 @@ export default function AttendanceStudents() {
         </div>
       </div>
 
-      <footer className="ap-footer">
-        © 2024 ADA University - Educational Technologies Department. For internal use only.
-      </footer>
     </div>
   )
 }

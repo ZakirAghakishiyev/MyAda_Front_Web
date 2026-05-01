@@ -998,55 +998,6 @@ const LostAndFound2 = ({ initialReport, fromAdmin }) => {
         )}
       </div>
 
-      <footer className="lf2-footer">
-        <span className="lf2-footer-count">
-          Showing {paginatedItems.length} of {totalItems} items
-        </span>
-        <div className="lf2-pagination">
-          <button
-            type="button"
-            className="lf2-page-btn"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage(p => p - 1)}
-            aria-label="Previous page"
-          >
-            ‹
-          </button>
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            const page = totalPages <= 5 ? i + 1 : (currentPage <= 3 ? i + 1 : currentPage - 2 + i)
-            if (page > totalPages) return null
-            return (
-              <button
-                key={page}
-                type="button"
-                className={`lf2-page-btn lf2-page-num ${currentPage === page ? 'lf2-page-num--active' : ''}`}
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </button>
-            )
-          })}
-          {totalPages > 5 && <span className="lf2-page-ellipsis">…</span>}
-          {totalPages > 5 && (
-            <button
-              type="button"
-              className={`lf2-page-btn lf2-page-num ${currentPage === totalPages ? 'lf2-page-num--active' : ''}`}
-              onClick={() => setCurrentPage(totalPages)}
-            >
-              {totalPages}
-            </button>
-          )}
-          <button
-            type="button"
-            className="lf2-page-btn"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage(p => p + 1)}
-            aria-label="Next page"
-          >
-            ›
-          </button>
-        </div>
-      </footer>
     </div>
   )
 }

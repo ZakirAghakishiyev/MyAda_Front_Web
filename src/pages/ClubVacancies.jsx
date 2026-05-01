@@ -404,17 +404,6 @@ const ClubVacancies = () => {
         )}
       </div>
 
-      <footer className="vacancies-footer">
-        <div className="vacancies-footer-left">
-          <IconGraduation />
-          <span>© 2024 University Recruitment Portal. All rights reserved.</span>
-        </div>
-        <div className="vacancies-footer-right">
-          <a href="/">Privacy Policy</a>
-          <a href="/">Terms of Service</a>
-          <a href="/">Help Center</a>
-        </div>
-      </footer>
     </div>
   )
 }

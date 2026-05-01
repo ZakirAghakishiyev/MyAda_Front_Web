@@ -213,31 +213,6 @@ const VacancyDetail = () => {
           </div>
         </div>
 
-        <footer className="vacancy-detail-footer">
-          <div className="vacancy-detail-footer-left">
-            <strong className="vacancy-detail-footer-title">{vacancy.position.toUpperCase()}</strong>
-            <span className="vacancy-detail-footer-club">{vacancy.clubName}</span>
-          </div>
-          <div className="vacancy-detail-footer-actions">
-            <button
-              type="button"
-              className={`vacancy-detail-footer-save ${saved ? 'vacancy-detail-footer-save--saved' : ''}`}
-              onClick={() => {
-                const ids = getSavedVacancyIds()
-                const next = saved ? ids.filter((i) => i !== vacancyId) : [...ids, vacancyId]
-                setSavedVacancyIds(next)
-                setSaved(!saved)
-              }}
-            >
-              <IconBookmark />
-              {saved ? 'Unsave' : 'Save Vacancy'}
-            </button>
-            <button type="button" className="vacancy-detail-footer-apply" onClick={handleApply}>
-              Apply Now
-              <IconArrowRight />
-            </button>
-          </div>
-        </footer>
       </div>
     </div>
   )

@@ -953,10 +953,6 @@ const ProposeClub = () => {
         </div>
         <Sidebar />
       </div>
-
-      <footer className="propose-footer">
-        © {new Date().getFullYear()} University Student Engagement Portal. All rights reserved.
-      </footer>
     </div>
   )
 }

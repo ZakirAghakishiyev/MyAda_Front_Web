@@ -333,17 +333,6 @@ const ClubEvents = () => {
             </button>
           </div>
         )}
-
-        <footer className="ce-footer">
-          <span className="ce-footer-logo">MyAda</span>
-          <nav className="ce-footer-nav">
-            <button type="button" onClick={() => navigate('/clubs')}>Clubs Directory</button>
-            <span>Safety Guidelines</span>
-            <span>Contact Support</span>
-            <span>Privacy Policy</span>
-          </nav>
-          <span className="ce-footer-copy">© 2024 University Student Life. All rights reserved.</span>
-        </footer>
       </div>
     </div>
   )

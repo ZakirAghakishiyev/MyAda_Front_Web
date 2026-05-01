@@ -257,9 +257,6 @@ const ApplyVacancy = () => {
           </div>
         </div>
 
-        <footer className="apply-vacancy-footer">
-          © 2024 CampusRecruit Platform. All rights reserved.
-        </footer>
       </div>
     </div>
   )

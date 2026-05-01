@@ -799,18 +799,6 @@ const ClubDetail = () => {
         </aside>
       </div>
 
-      <footer className="club-detail-footer">
-        <div className="club-detail-footer-inner">
-          <Link to="/" className="club-detail-nav-logo">MyAda</Link>
-          <nav className="club-detail-footer-links">
-            <a href="#help">Help Center</a>
-            <a href="#privacy">Privacy Policy</a>
-            <a href="#terms">Terms of Service</a>
-            <a href="#guidelines">University Guidelines</a>
-          </nav>
-          <span className="club-detail-footer-copy">© {new Date().getFullYear()} MyAda University Platforms.</span>
-        </div>
-      </footer>
     </div>
   )
 }

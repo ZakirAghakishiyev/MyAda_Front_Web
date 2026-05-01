@@ -284,11 +284,6 @@ const MyRegisteredEvents = () => {
           )}
         </div>
       </div>
-
-      <footer className="mre-footer">
-        <span className="mre-footer-logo">MyAda</span>
-        <span className="mre-footer-copy">© 2024 University Student Life. All rights reserved.</span>
-      </footer>
     </div>
   )
 }

@@ -489,10 +489,6 @@ const MyVacancyApplications = () => {
         </div>
       )}
 
-      <footer className="mva-footer">
-        <span className="mva-footer-logo">ADA University</span>
-        <span className="mva-footer-copy">© 2024 University Recruitment Portal. All rights reserved.</span>
-      </footer>
     </div>
   )
 }

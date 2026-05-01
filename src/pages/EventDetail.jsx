@@ -447,15 +447,6 @@ const EventDetail = () => {
 
         </aside>
       </div>
-
-      <footer className="ed-footer">
-        <span className="ed-footer-logo">MyAda</span>
-        <span className="ed-footer-copy">© 2023 University Student Association. All rights reserved.</span>
-        <nav className="ed-footer-links">
-          <span>Privacy Policy</span>
-          <span>Contact Support</span>
-        </nav>
-      </footer>
     </div>
   )
 }

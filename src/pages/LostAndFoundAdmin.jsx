@@ -625,47 +625,8 @@ export default function LostAndFoundAdmin() {
             </table>
           </div>
 
-          <footer className="lf-admin-table-footer">
-            <span>Showing {items.length} of {totalItems} active items</span>
-            <div className="lf-admin-pagination">
-              <button
-                type="button"
-                className="lf-admin-page-btn"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((page) => page - 1)}
-              >
-                &lt;
-              </button>
-              {pageNumbers.map((page) => (
-                <button
-                  key={page}
-                  type="button"
-                  className={`lf-admin-page-btn ${currentPage === page ? 'lf-admin-page-btn--active' : ''}`}
-                  onClick={() => setCurrentPage(page)}
-                >
-                  {page}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="lf-admin-page-btn"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((page) => page + 1)}
-              >
-                &gt;
-              </button>
-            </div>
-          </footer>
         </section>
 
-        <footer className="lf-admin-footer">
-          <span>Copyright 2023 University Inventory Systems. All rights reserved.</span>
-          <div>
-            <a href="#privacy">Privacy Policy</a>
-            <a href="#status">System Status</a>
-            <a href="#help">Help Center</a>
-          </div>
-        </footer>
       </main>
 
       {verifyModalItem && (

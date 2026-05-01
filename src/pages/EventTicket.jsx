@@ -233,16 +233,6 @@ const EventTicket = () => {
           </div>
         </div>
       </div>
-
-      <footer className="et-footer">
-        <span className="et-footer-logo">MyAda</span>
-        <span className="et-footer-copy">© 2023 University Events Platform. All rights reserved.</span>
-        <nav className="et-footer-links">
-          <span>Help Center</span>
-          <span>Privacy Policy</span>
-          <span>Contact</span>
-        </nav>
-      </footer>
       </div>
     </div>
   )
