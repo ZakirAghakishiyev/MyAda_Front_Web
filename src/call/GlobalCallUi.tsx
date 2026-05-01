@@ -425,15 +425,7 @@ const GlobalCallUi: React.FC = () => {
         </div>
       )}
 
-      {CALL_DEBUG &&
-        import.meta.env.DEV &&
-        getAccessToken() &&
-        !isAuthRoute(location.pathname) &&
-        isCallRoute(location.pathname) && (
-          <div className="gc-call-debug" title="Dev-only call diagnostics.">
-            Call debug - hub: {phase} - dispatcherRole: {isDispatcherAccessToken(getAccessToken()) ? 'yes' : 'no'}
-          </div>
-        )}
+      {null}
     </>
   )
 }

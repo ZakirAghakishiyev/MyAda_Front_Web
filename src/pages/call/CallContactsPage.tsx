@@ -128,6 +128,8 @@ const CallContactsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [callingUserId, setCallingUserId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [searchDraft, setSearchDraft] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const { phase, error: callError, requestCall } = useCallHub()
 
@@ -135,6 +137,19 @@ const CallContactsPage: React.FC = () => {
     () => ROLE_TABS.find((tab) => tab.id === activeRole) || ROLE_TABS[0],
     [activeRole]
   )
+
+  useEffect(() => {
+    setSearchDraft('')
+    setSearchQuery('')
+  }, [activeRole])
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearchQuery(searchDraft.trim())
+    }, 150)
+
+    return () => window.clearTimeout(handle)
+  }, [searchDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -166,6 +181,17 @@ const CallContactsPage: React.FC = () => {
       cancelled = true
     }
   }, [activeRole, currentUserId])
+
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return items
+
+    return items.filter((contact) => {
+      const name = String(contact?.name || '').toLowerCase()
+      const email = String(contact?.email || '').toLowerCase()
+      return name.includes(q) || email.includes(q)
+    })
+  }, [items, searchQuery])
 
   const handleCall = async (contact: RoleContact) => {
     setCallingUserId(contact.targetUserId)
@@ -221,9 +247,32 @@ const CallContactsPage: React.FC = () => {
           <h2>{activeTab.label}</h2>
           <p>{activeTab.description}</p>
         </div>
-        <div className="ccp-section-stat">
-          <span>Contacts</span>
-          <strong>{loading ? '...' : items.length}</strong>
+        <div className="ccp-section-actions">
+          <div className="ccp-search" role="search">
+            <label className="ccp-search-label" htmlFor="ccp-search-input">
+              Search contacts
+            </label>
+            <div className="ccp-search-field">
+              <input
+                id="ccp-search-input"
+                className="ccp-search-input"
+                type="search"
+                placeholder={`Search ${activeTab.label.toLowerCase()}...`}
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                disabled={loading}
+              />
+              {searchDraft.trim() ? (
+                <button type="button" className="ccp-search-clear" onClick={() => setSearchDraft('')}>
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div className="ccp-section-stat">
+            <span>{searchQuery.trim() ? 'Matches' : 'Contacts'}</span>
+            <strong>{loading ? '...' : filteredItems.length}</strong>
+          </div>
         </div>
       </section>
 
@@ -239,9 +288,15 @@ const CallContactsPage: React.FC = () => {
         </div>
       ) : null}
 
-      {!loading && items.length > 0 ? (
+      {!loading && items.length > 0 && filteredItems.length === 0 ? (
+        <div className="ccp-empty-state">
+          No matches for <strong>{searchQuery}</strong> in <strong>{activeTab.label}</strong>.
+        </div>
+      ) : null}
+
+      {!loading && filteredItems.length > 0 ? (
         <section className="ccp-contact-list">
-          {items.map((contact) => (
+          {filteredItems.map((contact) => (
             <ContactRow
               key={`${activeRole}-${contact.targetUserId}`}
               contact={contact}
