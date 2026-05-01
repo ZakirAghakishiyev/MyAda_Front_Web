@@ -397,16 +397,7 @@ export default function ClubAdminLayout() {
         message,
       })
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('club-announcement-posted', {
-            detail: {
-              clubId: clubIdParam,
-              title,
-              message,
-              createdAt: new Date().toISOString(),
-            },
-          })
-        )
+        window.dispatchEvent(new CustomEvent('club-announcement-posted'))
       }
     } catch (e) {
       setNotificationSubmitting(false)

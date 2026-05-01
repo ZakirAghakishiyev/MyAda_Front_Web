@@ -92,7 +92,6 @@ const Header = () => {
     refreshing: notificationsRefreshing,
     error: notificationsError,
     unreadCount,
-    markAllAsRead,
     refresh: refreshNotifications,
   } = useNotifications()
   const recentNotifications = notifications.slice(0, 6)
@@ -467,14 +466,6 @@ const Header = () => {
                   disabled={notificationsLoading || notificationsRefreshing}
                 >
                   {notificationsRefreshing ? 'Refreshing...' : 'Refresh'}
-                </button>
-                <button
-                  type="button"
-                  className="notification-panel-action"
-                  onClick={markAllAsRead}
-                  disabled={unreadCount === 0}
-                >
-                  Mark all read
                 </button>
               </div>
             </div>
